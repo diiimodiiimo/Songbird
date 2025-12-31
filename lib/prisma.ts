@@ -4,10 +4,14 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-// Don't set a default DATABASE_URL - it should always come from environment
-// This ensures production uses the correct database
+// In production, DATABASE_URL must be set
+// In development, fallback to SQLite for local testing
+if (!process.env.DATABASE_URL && process.env.NODE_ENV === 'production') {
+  throw new Error('DATABASE_URL environment variable is required in production')
+}
+
 if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL environment variable is not set')
+  process.env.DATABASE_URL = 'file:./dev.db'
 }
 
 export const prisma =
