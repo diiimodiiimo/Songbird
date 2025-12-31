@@ -30,17 +30,12 @@ export const prisma =
     },
   })
 
-// In serverless environments, don't reuse the client across requests
-// But in Node.js (development), reuse it to avoid too many connections
-if (process.env.NODE_ENV !== 'production') {
+// In serverless, we should reuse the client to avoid connection issues
+// The global pattern works in Vercel's serverless environment
+if (!globalForPrisma.prisma) {
   globalForPrisma.prisma = prisma
 }
 
-// Handle graceful shutdown
-if (process.env.NODE_ENV === 'production') {
-  // In serverless, ensure connections are closed after each request
-  process.on('beforeExit', async () => {
-    await prisma.$disconnect()
-  })
-}
+// Don't disconnect in serverless - let Vercel handle it
+// Disconnecting causes issues with connection pooling
 

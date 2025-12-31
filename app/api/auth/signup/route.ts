@@ -74,9 +74,6 @@ export async function POST(request: Request) {
       { error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
-  } finally {
-    // Always disconnect in serverless to avoid connection leaks
-    await prisma.$disconnect()
   }
 }
 
