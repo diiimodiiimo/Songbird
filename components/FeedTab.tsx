@@ -116,7 +116,7 @@ export default function FeedTab() {
                   </div>
                   <div className="text-sm text-text/70">
                     {(() => {
-                      const dateStr = typeof entry.date === 'string' ? entry.date : entry.date instanceof Date ? entry.date.toISOString() : String(entry.date)
+                      const dateStr = typeof entry.date === 'string' ? entry.date : (entry.date as any) instanceof Date ? (entry.date as Date).toISOString() : String(entry.date)
                       const [year, month, day] = dateStr.split('T')[0].split('-')
                       const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
                       return date.toLocaleDateString('en-US', {

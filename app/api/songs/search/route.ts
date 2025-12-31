@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     await getAccessToken()
     const results = await spotifyApi.searchTracks(query, { limit: 5 })
 
-    const tracks = results.body.tracks?.items.map((track) => ({
+    const tracks = results.body.tracks?.items.map((track: any) => ({
       id: track.id,
       name: track.name,
       artist: track.artists[0]?.name || 'Unknown',

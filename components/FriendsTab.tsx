@@ -247,7 +247,7 @@ export default function FriendsTab() {
             {friends.map((friend) => (
               <Link
                 key={friend.id}
-                href={`/user/${friend.username || friend.email}`}
+                href={`/user/${(friend as any).username || friend.email}`}
                 className="flex items-center justify-between p-3 bg-bg rounded hover:bg-primary/10 transition-colors cursor-pointer"
               >
                 <div>

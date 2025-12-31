@@ -178,7 +178,7 @@ async function autoDetectPeople(dryRun: boolean = true, userId?: string) {
         }
       })
       
-      for (const canonicalName of canonicalNames) {
+      for (const canonicalName of Array.from(canonicalNames)) {
         try {
           await prisma.personReference.create({
             data: {
