@@ -14,9 +14,6 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { email, password, name } = signupSchema.parse(body)
 
-    // Test database connection first
-    await prisma.$connect()
-
     const existingUser = await prisma.user.findUnique({
       where: { email },
     })
@@ -49,13 +46,20 @@ export async function POST(request: Request) {
     if (error instanceof Error) {
       console.error('Error name:', error.name)
       console.error('Error message:', error.message)
-      console.error('Error stack:', error.stack)
       
       // Check for database connection errors
       if (error.message.includes('P1001') || error.message.includes('Can\'t reach database')) {
         return NextResponse.json(
           { error: 'Database connection failed', message: 'Please check DATABASE_URL environment variable' },
           { status: 500 }
+        )
+      }
+      
+      // Check for Prisma client errors
+      if (error.message.includes('P2002')) {
+        return NextResponse.json(
+          { error: 'User already exists' },
+          { status: 400 }
         )
       }
     }
@@ -70,6 +74,9 @@ export async function POST(request: Request) {
       { error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
+  } finally {
+    // Always disconnect in serverless to avoid connection leaks
+    await prisma.$disconnect()
   }
 }
 
