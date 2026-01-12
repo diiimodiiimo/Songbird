@@ -89,6 +89,27 @@ export default function Dashboard() {
     }
   }, [isLoaded, user])
 
+  // Handle URL params for navigation (e.g., from notification clicks)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const tab = params.get('tab')
+      const showFriends = params.get('showFriends')
+      
+      if (tab === 'profile') {
+        setActiveTab('profile')
+        if (showFriends === 'true') {
+          // Dispatch event to open friends section in ProfileTab
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('openFriendsSection'))
+          }, 100)
+        }
+        // Clean up URL
+        window.history.replaceState({}, '', '/')
+      }
+    }
+  }, [])
+
   useEffect(() => {
     const handleNavigateToWrapped = () => {
       setActiveTab('insights')
@@ -99,7 +120,10 @@ export default function Dashboard() {
       // Could pass date if needed
     }
     const handleNavigateToFriends = () => {
-      setActiveTab('feed')
+      setActiveTab('profile')
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('openFriendsSection'))
+      }, 100)
     }
     window.addEventListener('navigateToWrapped', handleNavigateToWrapped)
     window.addEventListener('navigateToMemory', handleNavigateToMemory)

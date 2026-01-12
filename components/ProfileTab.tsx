@@ -35,6 +35,12 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
   const [showAddFriendModal, setShowAddFriendModal] = useState(false)
   const [friendUsernameInput, setFriendUsernameInput] = useState('')
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
+  const [pendingRequests, setPendingRequests] = useState<Array<{
+    id: string
+    sender: { id: string; name: string | null; username: string | null; email: string; image: string | null }
+  }>>([])
+  const [handlingRequest, setHandlingRequest] = useState(false)
+  const [currentDbUserId, setCurrentDbUserId] = useState<string | null>(null)
   const [theatricsEnabled, setTheatricsEnabled] = useState(() => {
     // Load from localStorage
     if (typeof window !== 'undefined') {
@@ -59,15 +65,67 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
     }
   }, [isLoaded, user])
 
+  // Listen for event to open friends section (from notification clicks)
+  useEffect(() => {
+    const handleOpenFriends = () => {
+      setShowFriendsSection(true)
+    }
+    window.addEventListener('openFriendsSection', handleOpenFriends)
+    return () => window.removeEventListener('openFriendsSection', handleOpenFriends)
+  }, [])
+
   const fetchPendingRequests = async () => {
     try {
-      const res = await fetch('/api/friends/requests')
+      // Also fetch the profile to get the database user ID
+      let dbUserId = currentDbUserId
+      if (!dbUserId) {
+        const profileRes = await fetch('/api/profile')
+        if (profileRes.ok) {
+          const profileData = await profileRes.json()
+          dbUserId = profileData.user?.id || null
+          setCurrentDbUserId(dbUserId)
+        }
+      }
+
+      const res = await fetch('/api/friends/requests?type=all')
       const data = await res.json()
       if (res.ok && data.requests) {
-        setPendingRequestsCount(data.requests.length)
+        // Filter for pending requests where user is the receiver
+        const received = data.requests.filter((r: any) => 
+          r.status === 'pending' && r.receiverId === dbUserId
+        )
+        setPendingRequestsCount(received.length)
+        setPendingRequests(received)
       }
     } catch (error) {
       console.error('Error fetching pending requests:', error)
+    }
+  }
+
+  const handleFriendRequest = async (requestId: string, action: 'accept' | 'decline') => {
+    setHandlingRequest(true)
+    try {
+      const res = await fetch(`/api/friends/requests/${requestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+
+      if (res.ok) {
+        setMessage({ 
+          type: 'success', 
+          text: action === 'accept' ? 'Friend request accepted!' : 'Friend request declined' 
+        })
+        fetchFriends()
+        fetchPendingRequests()
+      } else {
+        const data = await res.json()
+        setMessage({ type: 'error', text: data.error || 'Failed to update friend request' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to update friend request' })
+    } finally {
+      setHandlingRequest(false)
     }
   }
 
@@ -330,51 +388,114 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
 
             {/* Friends List (shown when View Friends clicked) */}
             {showFriendsSection && (
-              <div>
-                <h3 className="text-lg font-semibold mb-3 text-text/80">Friends</h3>
-                {friends.length === 0 ? (
-                  <div className="text-center py-8 text-text/60">
-                    <p>No friends yet.</p>
-                    <p className="text-sm mt-2">Use "Add Friend" to find and connect with others!</p>
-                  </div>
-                ) : (
-                  <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
-                    {friends.map((friend) => (
-                      <Link
-                        key={friend.id}
-                        href={`/user/${friend.username || friend.email}`}
-                        className="bg-bg rounded-lg p-3 flex items-center gap-3 hover:bg-accent/5 border border-transparent hover:border-accent/30 transition-all group"
-                      >
-                        {friend.image ? (
-                          <Image
-                            src={friend.image}
-                            alt={friend.name || 'Friend'}
-                            width={48}
-                            height={48}
-                            className="rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-lg flex-shrink-0">
-                            {(friend.name || friend.email)[0].toUpperCase()}
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold truncate group-hover:text-accent transition-colors text-sm">
-                            {friend.name || 'Friend'}
-                          </div>
-                          {friend.username && (
-                            <div className="text-xs text-text/60 truncate">
-                              @{friend.username}
+              <div className="space-y-6">
+                {/* Pending Friend Requests */}
+                {pendingRequests.length > 0 && (
+                  <div className="bg-accent/10 border border-accent/30 rounded-xl p-4">
+                    <h3 className="text-lg font-semibold mb-3 text-accent flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-accent text-bg flex items-center justify-center text-xs font-bold">
+                        {pendingRequests.length}
+                      </span>
+                      Friend Requests
+                    </h3>
+                    <div className="space-y-3">
+                      {pendingRequests.map((request) => (
+                        <div
+                          key={request.id}
+                          className="bg-surface rounded-lg p-4 flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-3">
+                            {request.sender?.image ? (
+                              <Image
+                                src={request.sender.image}
+                                alt={request.sender.name || 'User'}
+                                width={44}
+                                height={44}
+                                className="rounded-full"
+                              />
+                            ) : (
+                              <div className="w-11 h-11 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold">
+                                {(request.sender?.name || request.sender?.email || '?').charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-semibold">
+                                {request.sender?.name || request.sender?.email?.split('@')[0]}
+                              </div>
+                              <div className="text-sm text-text/50">
+                                @{request.sender?.username || request.sender?.email?.split('@')[0]}
+                              </div>
                             </div>
-                          )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleFriendRequest(request.id, 'accept')}
+                              disabled={handlingRequest}
+                              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+                            >
+                              ✓ Accept
+                            </button>
+                            <button
+                              onClick={() => handleFriendRequest(request.id, 'decline')}
+                              disabled={handlingRequest}
+                              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+                            >
+                              ✕
+                            </button>
+                          </div>
                         </div>
-                        <div className="text-accent opacity-0 group-hover:opacity-100 transition-opacity">
-                          →
-                        </div>
-                      </Link>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
+
+                {/* Friends List */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 text-text/80">Friends ({friends.length})</h3>
+                  {friends.length === 0 ? (
+                    <div className="text-center py-8 text-text/60">
+                      <p>No friends yet.</p>
+                      <p className="text-sm mt-2">Use "Add Friend" to find and connect with others!</p>
+                    </div>
+                  ) : (
+                    <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
+                      {friends.map((friend) => (
+                        <Link
+                          key={friend.id}
+                          href={`/user/${friend.username || friend.email}`}
+                          className="bg-bg rounded-lg p-3 flex items-center gap-3 hover:bg-accent/5 border border-transparent hover:border-accent/30 transition-all group"
+                        >
+                          {friend.image ? (
+                            <Image
+                              src={friend.image}
+                              alt={friend.name || 'Friend'}
+                              width={48}
+                              height={48}
+                              className="rounded-full object-cover flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-lg flex-shrink-0">
+                              {(friend.name || friend.email)[0].toUpperCase()}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold truncate group-hover:text-accent transition-colors text-sm">
+                              {friend.name || 'Friend'}
+                            </div>
+                            {friend.username && (
+                              <div className="text-xs text-text/60 truncate">
+                                @{friend.username}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+                            →
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </section>

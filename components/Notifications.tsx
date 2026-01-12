@@ -153,7 +153,14 @@ export default function Notifications() {
                       handleNotificationClick(notification)
                       // Navigate to appropriate page based on notification type
                       if (notification.type === 'friend_request') {
-                        window.dispatchEvent(new CustomEvent('navigateToFriends'))
+                        // Navigate to main page and trigger opening friends section
+                        window.location.href = '/?tab=profile&showFriends=true'
+                      } else if (notification.type === 'friend_request_accepted') {
+                        // Navigate to the new friend's profile
+                        const request = notification.relatedData
+                        if (request?.sender) {
+                          window.location.href = `/user/${request.sender.username || request.sender.id}`
+                        }
                       }
                     }}
                     className={`w-full text-left p-3 hover:bg-primary/5 transition-colors ${
