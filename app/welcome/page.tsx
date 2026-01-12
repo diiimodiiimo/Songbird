@@ -62,24 +62,28 @@ export default function WelcomePage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/2 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 text-center max-w-lg">
-        {/* Animated Bird Logo */}
+      <div className="relative z-10 text-center max-w-lg mt-8">
+        {/* Animated Bird Logo - Clickable */}
         <div 
-          className={`mb-8 transition-all duration-1000 ${
+          className={`mb-4 transition-all duration-1000 ${
             showContent ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-10'
           }`}
         >
-          <div className="relative inline-block">
-            {/* Glow effect */}
-            <div className="absolute inset-0 bg-accent/20 rounded-full blur-2xl scale-150 animate-pulse" />
+          <button
+            onClick={handleContinue}
+            className="relative inline-block group cursor-pointer focus:outline-none"
+            aria-label="Begin your journey"
+          >
+            {/* Glow effect - pulses more on hover */}
+            <div className="absolute inset-0 bg-accent/20 rounded-full blur-2xl scale-150 animate-pulse group-hover:bg-accent/40 transition-all duration-300" />
             
-            {/* Flying animation */}
-            <div className="relative animate-bounce" style={{ animationDuration: '3s' }}>
+            {/* Flying animation - subtle hover scale */}
+            <div className="relative animate-bounce group-hover:scale-110 transition-transform duration-300" style={{ animationDuration: '3s' }}>
               <Image
                 src="/SongBirdlogo.png"
                 alt="SongBird"
-                width={150}
-                height={150}
+                width={140}
+                height={140}
                 className="object-contain drop-shadow-2xl"
                 priority
               />
@@ -89,7 +93,17 @@ export default function WelcomePage() {
             <span className="absolute -top-4 -right-4 text-3xl animate-bounce" style={{ animationDelay: '0.2s', animationDuration: '2s' }}>🎵</span>
             <span className="absolute top-0 -left-6 text-2xl animate-bounce" style={{ animationDelay: '0.5s', animationDuration: '2.5s' }}>🎶</span>
             <span className="absolute -bottom-2 right-0 text-2xl animate-bounce" style={{ animationDelay: '0.8s', animationDuration: '2.2s' }}>✨</span>
-          </div>
+          </button>
+          
+          {/* Tap instruction */}
+          <p 
+            className={`text-accent/80 text-sm mt-4 animate-pulse transition-opacity duration-1000 ${
+              showButton ? 'opacity-100' : 'opacity-0'
+            }`}
+            style={{ animationDuration: '2s' }}
+          >
+            ✨ Tap the bird to begin your journey ✨
+          </p>
         </div>
 
         {/* Welcome Text */}
@@ -150,7 +164,7 @@ export default function WelcomePage() {
           </div>
         </div>
 
-        {/* Continue Button */}
+        {/* Alternative Continue Button */}
         <div 
           className={`transition-all duration-700 ${
             showButton ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
@@ -158,19 +172,10 @@ export default function WelcomePage() {
         >
           <button
             onClick={handleContinue}
-            className="group relative px-10 py-4 bg-accent text-bg font-bold text-lg rounded-xl hover:bg-accent/90 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-accent/25"
+            className="px-8 py-3 bg-surface/50 backdrop-blur-sm border border-text/20 text-text font-medium rounded-xl hover:bg-accent hover:text-bg hover:border-accent transition-all duration-300"
           >
-            <span className="relative z-10 flex items-center gap-2">
-              Let's Go
-              <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </span>
+            Or press here to continue →
           </button>
-          
-          <p className="mt-4 text-sm text-text/40">
-            Start logging your first song of the day
-          </p>
         </div>
       </div>
     </div>
