@@ -1,18 +1,24 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Convert Clerk user ID to Prisma user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: {
         id: true,
         email: true,
@@ -82,9 +88,15 @@ const updateProfileSchema = z.object({
 
 export async function PUT(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Convert Clerk user ID to Prisma user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const body = await request.json()
@@ -95,7 +107,7 @@ export async function PUT(request: Request) {
       const existingUser = await prisma.user.findFirst({
         where: {
           username: data.username,
-          NOT: { id: session.user.id },
+          NOT: { id: userId },
         },
       })
 
@@ -108,7 +120,7 @@ export async function PUT(request: Request) {
     }
 
     const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: userId },
       data: {
         username: data.username !== undefined ? (data.username || null) : undefined,
         image: data.image !== undefined ? (data.image || null) : undefined,

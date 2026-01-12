@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import SpotifyWebApi from 'spotify-web-api-node'
 
 const spotifyApi = new SpotifyWebApi({
-  clientId: process.env.SPOTIPY_CLIENT_ID,
-  clientSecret: process.env.SPOTIPY_CLIENT_SECRET,
+  clientId: process.env.SPOTIPY_CLIENT_ID || 'e419e60b293c4c13b7c67ab86780c2ef',
+  clientSecret: process.env.SPOTIPY_CLIENT_SECRET || 'aff4838b31af4d36965b1d84c40d24da',
 })
 
 async function getAccessToken() {
@@ -21,8 +20,8 @@ async function getAccessToken() {
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId } = await auth()
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

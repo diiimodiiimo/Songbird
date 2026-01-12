@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
 
 interface WrappedData {
@@ -51,7 +51,7 @@ interface WrappedData {
 }
 
 export default function WrappedTab() {
-  const { data: session } = useSession()
+  const { user, isLoaded } = useUser()
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [wrappedData, setWrappedData] = useState<WrappedData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -78,8 +78,10 @@ export default function WrappedTab() {
   })
 
   useEffect(() => {
-    fetchWrappedData()
-  }, [currentYear, session])
+    if (isLoaded && user) {
+      fetchWrappedData()
+    }
+  }, [currentYear, isLoaded, user])
 
   useEffect(() => {
     // Fetch artist images for top artists
@@ -93,7 +95,7 @@ export default function WrappedTab() {
   }, [wrappedData])
 
   const fetchWrappedData = async () => {
-    if (!session) return
+    if (!user || !isLoaded) return
 
     setLoading(true)
     try {
@@ -293,6 +295,22 @@ export default function WrappedTab() {
             <Image src="/SongBirdlogo.png" alt="SongBird" width={64} height={64} className="object-contain" />
           </div>
           <div className="text-primary/60">Loading your SongBird Wrapped...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="mb-4 flex justify-center">
+            <Image src="/SongBirdlogo.png" alt="SongBird" width={64} height={64} className="object-contain animate-pulse" />
+          </div>
+          <div className="text-primary/60 mb-4">Loading your wrapped...</div>
+          <div className="text-sm text-primary/40 mb-4">
+            Gathering your music memories from {currentYear}
+          </div>
         </div>
       </div>
     )

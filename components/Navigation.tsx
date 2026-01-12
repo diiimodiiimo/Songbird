@@ -1,12 +1,12 @@
 'use client'
 
-import { signOut, useSession } from 'next-auth/react'
+import { useUser, SignOutButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import Image from 'next/image'
 import Notifications from './Notifications'
 
 export default function Navigation() {
-  const { data: session } = useSession()
+  const { user, isLoaded } = useUser()
 
   return (
     <nav className="bg-card border-b border-white/10 px-4 py-3">
@@ -16,16 +16,17 @@ export default function Navigation() {
           SongBird
         </Link>
         <div className="flex items-center gap-4">
-          {session?.user && (
+          {isLoaded && user && (
             <>
               <Notifications />
-              <span className="text-text-muted text-sm">{session.user.name || session.user.email}</span>
-              <button
-                onClick={() => signOut()}
-                className="px-4 py-2 bg-white/5 border border-white/20 rounded-lg hover:bg-white/10 transition-colors text-white text-sm"
-              >
-                Sign Out
-              </button>
+              <span className="text-text-muted text-sm">{user.firstName || user.emailAddresses[0]?.emailAddress}</span>
+              <SignOutButton redirectUrl="/home">
+                <button
+                  className="px-4 py-2 bg-white/5 border border-white/20 rounded-lg hover:bg-white/10 transition-colors text-white text-sm"
+                >
+                  Sign Out
+                </button>
+              </SignOutButton>
             </>
           )}
         </div>

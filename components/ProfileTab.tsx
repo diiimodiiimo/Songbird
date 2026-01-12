@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession, signOut } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -16,7 +16,7 @@ interface Friend {
 }
 
 export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigateToAddEntry?: () => void; onBack?: () => void }) {
-  const { data: session, update } = useSession()
+  const { user, isLoaded } = useUser()
   const router = useRouter()
   const [username, setUsername] = useState('')
   const [profileImage, setProfileImage] = useState('')
@@ -30,6 +30,8 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
   const [loading, setLoading] = useState(false)
   const [loadingProfile, setLoadingProfile] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [entryCount, setEntryCount] = useState(0)
+  const [showSettings, setShowSettings] = useState(false)
   const [theatricsEnabled, setTheatricsEnabled] = useState(() => {
     // Load from localStorage
     if (typeof window !== 'undefined') {
@@ -46,25 +48,52 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
   }, [theatricsEnabled])
 
   useEffect(() => {
-    if (session?.user) {
+    if (isLoaded && user) {
       fetchProfile()
       fetchFriends()
+      fetchEntryCount()
     }
-  }, [session])
+  }, [isLoaded, user])
+
+  const fetchEntryCount = async () => {
+    if (!user || !isLoaded) return
+    try {
+      // Fetch entries with excludeImages to get count efficiently
+      // We'll count by fetching pages until hasMore is false
+      let count = 0
+      let page = 1
+      let hasMore = true
+      
+      while (hasMore && page <= 10) { // Limit to 10 pages (10,000 entries max)
+        const res = await fetch(`/api/entries?page=${page}&pageSize=1000&excludeImages=true`)
+        const data = await res.json()
+        if (res.ok && data.entries) {
+          count += data.entries.length
+          hasMore = data.hasMore || false
+          page++
+        } else {
+          break
+        }
+      }
+      setEntryCount(count)
+    } catch (error) {
+      console.error('Failed to fetch entry count:', error)
+    }
+  }
 
   // Refresh profile when component becomes visible (e.g., returning from edit page)
   useEffect(() => {
-    if (session?.user && typeof window !== 'undefined') {
+    if (isLoaded && user && typeof window !== 'undefined') {
       const handleFocus = () => {
         fetchProfile()
       }
       window.addEventListener('focus', handleFocus)
       return () => window.removeEventListener('focus', handleFocus)
     }
-  }, [session])
+  }, [isLoaded, user])
 
   const fetchProfile = async () => {
-    if (!session) return
+    if (!user || !isLoaded) return
     setLoadingProfile(true)
     try {
       const res = await fetch('/api/profile')
@@ -141,7 +170,7 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
 
           {/* Profile View */}
           <section className="bg-surface rounded-xl p-8 space-y-6">
-            {/* Profile Picture */}
+            {/* Avatar */}
             <div className="flex flex-col items-center gap-4">
               {profileImage ? (
                 <Image
@@ -154,13 +183,15 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
                 />
               ) : (
                 <div className="w-32 h-32 rounded-full bg-accent/20 border-4 border-accent flex items-center justify-center text-5xl font-bold text-accent">
-                  {username.charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || '?'}
+                  {username.charAt(0).toUpperCase() || user?.emailAddresses[0]?.emailAddress?.charAt(0).toUpperCase() || '?'}
                 </div>
               )}
-              <div className="text-center">
-                <h2 className="text-2xl font-bold mb-1">{username || 'Anonymous'}</h2>
-                <p className="text-text/60">@{username || session?.user?.email?.split('@')[0] || 'user'}</p>
-              </div>
+            </div>
+
+            {/* Username */}
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-1">{username || 'Anonymous'}</h2>
+              <p className="text-text/60">@{username || user?.emailAddresses[0]?.emailAddress?.split('@')[0] || 'user'}</p>
             </div>
 
             {/* Bio */}
@@ -170,48 +201,60 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
               </div>
             )}
 
-            {/* Stats Row */}
+            {/* Stats Row - entries, friends */}
             <div className="flex justify-center gap-8 py-4 border-y border-surface">
-              <button
-                onClick={() => setShowFriendsSection(!showFriendsSection)}
-                className="text-center hover:opacity-80 transition-opacity"
-              >
-                <div className="text-2xl font-bold text-accent">{friends.length}</div>
-                <div className="text-sm text-text/60">Friends</div>
-              </button>
               <div className="text-center">
-                <div className="text-2xl font-bold text-accent">{selectedArtists.length}</div>
-                <div className="text-sm text-text/60">Fav Artists</div>
+                <div className="text-2xl font-bold text-accent">{entryCount}</div>
+                <div className="text-sm text-text/60">Entries</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-accent">{selectedSongs.length}</div>
-                <div className="text-sm text-text/60">Fav Songs</div>
+                <div className="text-2xl font-bold text-accent">{friends.length}</div>
+                <div className="text-sm text-text/60">Friends</div>
               </div>
             </div>
 
-            {/* Favorite Artists */}
+            {/* Buttons: View Friends, Add Friend */}
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setShowFriendsSection(!showFriendsSection)}
+                className="px-4 py-2 bg-accent/10 border border-accent/30 rounded-lg text-accent font-medium hover:bg-accent/20 transition-colors"
+              >
+                View Friends
+              </button>
+              <button
+                onClick={() => {
+                  // Navigate to Friends tab or show add friend modal
+                  window.dispatchEvent(new CustomEvent('navigateToFriends'))
+                }}
+                className="px-4 py-2 bg-surface border border-text/20 rounded-lg text-text font-medium hover:bg-surface/80 transition-colors"
+              >
+                Add Friend
+              </button>
+            </div>
+
+            {/* Favorite Artists - tag-style */}
             {selectedArtists.length > 0 && (
               <div>
                 <h3 className="text-lg font-semibold mb-3 text-text/80">Favorite Artists</h3>
                 <div className="flex flex-wrap gap-2">
                   {selectedArtists.map((artist) => (
-                    <div key={artist} className="px-4 py-2 bg-accent/10 border border-accent/30 rounded-full text-accent font-medium">
+                    <span key={artist} className="px-4 py-2 bg-accent/10 border border-accent/30 rounded-full text-accent font-medium">
                       {artist}
-                    </div>
+                    </span>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Favorite Songs */}
+            {/* Favorite Songs - small cards */}
             {selectedSongs.length > 0 && (
               <div>
                 <h3 className="text-lg font-semibold mb-3 text-text/80">Favorite Songs</h3>
-                <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {selectedSongs.map((song) => (
                     <div key={`${song.songTitle}-${song.artist}`} className="bg-bg rounded-lg p-3 border border-accent/20">
-                      <div className="font-semibold">{song.songTitle}</div>
-                      <div className="text-sm text-text/60">{song.artist}</div>
+                      <div className="font-semibold text-sm">{song.songTitle}</div>
+                      <div className="text-xs text-text/60">{song.artist}</div>
                     </div>
                   ))}
                 </div>
@@ -264,49 +307,43 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
         </>
       )}
 
-      {/* Account Section (always visible below profile) */}
+      {/* Edit Profile Button */}
+      <div className="flex justify-center">
+        <Link
+          href="/profile/edit"
+          className="px-6 py-3 bg-accent text-bg font-semibold rounded-lg hover:bg-accent/90 transition-colors"
+        >
+          Edit Profile
+        </Link>
+      </div>
+
+      {/* Settings Section */}
       <section className="bg-surface rounded-xl overflow-hidden">
         <button
-          onClick={() => setShowAccountSection(!showAccountSection)}
+          onClick={() => setShowSettings(!showSettings)}
           className="w-full px-6 py-4 flex items-center justify-between hover:bg-surface/80 transition-colors"
         >
-          <h2 className="text-xl font-bold">Account</h2>
-          <span className="text-2xl">{showAccountSection ? '−' : '+'}</span>
+          <h2 className="text-xl font-bold">Settings</h2>
+          <span className="text-2xl">{showSettings ? '−' : '+'}</span>
         </button>
         
-        {showAccountSection && (
+        {showSettings && (
           <div className="px-6 pb-6 space-y-4">
             {/* Email (Read-only) */}
             <div>
               <label className="block mb-2 text-sm font-medium text-text/80">Email</label>
               <input
                 type="email"
-                value={session?.user?.email || ''}
+                value={user?.emailAddresses[0]?.emailAddress || ''}
                 disabled
                 className="w-full px-4 py-3 bg-bg/50 border border-surface/50 rounded-lg text-text/60 cursor-not-allowed"
               />
               <p className="text-xs text-text/60 mt-1">Email cannot be changed</p>
             </div>
 
-            {/* Change Username (Placeholder) */}
-            <button
-              disabled
-              className="w-full px-6 py-3 bg-surface border border-text/20 text-text/40 font-medium rounded-lg cursor-not-allowed"
-            >
-              Change Username (Coming soon)
-            </button>
-
-            {/* Change Password (Placeholder) */}
-            <button
-              disabled
-              className="w-full px-6 py-3 bg-surface border border-text/20 text-text/40 font-medium rounded-lg cursor-not-allowed"
-            >
-              Change Password (Coming soon)
-            </button>
-
             {/* Sign Out */}
             <button
-              onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+              onClick={() => window.location.href = '/home'}
               className="w-full px-6 py-3 bg-red-900/20 text-red-400 border border-red-900/30 font-medium rounded-lg hover:bg-red-900/30 transition-colors"
             >
               Sign Out

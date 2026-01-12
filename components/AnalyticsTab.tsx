@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
 import Link from 'next/link'
 import { getSpotifyArtistUrl } from '@/lib/spotify'
@@ -17,7 +17,7 @@ interface ArtistImageCache {
 }
 
 export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavigateToAddEntry?: () => void; onBack?: () => void }) {
-  const { data: session } = useSession()
+  const { user, isLoaded } = useUser()
   const [filterOption, setFilterOption] = useState('Last 4 Weeks')
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -27,8 +27,10 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
   const [artistSearchLoading, setArtistSearchLoading] = useState(false)
 
   useEffect(() => {
-    fetchAnalytics()
-  }, [filterOption, session])
+    if (isLoaded && user) {
+      fetchAnalytics()
+    }
+  }, [filterOption, isLoaded, user])
 
   useEffect(() => {
     // Fetch artist images for top artists
@@ -122,7 +124,7 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
   }
 
   const fetchAnalytics = async () => {
-    if (!session) {
+    if (!user || !isLoaded) {
       setLoading(false)
       return
     }
@@ -263,6 +265,12 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
                 </div>
               )}
 
+              {artistSearchLoading && (
+                <div className="text-center py-8 text-text/60">
+                  <div className="text-4xl mb-3 animate-pulse">🔍</div>
+                  Searching for songs...
+                </div>
+              )}
               {artistSearchQuery && artistSearchResults.length === 0 && !artistSearchLoading && (
                 <div className="text-center py-8 text-text/60">
                   <div className="text-4xl mb-3">🔍</div>

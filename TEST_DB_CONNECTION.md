@@ -39,3 +39,5 @@ If Session mode doesn't work, try Transaction mode. The connection string format
 
 This will tell us exactly what's failing.
 
+
+

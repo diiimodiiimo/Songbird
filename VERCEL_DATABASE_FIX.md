@@ -52,3 +52,5 @@ If you can't find the pooler URL:
 5. There should be options for "Direct connection" and "Connection pooling"
 6. Use the connection pooling one
 
+
+

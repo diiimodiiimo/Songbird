@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 const updateRequestSchema = z.object({
   action: z.enum(['accept', 'decline']),
@@ -14,9 +14,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Convert Clerk user ID to Prisma user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { id } = await params
@@ -36,7 +42,7 @@ export async function PUT(
     }
 
     // Only the receiver can accept/decline
-    if (friendRequest.receiverId !== session.user.id) {
+    if (friendRequest.receiverId !== userId) {
       return NextResponse.json(
         { error: 'You can only respond to requests sent to you' },
         { status: 403 }
@@ -109,9 +115,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Convert Clerk user ID to Prisma user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { id } = await params
@@ -127,7 +139,7 @@ export async function DELETE(
     }
 
     // Only the sender can cancel
-    if (friendRequest.senderId !== session.user.id) {
+    if (friendRequest.senderId !== userId) {
       return NextResponse.json(
         { error: 'You can only cancel requests you sent' },
         { status: 403 }

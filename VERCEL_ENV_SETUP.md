@@ -59,3 +59,5 @@ SPOTIPY_CLIENT_SECRET=your-client-secret
 - Check that Supabase database is running
 - Make sure SSL mode is included: `?sslmode=require` (if needed)
 
+
+

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -18,7 +18,7 @@ interface SuggestedSong {
 }
 
 export default function EditProfilePage() {
-  const { data: session, update } = useSession()
+  const { isSignedIn, isLoaded, user } = useUser()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   
@@ -35,14 +35,14 @@ export default function EditProfilePage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
-    if (session?.user) {
+    if (isLoaded && isSignedIn) {
       fetchProfile()
       fetchSuggestions()
     }
-  }, [session])
+  }, [isLoaded, isSignedIn])
 
   const fetchProfile = async () => {
-    if (!session) return
+    if (!isSignedIn) return
     setLoadingProfile(true)
     try {
       const res = await fetch('/api/profile')
@@ -139,7 +139,7 @@ export default function EditProfilePage() {
   }
 
   const handleSave = async () => {
-    if (!session) return
+    if (!isSignedIn) return
 
     setLoading(true)
     setMessage(null)
@@ -160,8 +160,6 @@ export default function EditProfilePage() {
       const data = await res.json()
       if (res.ok) {
         setMessage({ type: 'success', text: 'Profile updated successfully! Your profile is now active.' })
-        // Update session to reflect changes immediately
-        await update()
         // Refresh profile data to show updated info
         await fetchProfile()
         // Navigate back to profile after a short delay
@@ -235,7 +233,7 @@ export default function EditProfilePage() {
               />
             ) : (
               <div className="w-32 h-32 rounded-full bg-accent/20 border-4 border-accent flex items-center justify-center text-5xl font-bold text-accent">
-                {username.charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || '?'}
+                {username.charAt(0).toUpperCase() || user?.emailAddresses[0]?.emailAddress?.charAt(0).toUpperCase() || '?'}
               </div>
             )}
             <input

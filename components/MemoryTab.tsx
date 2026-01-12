@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -18,7 +18,7 @@ interface Entry {
 }
 
 export default function MemoryTab() {
-  const { data: session } = useSession()
+  const { user, isLoaded } = useUser()
   const router = useRouter()
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [onThisDayEntries, setOnThisDayEntries] = useState<Entry[]>([])
@@ -31,16 +31,20 @@ export default function MemoryTab() {
 
   // Fetch On This Day entries
   useEffect(() => {
-    fetchOnThisDay()
-  }, [selectedDate, session])
+    if (isLoaded && user) {
+      fetchOnThisDay()
+    }
+  }, [selectedDate, isLoaded, user])
 
   // Fetch recent entries (last 14)
   useEffect(() => {
-    fetchRecentEntries()
-  }, [session])
+    if (isLoaded && user) {
+      fetchRecentEntries()
+    }
+  }, [isLoaded, user])
 
   const fetchOnThisDay = async () => {
-    if (!session) return
+    if (!user || !isLoaded) return
     
     setLoadingOnThisDay(true)
     try {
@@ -84,7 +88,7 @@ export default function MemoryTab() {
   }
 
   const fetchRecentEntries = async () => {
-    if (!session) return
+    if (!user || !isLoaded) return
     
     setLoadingRecent(true)
     try {

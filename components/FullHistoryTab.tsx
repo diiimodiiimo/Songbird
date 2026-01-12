@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 import { format } from 'date-fns'
 
 interface Entry {
@@ -13,7 +13,7 @@ interface Entry {
 }
 
 export default function FullHistoryTab() {
-  const { data: session } = useSession()
+  const { isLoaded, isSignedIn } = useUser()
   const [keyword, setKeyword] = useState('')
   const [entries, setEntries] = useState<Entry[]>([])
   const [filteredEntries, setFilteredEntries] = useState<Entry[]>([])
@@ -21,7 +21,7 @@ export default function FullHistoryTab() {
 
   useEffect(() => {
     fetchEntries()
-  }, [])
+  }, [isLoaded, isSignedIn])
 
   useEffect(() => {
     if (keyword.trim()) {
@@ -39,7 +39,7 @@ export default function FullHistoryTab() {
   }, [keyword, entries])
 
   const fetchEntries = async () => {
-    if (!session) {
+    if (!isLoaded || !isSignedIn) {
       setLoading(false)
       return
     }

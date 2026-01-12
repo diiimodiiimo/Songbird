@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
 
 interface Entry {
@@ -15,7 +15,7 @@ interface Entry {
 }
 
 export default function HistoryTab({ onNavigateToAddEntry, onBack }: { onNavigateToAddEntry?: () => void; onBack?: () => void }) {
-  const { data: session } = useSession()
+  const { user, isLoaded } = useUser()
   const [view, setView] = useState<'timeline' | 'on-this-day'>('on-this-day')
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -207,7 +207,7 @@ function EditPeopleModal({ isOpen, onClose, entry, onSave }: EditPeopleModalProp
 }
 
 function TimelineView({ onEditPeople, refreshKey }: { onEditPeople: (entry: Entry) => void; refreshKey?: number }) {
-  const { data: session } = useSession()
+  const { isLoaded, isSignedIn } = useUser()
   const [keyword, setKeyword] = useState('')
   const [entries, setEntries] = useState<Entry[]>([])
   const [filteredEntries, setFilteredEntries] = useState<Entry[]>([])
@@ -240,7 +240,7 @@ function TimelineView({ onEditPeople, refreshKey }: { onEditPeople: (entry: Entr
   }, [keyword, entries])
 
   const fetchEntries = async (pageNum: number, reset: boolean = false) => {
-    if (!session || (!hasMore && !reset)) return
+    if (!isLoaded || !isSignedIn || (!hasMore && !reset)) return
     
     setLoading(true)
     try {
@@ -385,7 +385,7 @@ function TimelineView({ onEditPeople, refreshKey }: { onEditPeople: (entry: Entr
 }
 
 function OnThisDayView({ onEditPeople, refreshKey }: { onEditPeople: (entry: Entry) => void; refreshKey?: number }) {
-  const { data: session } = useSession()
+  const { isLoaded, isSignedIn } = useUser()
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(false)
@@ -395,7 +395,7 @@ function OnThisDayView({ onEditPeople, refreshKey }: { onEditPeople: (entry: Ent
   }, [selectedDate, refreshKey])
 
   const fetchHistory = async () => {
-    if (!session) return
+    if (!isLoaded || !isSignedIn) return
     
     setLoading(true)
     try {

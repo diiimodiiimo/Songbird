@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import SpotifyWebApi from 'spotify-web-api-node'
+import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 const spotifyApi = new SpotifyWebApi({
   clientId: process.env.SPOTIFY_CLIENT_ID!,
@@ -27,9 +27,15 @@ function getSeason(date: Date): 'winter' | 'spring' | 'summer' | 'fall' {
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Convert Clerk user ID to Prisma user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -44,7 +50,7 @@ export async function GET(request: Request) {
     // First, let's check if user has any entries at all
     const allUserEntries = await prisma.entry.findMany({
       where: {
-        userId: session.user.id,
+        userId: userId,
       },
       select: {
         date: true,
@@ -54,7 +60,7 @@ export async function GET(request: Request) {
 
     const entries = await prisma.entry.findMany({
       where: {
-        userId: session.user.id,
+        userId: userId,
         date: {
           gte: startDate,
           lte: endDate,
@@ -91,7 +97,7 @@ export async function GET(request: Request) {
       if (allUserEntries.length > 0) {
         const allEntries = await prisma.entry.findMany({
           where: {
-            userId: session.user.id,
+            userId: userId,
           },
           select: {
             date: true,

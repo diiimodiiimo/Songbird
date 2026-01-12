@@ -1,13 +1,19 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
+import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Convert Clerk user ID to Prisma user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -20,7 +26,7 @@ export async function GET(request: Request) {
     // SQLite doesn't support case-insensitive mode, so we'll filter in memory
     const allUsers = await prisma.user.findMany({
       where: {
-        NOT: { id: session.user.id },
+        NOT: { id: userId },
       },
       select: {
         id: true,

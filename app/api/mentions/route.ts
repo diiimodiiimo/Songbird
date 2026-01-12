@@ -1,25 +1,31 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { areFriends } from '@/lib/friends'
 import { z } from 'zod'
+import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 const mentionSchema = z.object({
   entryId: z.string(),
-  userId: z.string(), // The user being mentioned
+  userId: z.string(), // The user being mentioned (Prisma user ID)
 })
 
 // POST - Add a mention to an entry
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Convert Clerk user ID to Prisma user ID
+    const currentUserId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!currentUserId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
+    }
+
     const body = await request.json()
-    const { entryId, userId } = mentionSchema.parse(body)
+    const { entryId, userId: mentionedUserId } = mentionSchema.parse(body)
 
     // Verify the entry exists and belongs to the current user
     const entry = await prisma.entry.findUnique({
@@ -30,7 +36,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
     }
 
-    if (entry.userId !== session.user.id) {
+    if (entry.userId !== currentUserId) {
       return NextResponse.json(
         { error: 'You can only mention people in your own entries' },
         { status: 403 }
@@ -38,7 +44,7 @@ export async function POST(request: Request) {
     }
 
     // Check if users are friends (mentions only allowed between friends)
-    const isFriend = await areFriends(session.user.id, userId)
+    const isFriend = await areFriends(currentUserId, mentionedUserId)
     if (!isFriend) {
       return NextResponse.json(
         { error: 'You can only mention friends' },
@@ -51,7 +57,7 @@ export async function POST(request: Request) {
       where: {
         entryId_userId: {
           entryId,
-          userId,
+          userId: mentionedUserId,
         },
       },
     })
@@ -67,7 +73,7 @@ export async function POST(request: Request) {
     const mention = await prisma.mention.create({
       data: {
         entryId,
-        userId,
+        userId: mentionedUserId,
       },
       include: {
         user: {
@@ -84,7 +90,7 @@ export async function POST(request: Request) {
     // Create notification for the mentioned user
     await prisma.notification.create({
       data: {
-        userId,
+        userId: mentionedUserId,
         type: 'mention',
         relatedId: entryId,
       },
@@ -109,16 +115,22 @@ export async function POST(request: Request) {
 // DELETE - Remove a mention
 export async function DELETE(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Convert Clerk user ID to Prisma user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { searchParams } = new URL(request.url)
     const entryId = searchParams.get('entryId')
-    const userId = searchParams.get('userId')
+    const mentionedUserId = searchParams.get('userId')
 
-    if (!entryId || !userId) {
+    if (!entryId || !mentionedUserId) {
       return NextResponse.json(
         { error: 'entryId and userId are required' },
         { status: 400 }
@@ -130,7 +142,7 @@ export async function DELETE(request: Request) {
       where: { id: entryId },
     })
 
-    if (!entry || entry.userId !== session.user.id) {
+    if (!entry || entry.userId !== userId) {
       return NextResponse.json(
         { error: 'You can only remove mentions from your own entries' },
         { status: 403 }
@@ -141,7 +153,7 @@ export async function DELETE(request: Request) {
       where: {
         entryId_userId: {
           entryId,
-          userId,
+          userId: mentionedUserId,
         },
       },
     })
@@ -155,6 +167,8 @@ export async function DELETE(request: Request) {
     )
   }
 }
+
+
 
 
 

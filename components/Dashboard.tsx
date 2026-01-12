@@ -11,6 +11,43 @@ import WrappedTab from './WrappedTab'
 import LeaderboardTab from './LeaderboardTab'
 import Navigation from './Navigation'
 
+// Custom SongBird-style icon components (temporary SVG placeholders)
+const TodayIcon = ({ active }: { active: boolean }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? "currentColor" : "none"} />
+    <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? "currentColor" : "none"} />
+    <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? "currentColor" : "none"} />
+  </svg>
+)
+
+const MemoryIcon = ({ active }: { active: boolean }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? "currentColor" : "none"} />
+  </svg>
+)
+
+const FeedIcon = ({ active }: { active: boolean }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" fill={active ? "currentColor" : "none"} />
+    <path d="M12 1v6M12 17v6M23 12h-6M7 12H1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+)
+
+const InsightsIcon = ({ active }: { active: boolean }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 3v18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M7 16l4-4 4 4 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={active ? "currentColor" : "none"} />
+  </svg>
+)
+
+const ProfileIcon = ({ active }: { active: boolean }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" fill={active ? "currentColor" : "none"} />
+  </svg>
+)
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('today')
   const [insightsSubTab, setInsightsSubTab] = useState<'analytics' | 'wrapped' | 'leaderboard'>('analytics')
@@ -24,21 +61,26 @@ export default function Dashboard() {
       setActiveTab('history')
       // Could pass date if needed
     }
+    const handleNavigateToFriends = () => {
+      setActiveTab('feed')
+    }
     window.addEventListener('navigateToWrapped', handleNavigateToWrapped)
     window.addEventListener('navigateToMemory', handleNavigateToMemory)
+    window.addEventListener('navigateToFriends', handleNavigateToFriends)
     return () => {
       window.removeEventListener('navigateToWrapped', handleNavigateToWrapped)
       window.removeEventListener('navigateToMemory', handleNavigateToMemory)
+      window.removeEventListener('navigateToFriends', handleNavigateToFriends)
     }
   }, [])
 
-  // Main tabs - 5 for mobile bottom nav
+  // Main tabs - LOCKED ORDER: Today | Memory | Feed | Insights | Profile
   const mainTabs = [
-    { id: 'today', label: 'Today', emoji: '🐦', icon: '/SongBirdlogo.png' },
-    { id: 'feed', label: 'Feed', emoji: '🎵' },
-    { id: 'history', label: 'Memory', emoji: '📖' },
-    { id: 'insights', label: 'Insights', emoji: '📊' },
-    { id: 'profile', label: 'Profile', emoji: '👤' },
+    { id: 'today', label: 'Today', icon: TodayIcon },
+    { id: 'history', label: 'Memory', icon: MemoryIcon },
+    { id: 'feed', label: 'Feed', icon: FeedIcon },
+    { id: 'insights', label: 'Insights', icon: InsightsIcon },
+    { id: 'profile', label: 'Profile', icon: ProfileIcon },
   ]
 
   // All tabs for desktop sidebar
@@ -117,33 +159,29 @@ export default function Dashboard() {
       {/* Bottom Navigation - visible on all screen sizes */}
       <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-white/10 z-50">
         <div className="flex justify-around items-center px-2 py-2">
-          {mainTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id)
-                if (tab.id === 'insights') setInsightsSubTab('analytics')
-              }}
-              className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-lg transition-all ${
-                activeTab === tab.id
-                  ? 'text-primary'
-                  : 'text-text-muted'
-              }`}
-            >
-              {tab.id === 'today' && tab.icon ? (
-                <Image 
-                  src={tab.icon} 
-                  alt={tab.label} 
-                  width={activeTab === tab.id ? 32 : 24} 
-                  height={activeTab === tab.id ? 32 : 24}
-                  className="object-contain"
-                />
-              ) : (
-                <span className={`${activeTab === tab.id ? 'text-2xl' : 'text-xl'}`}>{tab.emoji}</span>
-              )}
-              <span className="text-[10px] font-medium">{tab.label}</span>
-            </button>
-          ))}
+          {mainTabs.map((tab) => {
+            const IconComponent = tab.icon
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id)
+                  if (tab.id === 'insights') setInsightsSubTab('analytics')
+                }}
+                className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-lg transition-all ${
+                  isActive
+                    ? 'text-accent'
+                    : 'text-text-muted'
+                }`}
+              >
+                <div className={`transition-transform ${isActive ? 'scale-110' : 'scale-100'}`}>
+                  <IconComponent active={isActive} />
+                </div>
+                <span className={`text-[10px] font-medium ${isActive ? 'font-semibold' : ''}`}>{tab.label}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>

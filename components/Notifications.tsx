@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 
 interface Notification {
   id: string
@@ -13,21 +13,23 @@ interface Notification {
 }
 
 export default function Notifications() {
-  const { data: session } = useSession()
+  const { user, isLoaded } = useUser()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    fetchNotifications()
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000)
-    return () => clearInterval(interval)
-  }, [session])
+    if (isLoaded && user) {
+      fetchNotifications()
+      // Poll for new notifications every 30 seconds
+      const interval = setInterval(fetchNotifications, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [isLoaded, user])
 
   const fetchNotifications = async () => {
-    if (!session) return
+    if (!user) return
 
     try {
       const res = await fetch('/api/notifications?unreadOnly=false')
@@ -77,7 +79,7 @@ export default function Notifications() {
     } else if (notification.type === 'friend_request_accepted') {
       const request = notification.relatedData
       if (request) {
-        const friend = request.receiver.id === session?.user.id ? request.sender : request.receiver
+        const friend = request.receiver.id === user?.id ? request.sender : request.receiver
         return `${friend.name || friend.email} accepted your friend request`
       }
       return 'Friend request accepted'
@@ -153,6 +155,8 @@ export default function Notifications() {
     </div>
   )
 }
+
+
 
 
 

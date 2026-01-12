@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 const friendRequestSchema = z.object({
   receiverUsername: z.string().min(1).max(50),
@@ -11,9 +11,15 @@ const friendRequestSchema = z.object({
 // GET - List friend requests (sent and received)
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Convert Clerk user ID to Prisma user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -21,14 +27,14 @@ export async function GET(request: Request) {
 
     const where: any = {}
     if (type === 'sent') {
-      where.senderId = session.user.id
+      where.senderId = userId
     } else if (type === 'received') {
-      where.receiverId = session.user.id
+      where.receiverId = userId
     } else {
       // Get both sent and received
       where.OR = [
-        { senderId: session.user.id },
-        { receiverId: session.user.id },
+        { senderId: userId },
+        { receiverId: userId },
       ]
     }
 
@@ -70,9 +76,15 @@ export async function GET(request: Request) {
 // POST - Send a friend request
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Convert Clerk user ID to Prisma user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const body = await request.json()
@@ -90,7 +102,7 @@ export async function POST(request: Request) {
       )
     }
 
-    if (receiver.id === session.user.id) {
+    if (receiver.id === userId) {
       return NextResponse.json(
         { error: 'Cannot send friend request to yourself' },
         { status: 400 }
@@ -102,12 +114,12 @@ export async function POST(request: Request) {
       where: {
         OR: [
           {
-            senderId: session.user.id,
+            senderId: userId,
             receiverId: receiver.id,
           },
           {
             senderId: receiver.id,
-            receiverId: session.user.id,
+            receiverId: userId,
           },
         ],
       },
@@ -131,7 +143,7 @@ export async function POST(request: Request) {
     // Create the friend request
     const friendRequest = await prisma.friendRequest.create({
       data: {
-        senderId: session.user.id,
+        senderId: userId,
         receiverId: receiver.id,
         status: 'pending',
       },

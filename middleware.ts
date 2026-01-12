@@ -1,12 +1,33 @@
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
 
-export function middleware(request: NextRequest) {
-  // Allow all requests for now - we'll add auth later
-  return NextResponse.next()
-}
+const isPublicRoute = createRouteMatcher([
+  '/home(.*)',
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/api/webhooks(.*)',
+])
+
+export default clerkMiddleware(async (auth, req) => {
+  const { userId } = await auth()
+  const isPublic = isPublicRoute(req)
+  
+  // If user is not authenticated and trying to access a protected route
+  if (!userId && !isPublic) {
+    // Redirect to home page for sign in/sign up
+    const homeUrl = new URL('/home', req.url)
+    return NextResponse.redirect(homeUrl)
+  }
+  
+  // Don't auto-redirect from /home - let user choose to sign in/out
+  // if (userId && req.nextUrl.pathname === '/home') {
+  //   const dashboardUrl = new URL('/', req.url)
+  //   return NextResponse.redirect(dashboardUrl)
+  // }
+})
 
 export const config = {
-  matcher: ['/((?!api|auth|_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }
-

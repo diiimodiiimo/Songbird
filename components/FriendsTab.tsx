@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 import Link from 'next/link'
 
 interface FriendRequest {
@@ -30,7 +30,7 @@ interface Friend {
 }
 
 export default function FriendsTab() {
-  const { data: session } = useSession()
+  const { user, isLoaded } = useUser()
   const [friendUsername, setFriendUsername] = useState('')
   const [pendingRequests, setPendingRequests] = useState<FriendRequest[]>([])
   const [friends, setFriends] = useState<Friend[]>([])
@@ -38,12 +38,14 @@ export default function FriendsTab() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
-    fetchFriends()
-    fetchFriendRequests()
-  }, [session])
+    if (isLoaded && user) {
+      fetchFriends()
+      fetchFriendRequests()
+    }
+  }, [isLoaded, user])
 
   const fetchFriends = async () => {
-    if (!session) return
+    if (!user || !isLoaded) return
 
     try {
       const res = await fetch('/api/friends/list')
@@ -57,7 +59,7 @@ export default function FriendsTab() {
   }
 
   const fetchFriendRequests = async () => {
-    if (!session) return
+    if (!user || !isLoaded) return
 
     try {
       const res = await fetch('/api/friends/requests?type=all')
@@ -71,7 +73,7 @@ export default function FriendsTab() {
   }
 
   const sendFriendRequest = async () => {
-    if (!session || !friendUsername.trim()) {
+    if (!user || !isLoaded || !friendUsername.trim()) {
       setMessage({ type: 'error', text: 'Please enter a username' })
       return
     }
@@ -128,10 +130,10 @@ export default function FriendsTab() {
   }
 
   const receivedRequests = pendingRequests.filter(
-    (r) => r.receiver.id === session?.user.id
+    (r) => r.receiver.id === user?.id
   )
   const sentRequests = pendingRequests.filter(
-    (r) => r.sender.id === session?.user.id
+    (r) => r.sender.id === user?.id
   )
 
   return (
@@ -152,22 +154,25 @@ export default function FriendsTab() {
 
       {/* Send Friend Request */}
       <div className="bg-card border border-primary rounded p-4">
-        <h4 className="text-lg font-semibold mb-3">Add Friend</h4>
-        <div className="flex space-x-2">
+        <h4 className="text-lg font-semibold mb-3">Add Friend by Username</h4>
+        <p className="text-sm text-primary/60 mb-3">
+          Enter a username to send a friend request
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
-            placeholder="Enter friend's username"
+            placeholder="Enter username (e.g., @username)"
             value={friendUsername}
             onChange={(e) => setFriendUsername(e.target.value)}
-            className="flex-grow px-4 py-2 bg-bg border border-primary rounded text-primary"
-            onKeyPress={(e) => e.key === 'Enter' && sendFriendRequest()}
+            className="flex-grow px-4 py-2 bg-bg border border-primary rounded text-primary placeholder:text-primary/40"
+            onKeyPress={(e) => e.key === 'Enter' && !loading && sendFriendRequest()}
           />
           <button
             onClick={sendFriendRequest}
-            disabled={loading}
-            className="bg-primary text-bg px-4 py-2 rounded font-semibold disabled:opacity-50"
+            disabled={loading || !friendUsername.trim()}
+            className="bg-primary text-bg px-6 py-2 rounded font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors whitespace-nowrap"
           >
-            {loading ? 'Sending...' : 'Send Request'}
+            {loading ? 'Sending...' : 'Add Friend'}
           </button>
         </div>
       </div>

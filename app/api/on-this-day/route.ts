@@ -1,17 +1,23 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
+import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Convert Clerk user ID to Prisma user ID
+    const prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!prismaUserId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
+    }
+
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId') || session.user.id
+    const userId = searchParams.get('userId') || prismaUserId
     const dateParam = searchParams.get('date') // YYYY-MM-DD format
 
     if (!dateParam || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {

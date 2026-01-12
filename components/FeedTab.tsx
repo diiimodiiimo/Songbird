@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
 import Link from 'next/link'
 import { getSpotifyTrackUrl, getSpotifyArtistUrl } from '@/lib/spotify'
@@ -34,16 +34,16 @@ interface FeedEntry {
 }
 
 export default function FeedTab() {
-  const { data: session } = useSession()
+  const { isLoaded, isSignedIn } = useUser()
   const [entries, setEntries] = useState<FeedEntry[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     fetchFeed()
-  }, [session])
+  }, [isLoaded, isSignedIn])
 
   const fetchFeed = async () => {
-    if (!session) {
+    if (!isLoaded || !isSignedIn) {
       setLoading(false)
       return
     }
@@ -56,7 +56,7 @@ export default function FeedTab() {
         setEntries(data.entries)
       } else if (res.status === 401) {
         console.error('Unauthorized - please sign in')
-        window.location.href = '/auth/signin'
+        window.location.href = '/home'
       }
     } catch (error) {
       console.error('Error fetching feed:', error)

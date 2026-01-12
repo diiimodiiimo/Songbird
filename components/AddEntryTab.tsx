@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
@@ -19,7 +19,7 @@ interface Track {
 }
 
 export default function AddEntryTab() {
-  const { data: session } = useSession()
+  const { user, isLoaded, isSignedIn } = useUser()
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [showWrappedBanner, setShowWrappedBanner] = useState(true)
@@ -38,6 +38,11 @@ export default function AddEntryTab() {
   const [checkingEntry, setCheckingEntry] = useState(false)
   const [showFlyingAnimation, setShowFlyingAnimation] = useState(false)
   const [onThisDayEntries, setOnThisDayEntries] = useState<Array<{ id: string; date: string; songTitle: string; artist: string; albumArt: string | null }>>([])
+  const [currentStreak, setCurrentStreak] = useState(0)
+  const [loadingStreak, setLoadingStreak] = useState(false)
+  const [selectedMood, setSelectedMood] = useState<string | null>(null)
+  const [showMoodPicker, setShowMoodPicker] = useState(false)
+  const [showBSideCTA, setShowBSideCTA] = useState(false)
 
   // Check if it's today's date
   const isToday = date === new Date().toISOString().split('T')[0]
@@ -46,7 +51,7 @@ export default function AddEntryTab() {
 
   // Define functions before useEffect hooks
   const fetchFriends = async () => {
-    if (!session) return
+    if (!isLoaded || !isSignedIn) return
 
     try {
       const res = await fetch('/api/friends/list')
@@ -60,7 +65,7 @@ export default function AddEntryTab() {
   }
 
   const checkExistingEntry = async () => {
-    if (!session) return
+    if (!isLoaded || !isSignedIn) return
 
     setCheckingEntry(true)
     try {
@@ -107,98 +112,173 @@ export default function AddEntryTab() {
   // Fetch friends list for mentions
   useEffect(() => {
     fetchFriends()
-  }, [session])
+  }, [isLoaded, isSignedIn])
 
   // Check for existing entry when date changes
   useEffect(() => {
     checkExistingEntry()
-  }, [date, session])
+  }, [date, isLoaded, isSignedIn])
 
   // Fetch On This Day entries for teaser
   useEffect(() => {
-    if (isToday && !showForm && !existingEntry && session) {
+    if (isToday && !showForm && !existingEntry && isLoaded && isSignedIn) {
       const todayStr = new Date().toISOString().split('T')[0]
       fetch(`/api/on-this-day?date=${todayStr}`)
         .then(res => res.json())
         .then(data => {
           if (data.entries && data.entries.length > 0) {
-            setOnThisDayEntries(data.entries.slice(0, 2)) // Max 2 entries
+            setOnThisDayEntries(data.entries.slice(0, 3)) // Max 3 entries
           }
         })
         .catch(err => console.error('Error fetching on-this-day:', err))
     } else {
       setOnThisDayEntries([])
     }
-  }, [isToday, showForm, existingEntry, session])
+  }, [isToday, showForm, existingEntry, isLoaded, isSignedIn])
+
+  // Fetch current streak
+  useEffect(() => {
+    if (isToday && isLoaded && isSignedIn) {
+      setLoadingStreak(true)
+      fetch('/api/streak')
+        .then(res => res.json())
+        .then(data => {
+          if (data.currentStreak !== undefined) {
+            setCurrentStreak(data.currentStreak)
+          }
+        })
+        .catch(err => console.error('Error fetching streak:', err))
+        .finally(() => setLoadingStreak(false))
+    }
+  }, [isToday, isLoaded, isSignedIn])
   
   // If today and no form shown and no existing entry, show the songbird landing page
   if (isToday && !showForm && !existingEntry) {
+    const fullDateString = today.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      month: 'long', 
+      day: 'numeric',
+      year: 'numeric'
+    })
+
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh]">
-        {/* Date header */}
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-text mb-2">
-            {dayName}, {today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-          </h2>
-          <p className="text-text/60 text-lg">How will we remember today?</p>
+      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        {/* Top Row: Full date with year + Streak indicator */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-text">
+            {fullDateString}
+          </h1>
+          {loadingStreak ? (
+            <div className="text-text/60 text-sm">Loading...</div>
+          ) : currentStreak > 0 ? (
+            <div className="flex items-center gap-1.5 text-accent text-sm sm:text-base font-medium">
+              <span>🔥</span>
+              <span>{currentStreak} {currentStreak === 1 ? 'day' : 'days'}</span>
+            </div>
+          ) : null}
         </div>
 
-        {/* Songbird icon - clickable */}
-        {showFlyingAnimation ? (
-          <div className="mb-8 flex justify-center">
-            <video 
-              src="/movingbirdbrowon.mp4" 
-              autoPlay
-              loop={false}
-              muted
-              className="w-36 h-36 object-contain"
-              onEnded={() => {
-                setShowForm(true)
-                setShowFlyingAnimation(false)
-              }}
-            />
-          </div>
-        ) : (
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              setShowFlyingAnimation(true)
-              // Show video for 2 seconds, then show form
-              setTimeout(() => {
-                setShowForm(true)
-                setShowFlyingAnimation(false)
-              }, 2000)
-            }}
-            className="group relative mb-8 transition-all hover:scale-110 active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/50 rounded-full"
-            aria-label="Add today's song"
-            type="button"
-          >
-            <div className="animate-bounce transition-all group-hover:drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]" style={{ animationDuration: '2s' }}>
-              <Image 
-                src="/SongBirdlogo.png" 
-                alt="SongBird" 
-                width={144} 
-                height={144} 
-                className="object-contain"
-                priority
+        {/* Prompt */}
+        <p className="text-text/70 text-base sm:text-lg mb-8 text-center">
+          How will we remember today?
+        </p>
+
+        {/* SongBird CTA - Entire bird is clickable */}
+        <div className="flex justify-center mb-8">
+          {showFlyingAnimation ? (
+            <div className="flex justify-center">
+              <video 
+                src="/movingbirdbrowon.mp4" 
+                autoPlay
+                loop={false}
+                muted
+                className="w-36 h-36 object-contain"
+                onEnded={() => {
+                  setShowForm(true)
+                  setShowFlyingAnimation(false)
+                }}
               />
             </div>
-            <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="bg-accent text-bg text-sm px-4 py-2 rounded-lg whitespace-nowrap shadow-lg">
-                Add Entry
+          ) : (
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setShowFlyingAnimation(true)
+                setTimeout(() => {
+                  setShowForm(true)
+                  setShowFlyingAnimation(false)
+                }, 2000)
+              }}
+              className="group relative transition-all hover:scale-105 active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/50 rounded-full"
+              aria-label="Add today's song"
+              type="button"
+            >
+              {/* Subtle idle animation - pulse/glow */}
+              <div className="animate-pulse transition-all group-hover:drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] group-hover:animate-none" style={{ animationDuration: '3s' }}>
+                <Image 
+                  src="/SongBirdlogo.png" 
+                  alt="SongBird" 
+                  width={144} 
+                  height={144} 
+                  className="object-contain"
+                  priority
+                />
               </div>
-            </div>
-          </button>
-        )}
-
-        {/* Subtitle */}
-        <div className="text-center">
-          <p className="text-text/60 text-base">No song yet</p>
-          <p className="text-text/40 text-sm">What song will hold today together?</p>
+              {/* TODO v1.5: Add more complex animations */}
+            </button>
+          )}
         </div>
 
-        {/* Wrapped Banner - moved here */}
+        {/* On This Day Section - BETWEEN bird and Wrapped banner */}
+        {onThisDayEntries.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-text">On This Day</h3>
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('navigateToMemory', { 
+                    detail: { date: new Date().toISOString().split('T')[0] } 
+                  }))
+                }}
+                className="text-sm text-accent hover:text-accent/80 transition-colors"
+              >
+                See all →
+              </button>
+            </div>
+            <div className="space-y-3">
+              {onThisDayEntries.slice(0, 3).map((entry) => (
+                <button
+                  key={entry.id}
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('navigateToMemory', { 
+                      detail: { date: entry.date } 
+                    }))
+                  }}
+                  className="w-full flex items-center gap-3 bg-surface/50 hover:bg-surface rounded-lg p-3 transition-colors text-left"
+                >
+                  {entry.albumArt && (
+                    <Image
+                      src={entry.albumArt}
+                      alt={entry.songTitle}
+                      width={60}
+                      height={60}
+                      className="rounded flex-shrink-0"
+                      style={{ aspectRatio: '1/1', objectFit: 'cover' }}
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-text/60 mb-1">{entry.date.split('-')[0]}</div>
+                    <div className="text-sm font-medium truncate">{entry.songTitle}</div>
+                    <div className="text-xs text-text/70 truncate">{entry.artist}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Wrapped Banner - Secondary, below On This Day */}
         {showWrappedBanner && (
           <div className="mt-8 bg-gradient-to-r from-primary/20 to-accent/20 border border-primary/30 rounded-xl p-4 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -211,53 +291,12 @@ export default function AddEntryTab() {
             <button
               onClick={() => {
                 setShowWrappedBanner(false)
-                // Navigate to wrapped by setting activeTab in Dashboard
-                // We'll use a custom event that Dashboard can listen to
                 window.dispatchEvent(new CustomEvent('navigateToWrapped'))
               }}
               className="bg-primary hover:bg-primary/90 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap"
             >
               View →
             </button>
-          </div>
-        )}
-
-        {/* On This Day Teaser - subtle, below main content */}
-        {onThisDayEntries.length > 0 && (
-          <div className="mt-8 pt-8 border-t border-surface/30">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-text/70">On this day…</h3>
-              <button
-                onClick={() => {
-                  // Navigate to Memory tab with today's date
-                  window.dispatchEvent(new CustomEvent('navigateToMemory', { detail: { date: new Date().toISOString().split('T')[0] } }))
-                }}
-                className="text-xs text-accent hover:text-accent/80 transition-colors"
-              >
-                See all →
-              </button>
-            </div>
-            <div className="space-y-2">
-              {onThisDayEntries.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-3 bg-surface/50 rounded-lg p-2">
-                  {entry.albumArt && (
-                    <Image
-                      src={entry.albumArt}
-                      alt={entry.songTitle}
-                      width={40}
-                      height={40}
-                      className="rounded flex-shrink-0"
-                      style={{ aspectRatio: '1/1', objectFit: 'cover' }}
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-text/60">{entry.date.split('-')[0]}</div>
-                    <div className="text-sm font-medium truncate">{entry.songTitle}</div>
-                    <div className="text-xs text-text/70 truncate">{entry.artist}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
       </div>
@@ -436,6 +475,7 @@ export default function AddEntryTab() {
             await updateMentions(data.entry.id)
           }
           setMessage({ type: 'success', text: `🎵 ${selectedTrack.name} by ${selectedTrack.artist} added successfully!` })
+          setShowBSideCTA(true)
           setSelectedTrack(null)
           setQuery('')
           setTracks([])
@@ -443,6 +483,8 @@ export default function AddEntryTab() {
           setMentionedUsers([])
           setPeopleNames([])
           setPeopleInput('')
+          setSelectedMood(null)
+          setShowMoodPicker(false)
           await checkExistingEntry() // Refresh to show it now exists
         } else {
           setMessage({ type: 'error', text: data.error || 'Failed to save entry' })
@@ -674,6 +716,65 @@ export default function AddEntryTab() {
               />
             </div>
 
+            {/* Mood Picker - Optional, after notes, before save */}
+            <div className="mb-4">
+              <label className="block mb-2 text-text/80">
+                How did today feel? <span className="text-sm text-text/60 font-normal">(Optional)</span>
+              </label>
+              {!showMoodPicker ? (
+                <button
+                  onClick={() => setShowMoodPicker(true)}
+                  className="w-full px-4 py-2 bg-surface border border-text/20 rounded-lg text-text/60 hover:bg-surface/80 transition-colors text-left"
+                >
+                  Add mood
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    {['😊', '😌', '😢', '🔥', '😴', '🎉'].map((mood) => (
+                      <button
+                        key={mood}
+                        onClick={() => {
+                          setSelectedMood(mood)
+                          setShowMoodPicker(false)
+                        }}
+                        className={`p-3 rounded-lg text-2xl border-2 transition-all hover:scale-110 ${
+                          selectedMood === mood
+                            ? 'border-accent bg-accent/10'
+                            : 'border-text/20 bg-surface hover:border-text/40'
+                        }`}
+                      >
+                        {mood}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowMoodPicker(false)
+                      setSelectedMood(null)
+                    }}
+                    className="text-sm text-text/60 hover:text-text transition-colors"
+                  >
+                    Skip
+                  </button>
+                </div>
+              )}
+              {selectedMood && !showMoodPicker && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-2xl">{selectedMood}</span>
+                  <button
+                    onClick={() => {
+                      setSelectedMood(null)
+                      setShowMoodPicker(true)
+                    }}
+                    className="text-xs text-text/60 hover:text-text transition-colors"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={saveEntry}
               disabled={loading}
@@ -685,14 +786,31 @@ export default function AddEntryTab() {
         )}
 
         {message && (
-          <div
-            className={`p-4 rounded ${
-              message.type === 'success'
-                ? 'bg-green-900/30 text-green-300'
-                : 'bg-warn-bg text-warn-text'
-            }`}
-          >
-            {message.text}
+          <div className="space-y-3">
+            <div
+              className={`p-4 rounded ${
+                message.type === 'success'
+                  ? 'bg-green-900/30 text-green-300'
+                  : 'bg-warn-bg text-warn-text'
+              }`}
+            >
+              {message.text}
+            </div>
+            {/* B-side CTA - Subtle, after save success */}
+            {message.type === 'success' && showBSideCTA && (
+              <div className="p-3 bg-surface/50 border border-text/20 rounded-lg">
+                <p className="text-sm text-text/70 mb-2">Want to add a B-side?</p>
+                <button
+                  onClick={() => {
+                    setShowBSideCTA(false)
+                    // TODO: Implement B-side flow
+                  }}
+                  className="text-sm text-accent hover:text-accent/80 transition-colors"
+                >
+                  Add B-side →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

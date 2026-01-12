@@ -20,9 +20,11 @@
     "detect:people": "tsx scripts/auto-detect-people-simple.ts",
     "detect:people:apply": "tsx scripts/auto-detect-people-simple.ts --apply",
     "review:names": "tsx scripts/review-detected-names.ts",
-    "migrate:data": "tsx scripts/migrate-data-to-postgresql.ts"
+    "migrate:data": "tsx scripts/migrate-data-to-postgresql.ts",
+    "migrate:clerk": "tsx scripts/migrate-user-to-clerk.ts"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.36.7",
     "@prisma/client": "^5.7.1",
     "bcryptjs": "^2.4.3",
     "date-fns": "^3.0.6",

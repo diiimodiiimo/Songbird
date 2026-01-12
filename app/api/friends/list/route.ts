@@ -1,14 +1,20 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
+import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 // GET - List all friends (accepted friend requests)
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const { userId: clerkUserId } = await auth()
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Convert Clerk user ID to Prisma user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     // Get all accepted friend requests where user is either sender or receiver
@@ -16,8 +22,8 @@ export async function GET(request: Request) {
       where: {
         status: 'accepted',
         OR: [
-          { senderId: session.user.id },
-          { receiverId: session.user.id },
+          { senderId: userId },
+          { receiverId: userId },
         ],
       },
       include: {
@@ -42,7 +48,7 @@ export async function GET(request: Request) {
 
     // Extract friends (the other user in each accepted request)
     const friends = friendRequests.map((request) => {
-      return request.senderId === session.user.id
+      return request.senderId === userId
         ? request.receiver
         : request.sender
     })
@@ -56,6 +62,8 @@ export async function GET(request: Request) {
     )
   }
 }
+
+
 
 
 

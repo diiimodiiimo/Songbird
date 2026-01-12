@@ -11,55 +11,57 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  username      String?   @unique // Display name/username for the app
-  password      String
-  image         String?
-  bio           String?   // User bio (max 160 chars)
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String?
+  username        String?  @unique // Display name/username for the app
+  password        String? // Optional - only used for legacy NextAuth accounts
+  clerkId         String?  @unique // Clerk user ID for authentication
+  image           String?
+  bio             String? // User bio (max 160 chars)
   favoriteArtists String? // JSON array of favorite artist names
   favoriteSongs   String? // JSON array of favorite songs (title + artist)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  entries       Entry[]
-  taggedEntries EntryTag[]
-  mentions      Mention[]
-  notifications Notification[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  entries          Entry[]
+  taggedEntries    EntryTag[]
+  mentions         Mention[]
+  notifications    Notification[]
   personReferences PersonReference[]
-  
+
   // Friends system - two-way friendships
   sentFriendRequests     FriendRequest[] @relation("Sender")
   receivedFriendRequests FriendRequest[] @relation("Receiver")
-  
+
   @@map("users")
 }
 
 model Entry {
-  id            String    @id @default(cuid())
-  date          DateTime
-  userId        String
-  songTitle     String
-  artist        String
-  albumTitle    String
-  albumArt      String
-  durationMs    Int
-  explicit      Boolean   @default(false)
-  popularity    Int
-  releaseDate   String?
-  trackId       String
-  uri           String
-  notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tags          EntryTag[]
-  mentions      Mention[]
-  people        PersonReference[]
-  
+  id          String   @id @default(cuid())
+  date        DateTime
+  userId      String
+  songTitle   String
+  artist      String
+  albumTitle  String
+  albumArt    String
+  durationMs  Int
+  explicit    Boolean  @default(false)
+  popularity  Int
+  releaseDate String?
+  trackId     String
+  uri         String
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tags     EntryTag[]
+  mentions Mention[]
+  people   PersonReference[]
+
   @@unique([userId, date])
+  @@index([userId, date])
   @@map("entries")
 }
 
@@ -68,26 +70,26 @@ model EntryTag {
   entryId   String
   userId    String
   createdAt DateTime @default(now())
-  
-  entry     Entry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  entry Entry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([entryId, userId])
   @@map("entry_tags")
 }
 
 // Two-way friendship system
 model FriendRequest {
-  id        String   @id @default(cuid())
-  senderId  String
+  id         String   @id @default(cuid())
+  senderId   String
   receiverId String
-  status    String   @default("pending") // "pending", "accepted", "declined"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  sender    User     @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver  User     @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
-  
+  status     String   @default("pending") // "pending", "accepted", "declined"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sender   User @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
   @@unique([senderId, receiverId])
   @@map("friend_requests")
 }
@@ -96,12 +98,12 @@ model FriendRequest {
 model Mention {
   id        String   @id @default(cuid())
   entryId   String
-  userId    String   // The user being mentioned
+  userId    String // The user being mentioned
   createdAt DateTime @default(now())
-  
-  entry     Entry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  entry Entry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([entryId, userId])
   @@map("mentions")
 }
@@ -109,14 +111,14 @@ model Mention {
 // Notifications
 model Notification {
   id        String   @id @default(cuid())
-  userId    String   // The user receiving the notification
-  type      String   // "mention", "friend_request_accepted"
-  relatedId String?  // ID of related entity (entryId, friendRequestId, etc.)
+  userId    String // The user receiving the notification
+  type      String // "mention", "friend_request_accepted"
+  relatedId String? // ID of related entity (entryId, friendRequestId, etc.)
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("notifications")
 }
 
@@ -125,15 +127,14 @@ model Notification {
 model PersonReference {
   id        String   @id @default(cuid())
   entryId   String
-  name      String   // The person's name (e.g., "Nick", "Grace")
-  userId    String?  // Optional: if this person has an account, link to their User ID
-  source    String?  // Optional: "manual" (default), "auto_migration", etc.
+  name      String // The person's name (e.g., "Nick", "Grace")
+  userId    String? // Optional: if this person has an account, link to their User ID
+  source    String? // Optional: "manual" (default), "auto_migration", etc.
   createdAt DateTime @default(now())
-  
-  entry     Entry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
+
+  entry Entry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   @@unique([entryId, name]) // Prevent duplicate names per entry
   @@map("person_references")
 }
-
