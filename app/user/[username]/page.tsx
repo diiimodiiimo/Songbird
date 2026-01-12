@@ -221,79 +221,60 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {/* Show Add Friend section */}
-          <div className="mb-6">
+          {/* ADD FRIEND BUTTON - ALWAYS VISIBLE */}
+          <div className="mb-6 mt-6">
             {!currentUser ? (
               // Not logged in - show sign in prompt
               <Link
                 href="/home"
-                className="w-full px-6 py-3 bg-accent text-bg font-semibold rounded-lg hover:bg-accent/90 transition-colors flex items-center justify-center gap-2"
+                className="block w-full px-6 py-4 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 transition-colors text-center text-lg shadow-lg"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
-                Sign in to Add Friend
+                👤 Sign in to Add Friend
               </Link>
             ) : friendshipStatus?.isOwnProfile ? (
               // This is the user's own profile - show edit button
               <Link
                 href="/profile/edit"
-                className="w-full px-6 py-3 bg-surface border border-text/20 text-text font-medium rounded-lg hover:bg-surface/80 transition-colors flex items-center justify-center gap-2"
+                className="block w-full px-6 py-4 bg-gray-600 text-white font-bold rounded-xl hover:bg-gray-700 transition-colors text-center text-lg"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Edit Profile
+                ✏️ Edit Your Profile
               </Link>
             ) : friendshipStatus?.isFriend ? (
               // Already friends
-              <div className="w-full px-6 py-3 bg-accent/20 border border-accent/30 text-accent font-medium rounded-lg text-center flex items-center justify-center gap-2">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-                Friends
+              <div className="w-full px-6 py-4 bg-green-500 text-white font-bold rounded-xl text-center text-lg">
+                ✅ Already Friends!
               </div>
             ) : friendshipStatus?.hasPendingRequest && friendshipStatus.requestDirection === 'sent' ? (
               // Request already sent
-              <div className="w-full px-6 py-3 bg-surface border border-text/20 text-text/60 font-medium rounded-lg text-center">
+              <div className="w-full px-6 py-4 bg-yellow-500 text-black font-bold rounded-xl text-center text-lg">
                 ⏳ Friend Request Sent
               </div>
             ) : friendshipStatus?.hasPendingRequest && friendshipStatus.requestDirection === 'received' ? (
               // They sent us a request
-              <div className="space-y-2">
-                <p className="text-sm text-text/70 text-center">This user wants to be your friend!</p>
-                <Link
-                  href="/"
-                  className="block w-full px-6 py-3 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors text-center"
-                >
-                  View & Accept Request
-                </Link>
-              </div>
-            ) : !friendshipStatus ? (
-              // Still loading friendship status
-              <div className="w-full px-6 py-3 bg-surface/50 border border-text/10 text-text/40 font-medium rounded-lg text-center animate-pulse">
-                Loading...
-              </div>
+              <Link
+                href="/"
+                className="block w-full px-6 py-4 bg-purple-500 text-white font-bold rounded-xl hover:bg-purple-600 transition-colors text-center text-lg shadow-lg"
+              >
+                🎉 Accept Their Friend Request!
+              </Link>
             ) : (
-              // Can add friend
+              // Can add friend OR still loading - show the button anyway!
               <button
                 onClick={sendFriendRequest}
                 disabled={sendingRequest}
-                className="w-full px-6 py-3 bg-accent text-bg font-semibold rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full px-6 py-4 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 transition-colors disabled:bg-blue-300 disabled:cursor-wait text-center text-lg shadow-lg flex items-center justify-center gap-3"
               >
                 {sendingRequest ? (
                   <>
-                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
                     </svg>
-                    Sending...
+                    Sending Request...
                   </>
                 ) : (
                   <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                    </svg>
+                    <span className="text-2xl">➕</span>
                     Add Friend
                   </>
                 )}
