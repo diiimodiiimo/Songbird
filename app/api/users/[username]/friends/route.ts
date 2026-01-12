@@ -4,11 +4,11 @@ import { getSupabase } from '@/lib/supabase'
 // GET - Get public friends list for a user
 export async function GET(
   request: Request,
-  { params }: { params: { username: string } }
+  { params }: { params: Promise<{ username: string }> }
 ) {
   try {
     const supabase = getSupabase()
-    const { username } = params
+    const { username } = await params
 
     // Find the user by username or email
     const { data: targetUser, error: userError } = await supabase
