@@ -206,6 +206,77 @@ export default function UserProfilePage() {
             </div>
           )}
 
+          {/* Friend Action Button - Inside Card */}
+          {message && (
+            <div
+              className={`mb-4 p-3 rounded-lg text-sm ${
+                message.type === 'success'
+                  ? 'bg-green-900/30 text-green-300 border border-green-500/50'
+                  : 'bg-red-900/30 text-red-300 border border-red-500/50'
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
+          {friendshipStatus ? (
+            !friendshipStatus.isOwnProfile && (
+              <div className="mb-6">
+                {friendshipStatus.isFriend ? (
+                  <div className="w-full px-6 py-3 bg-accent/20 border border-accent/30 text-accent font-medium rounded-lg text-center flex items-center justify-center gap-2">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    Friends
+                  </div>
+                ) : friendshipStatus.hasPendingRequest && friendshipStatus.requestDirection === 'sent' ? (
+                  <div className="w-full px-6 py-3 bg-surface border border-text/20 text-text/60 font-medium rounded-lg text-center">
+                    ⏳ Friend Request Sent
+                  </div>
+                ) : friendshipStatus.hasPendingRequest && friendshipStatus.requestDirection === 'received' ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-text/70 text-center">This user wants to be your friend!</p>
+                    <Link
+                      href="/"
+                      className="block w-full px-6 py-3 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors text-center"
+                    >
+                      View & Accept Request
+                    </Link>
+                  </div>
+                ) : (
+                  <button
+                    onClick={sendFriendRequest}
+                    disabled={sendingRequest}
+                    className="w-full px-6 py-3 bg-accent text-bg font-semibold rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {sendingRequest ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                        </svg>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                        </svg>
+                        Add Friend
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            )
+          ) : currentUser && (
+            <div className="mb-6">
+              <div className="w-full px-6 py-3 bg-surface/50 border border-text/10 text-text/40 font-medium rounded-lg text-center animate-pulse">
+                Loading...
+              </div>
+            </div>
+          )}
+
           {/* Favorite Artists */}
           {profile.favoriteArtists.length > 0 && (
             <div className="mb-6">
@@ -241,51 +312,6 @@ export default function UserProfilePage() {
             </div>
           )}
         </div>
-
-        {/* Friend Action Button */}
-        {message && (
-          <div
-            className={`mb-4 p-3 rounded-lg text-sm ${
-              message.type === 'success'
-                ? 'bg-green-900/30 text-green-300 border border-green-500/50'
-                : 'bg-red-900/30 text-red-300 border border-red-500/50'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
-        {friendshipStatus && !friendshipStatus.isOwnProfile && (
-          <div className="space-y-3">
-            {friendshipStatus.isFriend ? (
-              <div className="w-full px-6 py-3 bg-accent/20 border border-accent/30 text-accent font-medium rounded-lg text-center">
-                ✓ Friends
-              </div>
-            ) : friendshipStatus.hasPendingRequest && friendshipStatus.requestDirection === 'sent' ? (
-              <div className="w-full px-6 py-3 bg-surface border border-text/20 text-text/60 font-medium rounded-lg text-center">
-                Friend Request Sent
-              </div>
-            ) : friendshipStatus.hasPendingRequest && friendshipStatus.requestDirection === 'received' ? (
-              <div className="space-y-2">
-                <p className="text-sm text-text/70 text-center">You have a pending friend request from this user</p>
-                <Link
-                  href="/"
-                  className="block w-full px-6 py-3 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors text-center"
-                >
-                  View Requests
-                </Link>
-              </div>
-            ) : (
-              <button
-                onClick={sendFriendRequest}
-                disabled={sendingRequest}
-                className="w-full px-6 py-3 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {sendingRequest ? 'Sending...' : 'Add Friend'}
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )

@@ -21,12 +21,28 @@ export async function GET(
     const { username } = await params
     const supabase = getSupabase()
 
-    // Find the profile user
-    const { data: profileUser } = await supabase
+    // Find the profile user by username, email, or name
+    let { data: profileUser } = await supabase
       .from('users')
       .select('id')
       .or(`username.eq.${username},email.eq.${username}`)
       .maybeSingle()
+
+    // If not found, try case-insensitive name search
+    if (!profileUser) {
+      const searchTerm = username.toLowerCase()
+      const { data: allUsers } = await supabase
+        .from('users')
+        .select('id, name, email')
+      
+      const foundUser = (allUsers || []).find(u => 
+        u.name?.toLowerCase() === searchTerm ||
+        u.email?.toLowerCase().split('@')[0] === searchTerm
+      )
+      if (foundUser) {
+        profileUser = { id: foundUser.id }
+      }
+    }
 
     if (!profileUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })

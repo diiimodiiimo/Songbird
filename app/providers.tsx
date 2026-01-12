@@ -8,8 +8,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       publishableKey="pk_test_Y2hhcm1pbmcta2l3aS0zOS5jbGVyay5hY2NvdW50cy5kZXYk"
       signInUrl="/home"
       signUpUrl="/home"
-      afterSignInUrl="/"
-      afterSignUpUrl="/"
+      signInFallbackRedirectUrl="/"
+      signUpFallbackRedirectUrl="/"
+      afterSignOutUrl="/home"
     >
       {children}
     </ClerkProvider>
