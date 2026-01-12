@@ -33,9 +33,13 @@ export default function EditProfilePage() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(true)
   const [loadingProfile, setLoadingProfile] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [isSetup, setIsSetup] = useState(false)
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
+      // Check if this is a setup flow (username not set)
+      const urlParams = new URLSearchParams(window.location.search)
+      setIsSetup(urlParams.get('setup') === 'true')
       fetchProfile()
       fetchSuggestions()
     }
@@ -141,6 +145,12 @@ export default function EditProfilePage() {
   const handleSave = async () => {
     if (!isSignedIn) return
 
+    // Validate username if this is setup
+    if (isSetup && !username.trim()) {
+      setMessage({ type: 'error', text: 'Username is required to get started!' })
+      return
+    }
+
     setLoading(true)
     setMessage(null)
 
@@ -159,7 +169,12 @@ export default function EditProfilePage() {
 
       const data = await res.json()
       if (res.ok) {
-        setMessage({ type: 'success', text: 'Profile updated successfully! Your profile is now active.' })
+        setMessage({ 
+          type: 'success', 
+          text: isSetup 
+            ? 'Profile set up successfully! Welcome to SongBird! 🎵'
+            : 'Profile updated successfully! Your profile is now active.'
+        })
         // Refresh profile data to show updated info
         await fetchProfile()
         // Navigate back to profile after a short delay
@@ -204,7 +219,14 @@ export default function EditProfilePage() {
 
       {/* Content */}
       <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-6">
-        <h2 className="text-2xl font-bold">Edit Profile</h2>
+        <div>
+          <h2 className="text-2xl font-bold">{isSetup ? 'Set Up Your Profile' : 'Edit Profile'}</h2>
+          {isSetup && (
+            <p className="text-text/70 text-sm mt-2">
+              Choose a username to get started. This will be your unique identifier in SongBird.
+            </p>
+          )}
+        </div>
 
         {message && (
           <div
@@ -256,16 +278,22 @@ export default function EditProfilePage() {
 
           {/* Username */}
           <div>
-            <label className="block mb-2 text-sm font-medium text-text/80">Username</label>
+            <label className="block mb-2 text-sm font-medium text-text/80">
+              Username {isSetup && <span className="text-red-400">*</span>}
+            </label>
             <input
               type="text"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Your username"
+              onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+              placeholder="Your username (letters, numbers, and underscores only)"
               className="w-full px-4 py-3 bg-bg border border-surface rounded-lg text-text placeholder:text-text/40 focus:border-accent outline-none transition-colors"
+              required={isSetup}
             />
             <p className="text-xs text-text/60 mt-1">
-              This is how others will see you in the app
+              {isSetup 
+                ? 'This username will be used to identify you in the app. Choose wisely!'
+                : 'This is how others will see you in the app'
+              }
             </p>
           </div>
 

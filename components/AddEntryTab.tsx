@@ -49,108 +49,78 @@ export default function AddEntryTab() {
   const today = new Date()
   const dayName = today.toLocaleDateString('en-US', { weekday: 'long' })
 
-  // Define functions before useEffect hooks
-  const fetchFriends = async () => {
-    if (!isLoaded || !isSignedIn) return
-
-    try {
-      const res = await fetch('/api/friends/list')
-      const data = await res.json()
-      if (res.ok) {
-        setFriends(data.friends)
-      }
-    } catch (error) {
-      console.error('Error fetching friends:', error)
-    }
-  }
-
-  const checkExistingEntry = async () => {
+  // OPTIMIZED: Fetch all today data in a single API call
+  // This replaces 4-5 separate calls (friends, entry, on-this-day, streak)
+  const fetchTodayData = async () => {
     if (!isLoaded || !isSignedIn) return
 
     setCheckingEntry(true)
+    setLoadingStreak(true)
+    
     try {
-      const res = await fetch(`/api/entries?date=${date}`)
+      const res = await fetch(`/api/today-data?date=${date}`)
       const data = await res.json()
-      if (res.ok && data.entries && data.entries.length > 0) {
-        const entry = data.entries[0]
-        setExistingEntry({
-          id: entry.id,
-          songTitle: entry.songTitle,
-          artist: entry.artist,
-          notes: entry.notes || '',
-        })
-        // Load existing notes, mentions, and people
-        setNotes(entry.notes || '')
-        if (entry.mentions && entry.mentions.length > 0) {
-          setMentionedUsers(entry.mentions.map((mention: any) => mention.user))
-        } else {
-          setMentionedUsers([])
+      
+      if (res.ok) {
+        // Set streak
+        if (data.currentStreak !== undefined) {
+          setCurrentStreak(data.currentStreak)
         }
-        if (entry.people && entry.people.length > 0) {
-          setPeopleNames(entry.people.map((person: any) => person.name))
-        } else {
-          setPeopleNames([])
+        
+        // Set friends
+        if (data.friends) {
+          setFriends(data.friends)
         }
-        setPeopleInput('')
-      } else {
-        setExistingEntry(null)
-        // Only clear if user hasn't typed anything yet
-        if (!selectedTrack) {
-          setNotes('')
-          setMentionedUsers([])
-          setPeopleNames([])
+        
+        // Set On This Day entries
+        if (data.onThisDayEntries && data.onThisDayEntries.length > 0) {
+          setOnThisDayEntries(data.onThisDayEntries)
+        } else {
+          setOnThisDayEntries([])
+        }
+        
+        // Set existing entry
+        if (data.existingEntry) {
+          setExistingEntry({
+            id: data.existingEntry.id,
+            songTitle: data.existingEntry.songTitle,
+            artist: data.existingEntry.artist,
+            notes: data.existingEntry.notes || '',
+          })
+          setNotes(data.existingEntry.notes || '')
+          if (data.existingEntry.mentions && data.existingEntry.mentions.length > 0) {
+            setMentionedUsers(data.existingEntry.mentions)
+          } else {
+            setMentionedUsers([])
+          }
+          if (data.existingEntry.people && data.existingEntry.people.length > 0) {
+            setPeopleNames(data.existingEntry.people.map((person: any) => person.name))
+          } else {
+            setPeopleNames([])
+          }
           setPeopleInput('')
+        } else {
+          setExistingEntry(null)
+          if (!selectedTrack) {
+            setNotes('')
+            setMentionedUsers([])
+            setPeopleNames([])
+            setPeopleInput('')
+          }
         }
       }
     } catch (error) {
-      console.error('Error checking existing entry:', error)
+      console.error('Error fetching today data:', error)
     } finally {
       setCheckingEntry(false)
+      setLoadingStreak(false)
     }
   }
 
-  // Fetch friends list for mentions
+  // OPTIMIZED: Single useEffect to fetch all data
   useEffect(() => {
-    fetchFriends()
-  }, [isLoaded, isSignedIn])
-
-  // Check for existing entry when date changes
-  useEffect(() => {
-    checkExistingEntry()
+    fetchTodayData()
   }, [date, isLoaded, isSignedIn])
-
-  // Fetch On This Day entries for teaser
-  useEffect(() => {
-    if (isToday && !showForm && !existingEntry && isLoaded && isSignedIn) {
-      const todayStr = new Date().toISOString().split('T')[0]
-      fetch(`/api/on-this-day?date=${todayStr}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.entries && data.entries.length > 0) {
-            setOnThisDayEntries(data.entries.slice(0, 3)) // Max 3 entries
-          }
-        })
-        .catch(err => console.error('Error fetching on-this-day:', err))
-    } else {
-      setOnThisDayEntries([])
-    }
-  }, [isToday, showForm, existingEntry, isLoaded, isSignedIn])
-
-  // Fetch current streak
-  useEffect(() => {
-    if (isToday && isLoaded && isSignedIn) {
-      setLoadingStreak(true)
-      fetch('/api/streak')
-        .then(res => res.json())
-        .then(data => {
-          if (data.currentStreak !== undefined) {
-            setCurrentStreak(data.currentStreak)
-          }
-        })
-        .catch(err => console.error('Error fetching streak:', err))
-        .finally(() => setLoadingStreak(false))
-    }
-  }, [isToday, isLoaded, isSignedIn])
   
   // If today and no form shown and no existing entry, show the songbird landing page
   if (isToday && !showForm && !existingEntry) {
@@ -443,7 +413,7 @@ export default function AddEntryTab() {
           setQuery('')
           setTracks([])
           // Don't clear notes - they're preserved
-          await checkExistingEntry() // Refresh existing entry data
+          await fetchTodayData() // Refresh existing entry data
         } else {
           setMessage({ type: 'error', text: data.error || 'Failed to update entry' })
         }
@@ -485,7 +455,7 @@ export default function AddEntryTab() {
           setPeopleInput('')
           setSelectedMood(null)
           setShowMoodPicker(false)
-          await checkExistingEntry() // Refresh to show it now exists
+          await fetchTodayData() // Refresh to show it now exists
         } else {
           setMessage({ type: 'error', text: data.error || 'Failed to save entry' })
         }

@@ -42,7 +42,10 @@ export async function GET(request: Request) {
       favoriteSongs: user.favoriteSongs ? JSON.parse(user.favoriteSongs) : [],
     }
 
-    return NextResponse.json({ user: responseUser })
+    const response = NextResponse.json({ user: responseUser })
+    // Cache for 60 seconds to reduce repeated calls
+    response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=120')
+    return response
   } catch (error) {
     console.error('Error fetching profile:', error)
     return NextResponse.json(

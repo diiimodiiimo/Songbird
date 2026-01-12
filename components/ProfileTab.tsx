@@ -32,6 +32,8 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [entryCount, setEntryCount] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
+  const [showAddFriendModal, setShowAddFriendModal] = useState(false)
+  const [friendUsernameInput, setFriendUsernameInput] = useState('')
   const [theatricsEnabled, setTheatricsEnabled] = useState(() => {
     // Load from localStorage
     if (typeof window !== 'undefined') {
@@ -222,15 +224,61 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
                 View Friends
               </button>
               <button
-                onClick={() => {
-                  // Navigate to Friends tab or show add friend modal
-                  window.dispatchEvent(new CustomEvent('navigateToFriends'))
-                }}
+                onClick={() => setShowAddFriendModal(true)}
                 className="px-4 py-2 bg-surface border border-text/20 rounded-lg text-text font-medium hover:bg-surface/80 transition-colors"
               >
                 Add Friend
               </button>
             </div>
+
+            {/* Add Friend Modal */}
+            {showAddFriendModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-surface rounded-xl p-6 max-w-md w-full">
+                  <h3 className="text-xl font-bold mb-4">Add Friend</h3>
+                  <p className="text-text/70 text-sm mb-4">
+                    Enter a username to view their profile
+                  </p>
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      placeholder="Enter username (e.g., username)"
+                      value={friendUsernameInput}
+                      onChange={(e) => setFriendUsernameInput(e.target.value.replace('@', ''))}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && friendUsernameInput.trim()) {
+                          window.location.href = `/user/${friendUsernameInput.trim()}`
+                        }
+                      }}
+                      className="flex-1 px-4 py-2 bg-bg border border-text/20 rounded-lg text-text placeholder:text-text/40"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        if (friendUsernameInput.trim()) {
+                          window.location.href = `/user/${friendUsernameInput.trim()}`
+                        }
+                      }}
+                      disabled={!friendUsernameInput.trim()}
+                      className="flex-1 px-4 py-2 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      View Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowAddFriendModal(false)
+                        setFriendUsernameInput('')
+                      }}
+                      className="px-4 py-2 bg-surface border border-text/20 rounded-lg text-text font-medium hover:bg-surface/80 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Favorite Artists - tag-style */}
             {selectedArtists.length > 0 && (
@@ -261,46 +309,53 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
               </div>
             )}
 
-            {/* Friends List (shown when stat clicked) */}
-            {showFriendsSection && friends.length > 0 && (
+            {/* Friends List (shown when View Friends clicked) */}
+            {showFriendsSection && (
               <div>
                 <h3 className="text-lg font-semibold mb-3 text-text/80">Friends</h3>
-                <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
-                  {friends.map((friend) => (
-                    <Link
-                      key={friend.id}
-                      href={`/user/${friend.username || friend.email}`}
-                      className="bg-bg rounded-lg p-3 flex items-center gap-3 hover:bg-accent/5 border border-transparent hover:border-accent/30 transition-all group"
-                    >
-                      {friend.image ? (
-                        <Image
-                          src={friend.image}
-                          alt={friend.name || 'Friend'}
-                          width={48}
-                          height={48}
-                          className="rounded-full object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-lg flex-shrink-0">
-                          {(friend.name || friend.email)[0].toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold truncate group-hover:text-accent transition-colors text-sm">
-                          {friend.name || 'Friend'}
-                        </div>
-                        {friend.username && (
-                          <div className="text-xs text-text/60 truncate">
-                            @{friend.username}
+                {friends.length === 0 ? (
+                  <div className="text-center py-8 text-text/60">
+                    <p>No friends yet.</p>
+                    <p className="text-sm mt-2">Use "Add Friend" to find and connect with others!</p>
+                  </div>
+                ) : (
+                  <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
+                    {friends.map((friend) => (
+                      <Link
+                        key={friend.id}
+                        href={`/user/${friend.username || friend.email}`}
+                        className="bg-bg rounded-lg p-3 flex items-center gap-3 hover:bg-accent/5 border border-transparent hover:border-accent/30 transition-all group"
+                      >
+                        {friend.image ? (
+                          <Image
+                            src={friend.image}
+                            alt={friend.name || 'Friend'}
+                            width={48}
+                            height={48}
+                            className="rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-lg flex-shrink-0">
+                            {(friend.name || friend.email)[0].toUpperCase()}
                           </div>
                         )}
-                      </div>
-                      <div className="text-accent opacity-0 group-hover:opacity-100 transition-opacity">
-                        →
-                      </div>
-                    </Link>
-                  ))}
-                </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold truncate group-hover:text-accent transition-colors text-sm">
+                            {friend.name || 'Friend'}
+                          </div>
+                          {friend.username && (
+                            <div className="text-xs text-text/60 truncate">
+                              @{friend.username}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+                          →
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </section>

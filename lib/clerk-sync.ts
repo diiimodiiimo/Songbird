@@ -1,63 +1,72 @@
 import { prisma } from './prisma'
-import { currentUser } from '@clerk/nextjs/server'
+
+// In-memory cache for clerk-to-prisma user ID mapping
+// This drastically reduces database calls on serverless
+const userIdCache = new Map<string, { id: string; timestamp: number }>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Get the Prisma user ID from Clerk user ID
- * This syncs Clerk users with our database automatically
+ * OPTIMIZED: Single database query with in-memory caching
  */
 export async function getPrismaUserIdFromClerk(clerkUserId: string): Promise<string | null> {
   if (!clerkUserId) return null
 
-  // For dimotesi44@gmail.com - the user ID IS the Clerk ID
-  // So we can just return the Clerk ID directly if it exists as a user ID
-  try {
-    // First check if Clerk ID matches a user ID directly (your case)
-    const userById = await prisma.user.findUnique({
-      where: { id: clerkUserId },
-      select: { id: true },
-    })
-    
-    if (userById) {
-      return userById.id
-    }
-
-    // Then check by clerkId field
-    const userByClerkId = await prisma.user.findUnique({
-      where: { clerkId: clerkUserId },
-      select: { id: true },
-    })
-    
-    if (userByClerkId) {
-      return userByClerkId.id
-    }
-
-    // Finally, try by email
-    const clerkUser = await currentUser()
-    if (clerkUser) {
-      const email = clerkUser.emailAddresses[0]?.emailAddress
-      if (email) {
-        const userByEmail = await prisma.user.findUnique({
-          where: { email },
-          select: { id: true },
-        })
-        
-        if (userByEmail) {
-          // Update with clerkId
-          await prisma.user.update({
-            where: { id: userByEmail.id },
-            data: { clerkId: clerkUserId },
-          })
-          return userByEmail.id
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error in getPrismaUserIdFromClerk:', error)
-    // Fallback: return Clerk ID directly if it looks like a user ID
-    return clerkUserId
+  // Check cache first
+  const cached = userIdCache.get(clerkUserId)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.id
   }
 
-  return null
+  try {
+    // OPTIMIZED: Single query that checks both id and clerkId
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: clerkUserId },
+          { clerkId: clerkUserId },
+        ],
+      },
+      select: { id: true },
+    })
+
+    if (user) {
+      // Cache the result
+      userIdCache.set(clerkUserId, { id: user.id, timestamp: Date.now() })
+      return user.id
+    }
+
+    // If not found by id/clerkId, we need email lookup
+    // This is a fallback for first-time users - import currentUser lazily
+    const { currentUser } = await import('@clerk/nextjs/server')
+    const clerkUser = await currentUser()
+    
+    if (clerkUser?.emailAddresses?.[0]?.emailAddress) {
+      const email = clerkUser.emailAddresses[0].emailAddress
+      
+      const userByEmail = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      })
+
+      if (userByEmail) {
+        // Link clerkId for future lookups (fire and forget)
+        prisma.user.update({
+          where: { id: userByEmail.id },
+          data: { clerkId: clerkUserId },
+        }).catch(() => {}) // Non-blocking update
+        
+        // Cache the result
+        userIdCache.set(clerkUserId, { id: userByEmail.id, timestamp: Date.now() })
+        return userByEmail.id
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error('Error in getPrismaUserIdFromClerk:', error)
+    return null
+  }
 }
 
 /**

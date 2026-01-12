@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -19,16 +20,31 @@ interface PublicProfile {
   }
 }
 
+interface FriendshipStatus {
+  isOwnProfile: boolean
+  isFriend: boolean
+  hasPendingRequest: boolean
+  requestDirection: 'sent' | 'received' | null
+  requestId?: string
+}
+
 export default function UserProfilePage() {
   const params = useParams()
   const router = useRouter()
+  const { user: currentUser, isLoaded } = useUser()
   const username = params.username as string
   const [profile, setProfile] = useState<PublicProfile | null>(null)
+  const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatus | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sendingRequest, setSendingRequest] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     fetchPublicProfile()
-  }, [username])
+    if (isLoaded && currentUser) {
+      fetchFriendshipStatus()
+    }
+  }, [username, isLoaded, currentUser])
 
   const fetchPublicProfile = async () => {
     try {
@@ -41,6 +57,45 @@ export default function UserProfilePage() {
       console.error('Error fetching profile:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchFriendshipStatus = async () => {
+    try {
+      const res = await fetch(`/api/users/${username}/friendship`)
+      if (res.ok) {
+        const data = await res.json()
+        setFriendshipStatus(data)
+      }
+    } catch (error) {
+      console.error('Error fetching friendship status:', error)
+    }
+  }
+
+  const sendFriendRequest = async () => {
+    if (!profile) return
+
+    setSendingRequest(true)
+    setMessage(null)
+
+    try {
+      const res = await fetch('/api/friends/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receiverUsername: profile.username }),
+      })
+
+      const data = await res.json()
+      if (res.ok) {
+        setMessage({ type: 'success', text: `Friend request sent to @${profile.username}!` })
+        fetchFriendshipStatus()
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to send friend request' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to send friend request' })
+    } finally {
+      setSendingRequest(false)
     }
   }
 
@@ -187,16 +242,50 @@ export default function UserProfilePage() {
           )}
         </div>
 
-        {/* Add Friend Button */}
-        <button
-          onClick={() => {
-            // TODO: Implement friend request
-            alert('Friend request feature coming soon!')
-          }}
-          className="w-full px-6 py-3 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors"
-        >
-          Add Friend
-        </button>
+        {/* Friend Action Button */}
+        {message && (
+          <div
+            className={`mb-4 p-3 rounded-lg text-sm ${
+              message.type === 'success'
+                ? 'bg-green-900/30 text-green-300 border border-green-500/50'
+                : 'bg-red-900/30 text-red-300 border border-red-500/50'
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
+
+        {friendshipStatus && !friendshipStatus.isOwnProfile && (
+          <div className="space-y-3">
+            {friendshipStatus.isFriend ? (
+              <div className="w-full px-6 py-3 bg-accent/20 border border-accent/30 text-accent font-medium rounded-lg text-center">
+                ✓ Friends
+              </div>
+            ) : friendshipStatus.hasPendingRequest && friendshipStatus.requestDirection === 'sent' ? (
+              <div className="w-full px-6 py-3 bg-surface border border-text/20 text-text/60 font-medium rounded-lg text-center">
+                Friend Request Sent
+              </div>
+            ) : friendshipStatus.hasPendingRequest && friendshipStatus.requestDirection === 'received' ? (
+              <div className="space-y-2">
+                <p className="text-sm text-text/70 text-center">You have a pending friend request from this user</p>
+                <Link
+                  href="/"
+                  className="block w-full px-6 py-3 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors text-center"
+                >
+                  View Requests
+                </Link>
+              </div>
+            ) : (
+              <button
+                onClick={sendFriendRequest}
+                disabled={sendingRequest}
+                className="w-full px-6 py-3 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sendingRequest ? 'Sending...' : 'Add Friend'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

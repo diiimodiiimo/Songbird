@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useUser } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import AddEntryTab from './AddEntryTab'
 import AnalyticsTab from './AnalyticsTab'
@@ -49,8 +51,42 @@ const ProfileIcon = ({ active }: { active: boolean }) => (
 )
 
 export default function Dashboard() {
+  const { user, isLoaded } = useUser()
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState('today')
   const [insightsSubTab, setInsightsSubTab] = useState<'analytics' | 'wrapped' | 'leaderboard'>('analytics')
+  const [checkingUsername, setCheckingUsername] = useState(true)
+
+  // Check if username is set on first load (non-blocking)
+  useEffect(() => {
+    if (isLoaded && user) {
+      // Non-blocking check - don't block UI rendering
+      setCheckingUsername(false)
+      
+      // Check username in background after a short delay
+      // This prevents blocking the initial render
+      const timer = setTimeout(async () => {
+        try {
+          const res = await fetch('/api/profile')
+          if (res.ok) {
+            const data = await res.json()
+            if (!data.user?.username) {
+              const shouldSetUsername = confirm(
+                'Welcome to SongBird! To get started, you need to set a username. This will be your unique identifier in the app.\n\nWould you like to set it now?'
+              )
+              if (shouldSetUsername) {
+                router.push('/profile/edit?setup=true')
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error checking username:', error)
+        }
+      }, 500) // Delay check to not block initial render
+      
+      return () => clearTimeout(timer)
+    }
+  }, [isLoaded, user, router])
 
   useEffect(() => {
     const handleNavigateToWrapped = () => {
