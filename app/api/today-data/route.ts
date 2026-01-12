@@ -151,7 +151,7 @@ export async function GET(request: Request) {
 
     // Format friends list
     const friendsList = friends.map((fr) => {
-      const friend = fr.senderId === prismaUserId ? fr.receiver : fr.sender
+      const friend = fr.sender.id === prismaUserId ? fr.receiver : fr.sender
       return {
         id: friend.id,
         name: friend.name || friend.email?.split('@')[0] || 'Unknown',
