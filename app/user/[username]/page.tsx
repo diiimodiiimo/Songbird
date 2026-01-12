@@ -79,15 +79,17 @@ export default function UserProfilePage() {
     setMessage(null)
 
     try {
+      // Use username if available, otherwise fall back to email
+      const identifier = profile.username || profile.email
       const res = await fetch('/api/friends/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receiverUsername: profile.username }),
+        body: JSON.stringify({ receiverUsername: identifier }),
       })
 
       const data = await res.json()
       if (res.ok) {
-        setMessage({ type: 'success', text: `Friend request sent to @${profile.username}!` })
+        setMessage({ type: 'success', text: `Friend request sent to ${profile.name || profile.username}!` })
         fetchFriendshipStatus()
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to send friend request' })

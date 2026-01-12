@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     // Fetch user info
     const { data: users } = await supabase
       .from('users')
-      .select('id, email, name, image')
+      .select('id, email, name, username, image')
       .in('id', Array.from(userIds))
 
     const userMap = new Map((users || []).map(u => [u.id, u]))
