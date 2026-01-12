@@ -19,11 +19,11 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(homeUrl)
   }
   
-  // Don't auto-redirect from /home - let user choose to sign in/out
-  // if (userId && req.nextUrl.pathname === '/home') {
-  //   const dashboardUrl = new URL('/', req.url)
-  //   return NextResponse.redirect(dashboardUrl)
-  // }
+  // Redirect authenticated users from /home to dashboard
+  if (userId && req.nextUrl.pathname === '/home') {
+    const dashboardUrl = new URL('/', req.url)
+    return NextResponse.redirect(dashboardUrl)
+  }
 })
 
 export const config = {

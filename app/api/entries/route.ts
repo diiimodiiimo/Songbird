@@ -162,13 +162,29 @@ export async function POST(request: Request) {
   try {
     const { userId: clerkUserId } = await auth()
     if (!clerkUserId) {
+      console.log('[entries POST] No clerkUserId - unauthorized')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkUserId)
-    if (!userId) {
-      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
+    console.log('[entries POST] Creating entry for clerk user:', clerkUserId)
+    
+    let userId: string | null = null
+    try {
+      userId = await getPrismaUserIdFromClerk(clerkUserId)
+    } catch (syncError: any) {
+      console.error('[entries POST] User sync error:', syncError?.message || syncError)
+      return NextResponse.json({ 
+        error: 'Failed to sync user account. Please try again.',
+        details: syncError?.message 
+      }, { status: 500 })
     }
+    
+    if (!userId) {
+      console.log('[entries POST] No userId found after sync for:', clerkUserId)
+      return NextResponse.json({ error: 'User not found in database. Please refresh and try again.' }, { status: 404 })
+    }
+    
+    console.log('[entries POST] Using database userId:', userId)
 
     const body = await request.json()
     const {
@@ -219,6 +235,7 @@ export async function POST(request: Request) {
     }
 
     // Create entry
+    console.log('[entries POST] Creating entry for date:', dateStr, 'user:', userId)
     const { data: entry, error: createError } = await supabase
       .from('entries')
       .insert({
@@ -241,7 +258,15 @@ export async function POST(request: Request) {
       .select('*')
       .single()
 
-    if (createError) throw createError
+    if (createError) {
+      console.error('[entries POST] Create entry error:', createError)
+      return NextResponse.json({ 
+        error: 'Failed to create entry',
+        details: createError.message 
+      }, { status: 500 })
+    }
+    
+    console.log('[entries POST] Entry created successfully:', entry.id)
 
     // Match people to users and create person references
     if (peopleNames && peopleNames.length > 0) {

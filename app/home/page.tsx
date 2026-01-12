@@ -10,12 +10,12 @@ export default function HomePage() {
   const { isSignedIn, isLoaded } = useUser()
   const router = useRouter()
 
-  // Don't auto-redirect - let user choose to sign in/out
-  // useEffect(() => {
-  //   if (isLoaded && isSignedIn) {
-  //     router.push('/')
-  //   }
-  // }, [isLoaded, isSignedIn, router])
+  // Auto-redirect authenticated users to dashboard
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      router.push('/')
+    }
+  }, [isLoaded, isSignedIn, router])
 
   if (!isLoaded) {
     return (
@@ -68,12 +68,12 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="space-y-4 w-full">
-            <SignInButton mode="modal" fallbackRedirectUrl="/">
+            <SignInButton mode="modal" forceRedirectUrl="/">
               <button className="w-full px-8 py-4 bg-surface border-2 border-accent text-accent font-semibold rounded-lg hover:bg-surface/80 transition-colors text-center text-lg">
                 Sign In
               </button>
             </SignInButton>
-            <SignUpButton mode="modal" fallbackRedirectUrl="/">
+            <SignUpButton mode="modal" forceRedirectUrl="/">
               <button className="w-full px-8 py-4 bg-surface border-2 border-accent text-accent font-semibold rounded-lg hover:bg-surface/80 transition-colors text-center text-lg">
                 Sign Up
               </button>
