@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 export async function GET(request: Request) {
@@ -10,7 +10,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!prismaUserId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -18,75 +17,69 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId') || prismaUserId
-    const dateParam = searchParams.get('date') // YYYY-MM-DD format
+    const dateParam = searchParams.get('date')
 
     if (!dateParam || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
       return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, { status: 400 })
     }
 
-    // Extract month and day (MM-DD)
     const [, month, day] = dateParam.split('-')
     const monthNum = parseInt(month)
     const dayNum = parseInt(day)
 
-    // For SQLite, we need to fetch and filter in memory
-    // This is acceptable since On This Day queries are small (only matching month/day)
-    // Fetch entries with a reasonable limit to prevent issues
-    const allEntries = await prisma.entry.findMany({
-      where: { userId: String(userId) },
-      select: {
-        id: true,
-        date: true,
-        songTitle: true,
-        artist: true,
-        albumArt: true,
-        notes: true,
-        people: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: { date: 'desc' },
-      take: 5000, // Reasonable limit - user likely won't have more than 5000 entries matching a specific month/day
-    })
+    const supabase = getSupabase()
+
+    const { data: allEntries, error } = await supabase
+      .from('entries')
+      .select('id, date, songTitle, artist, albumArt, notes')
+      .eq('userId', userId)
+      .order('date', { ascending: false })
+      .limit(5000)
+
+    if (error) throw error
 
     // Filter entries where month/day matches
-    const entries = allEntries.filter((entry) => {
-      const entryDate = entry.date instanceof Date ? entry.date : new Date(entry.date)
+    const entries = (allEntries || []).filter((entry) => {
+      const entryDate = new Date(entry.date)
       return entryDate.getMonth() + 1 === monthNum && entryDate.getDate() === dayNum
     })
 
-    // Format entries - include base64 images since this is a small, targeted query
-    const formattedEntries = entries.map((entry: any) => ({
-      id: String(entry.id),
-      date: entry.date instanceof Date
-        ? entry.date.toISOString().split('T')[0]
-        : String(entry.date).split('T')[0],
-      songTitle: String(entry.songTitle || ''),
-      artist: String(entry.artist || ''),
-      albumArt: entry.albumArt ? String(entry.albumArt) : null, // Include base64 images
+    // Get person references
+    const entryIds = entries.map(e => e.id)
+    let personRefs: any[] = []
+    if (entryIds.length > 0) {
+      const { data } = await supabase
+        .from('person_references')
+        .select('entryId, id, name')
+        .in('entryId', entryIds)
+      personRefs = data || []
+    }
+
+    const personRefsByEntry = new Map<string, any[]>()
+    personRefs.forEach((pr) => {
+      const existing = personRefsByEntry.get(pr.entryId) || []
+      existing.push({ id: pr.id, name: pr.name })
+      personRefsByEntry.set(pr.entryId, existing)
+    })
+
+    const formattedEntries = entries.map((entry) => ({
+      id: entry.id,
+      date: new Date(entry.date).toISOString().split('T')[0],
+      songTitle: entry.songTitle || '',
+      artist: entry.artist || '',
+      albumArt: entry.albumArt || null,
       notesPreview: entry.notes
-        ? String(entry.notes).substring(0, 160) + (entry.notes.length > 160 ? '...' : '')
+        ? entry.notes.substring(0, 160) + (entry.notes.length > 160 ? '...' : '')
         : null,
-      people: Array.isArray(entry.people) ? entry.people.map((person: any) => ({
-        id: String(person.id),
-        name: String(person.name),
-      })) : [],
+      people: personRefsByEntry.get(entry.id) || [],
     }))
 
     return NextResponse.json({ entries: formattedEntries })
   } catch (error: any) {
-    console.error('=== ERROR IN /api/on-this-day ===')
-    console.error(error?.message)
+    console.error('[on-this-day] Error:', error?.message || error)
     return NextResponse.json(
-      {
-        error: 'Failed to fetch on-this-day entries',
-        message: error?.message || 'Unknown error',
-      },
+      { error: 'Failed to fetch on-this-day entries', message: error?.message },
       { status: 500 }
     )
   }
 }
-

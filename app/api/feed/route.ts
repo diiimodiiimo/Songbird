@@ -1,18 +1,17 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { getFriendIds } from '@/lib/friends'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 // GET - Get friends feed (entries from friends, showing only song + mentions)
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const { userId: clerkUserId } = await auth()
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -25,66 +24,45 @@ export async function GET(request: Request) {
       return NextResponse.json({ entries: [] })
     }
 
-    // Get entries from friends
-    const entries = await prisma.entry.findMany({
-      where: {
-        userId: {
-          in: friendIds,
-        },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            username: true,
-            image: true,
-          },
-        },
-        mentions: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                name: true,
-                username: true,
-                image: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: 50, // Limit to recent 50 entries
-    })
+    const supabase = getSupabase()
 
-    // Format entries for feed (only song + mentions, no notes/tags)
-    const feedEntries = entries.map((entry) => ({
+    // Get entries from friends
+    const { data: entries, error } = await supabase
+      .from('entries')
+      .select('id, date, songTitle, artist, albumTitle, albumArt, createdAt, userId')
+      .in('userId', friendIds)
+      .order('createdAt', { ascending: false })
+      .limit(50)
+
+    if (error) throw error
+
+    // Get user info for all friend IDs
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, email, name, username, image')
+      .in('id', friendIds)
+
+    const userMap = new Map((users || []).map(u => [u.id, u]))
+
+    // Format entries for feed
+    const feedEntries = (entries || []).map((entry) => ({
       id: entry.id,
-      date: new Date(entry.date).toISOString().split('T')[0], // Format as YYYY-MM-DD
+      date: new Date(entry.date).toISOString().split('T')[0],
       songTitle: entry.songTitle,
       artist: entry.artist,
       albumTitle: entry.albumTitle,
       albumArt: entry.albumArt,
-      user: entry.user,
-      mentions: entry.mentions.map((mention) => ({
-        id: mention.id,
-        user: mention.user,
-      })),
+      user: userMap.get(entry.userId) || null,
+      mentions: [],
       createdAt: entry.createdAt,
     }))
 
     return NextResponse.json({ entries: feedEntries })
-  } catch (error) {
-    console.error('Error fetching feed:', error)
+  } catch (error: any) {
+    console.error('[feed] Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to fetch feed' },
+      { error: 'Failed to fetch feed', message: error?.message },
       { status: 500 }
     )
   }
 }
-

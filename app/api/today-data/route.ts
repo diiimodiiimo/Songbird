@@ -1,95 +1,106 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { supabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 /**
  * OPTIMIZED: Combined endpoint for Today page data
- * Combines: streak + on-this-day + existing entry check + friends list
- * Reduces 4-5 API calls to 1
+ * Uses Supabase REST API (more reliable on Vercel than Prisma)
  */
 export async function GET(request: Request) {
+  const startTime = Date.now()
+
   try {
+    console.log('[today-data] Starting request')
+
     const { userId: clerkUserId } = await auth()
     if (!clerkUserId) {
+      console.log('[today-data] No clerkUserId - unauthorized')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    console.log('[today-data] Clerk userId:', clerkUserId)
 
-    const prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
-    if (!prismaUserId) {
-      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
+    if (!supabase) {
+      return NextResponse.json({
+        error: 'Database not configured',
+        message: 'Missing SUPABASE_SERVICE_ROLE_KEY',
+      }, { status: 500 })
     }
 
+    let prismaUserId: string | null = null
+    try {
+      prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
+    } catch (syncError: any) {
+      console.error('[today-data] clerk-sync error:', syncError?.message)
+      return NextResponse.json({
+        error: 'Database connection error',
+        message: syncError?.message || 'Failed to sync user',
+      }, { status: 500 })
+    }
+
+    if (!prismaUserId) {
+      console.log('[today-data] No prismaUserId found')
+      return NextResponse.json({
+        error: 'User not found in database',
+      }, { status: 404 })
+    }
+    console.log('[today-data] Database userId:', prismaUserId)
+
     const { searchParams } = new URL(request.url)
-    const dateParam = searchParams.get('date') // YYYY-MM-DD format
+    const dateParam = searchParams.get('date')
 
     if (!dateParam || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
       return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, { status: 400 })
     }
 
-    // Parse date components
     const [year, month, day] = dateParam.split('-')
     const monthNum = parseInt(month)
     const dayNum = parseInt(day)
 
-    // Run all queries in parallel for maximum speed
-    const [allEntries, existingEntryResult, friends] = await Promise.all([
-      // Get all entries for streak calculation + on-this-day (single query)
-      prisma.entry.findMany({
-        where: { userId: prismaUserId },
-        select: {
-          id: true,
-          date: true,
-          songTitle: true,
-          artist: true,
-          albumArt: true,
-          notes: true,
-          people: {
-            select: { id: true, name: true },
-          },
-        },
-        orderBy: { date: 'desc' },
-      }),
+    console.log('[today-data] Fetching data for date:', dateParam)
 
-      // Check for existing entry on the selected date
-      prisma.entry.findFirst({
-        where: {
-          userId: prismaUserId,
-          date: {
-            gte: new Date(`${dateParam}T00:00:00.000Z`),
-            lte: new Date(`${dateParam}T23:59:59.999Z`),
-          },
-        },
-        select: {
-          id: true,
-          songTitle: true,
-          artist: true,
-          notes: true,
-          people: { select: { id: true, name: true } },
-          mentions: {
-            select: {
-              user: { select: { id: true, name: true, email: true } },
-            },
-          },
-        },
-      }),
+    // Run queries in parallel using Supabase
+    const [entriesResult, existingEntryResult, friendsResult] = await Promise.all([
+      // Get all entries for streak + on-this-day
+      supabase
+        .from('entries')
+        .select('id, date, songTitle, artist, albumArt, notes')
+        .eq('userId', prismaUserId)
+        .order('date', { ascending: false }),
 
-      // Get friends list for mentions
-      prisma.friendRequest.findMany({
-        where: {
-          OR: [
-            { senderId: prismaUserId, status: 'accepted' },
-            { receiverId: prismaUserId, status: 'accepted' },
-          ],
-        },
-        select: {
-          sender: { select: { id: true, name: true, email: true } },
-          receiver: { select: { id: true, name: true, email: true } },
-        },
-      }),
+      // Check for existing entry on selected date
+      supabase
+        .from('entries')
+        .select(`
+          id, songTitle, artist, notes,
+          person_references (id, name)
+        `)
+        .eq('userId', prismaUserId)
+        .gte('date', `${dateParam}T00:00:00.000Z`)
+        .lte('date', `${dateParam}T23:59:59.999Z`)
+        .maybeSingle(),
+
+      // Get friends
+      supabase
+        .from('friend_requests')
+        .select(`
+          senderId, receiverId,
+          sender:users!friend_requests_senderId_fkey(id, name, email),
+          receiver:users!friend_requests_receiverId_fkey(id, name, email)
+        `)
+        .eq('status', 'accepted')
+        .or(`senderId.eq.${prismaUserId},receiverId.eq.${prismaUserId}`),
     ])
 
-    // Calculate streak from entries
+    if (entriesResult.error) {
+      console.error('[today-data] Entries query error:', entriesResult.error)
+      throw entriesResult.error
+    }
+
+    const allEntries = entriesResult.data || []
+    console.log('[today-data] Found entries:', allEntries.length)
+
+    // Calculate streak
     let currentStreak = 0
     if (allEntries.length > 0) {
       const today = new Date()
@@ -97,14 +108,13 @@ export async function GET(request: Request) {
 
       const entryDates = new Set(
         allEntries.map((entry) => {
-          const date = entry.date instanceof Date ? entry.date : new Date(entry.date)
+          const date = new Date(entry.date)
           date.setHours(0, 0, 0, 0)
           return date.getTime()
         })
       )
 
       let checkDate = new Date(today)
-      // If today doesn't have an entry, start from yesterday
       if (!entryDates.has(checkDate.getTime())) {
         checkDate.setDate(checkDate.getDate() - 1)
       }
@@ -115,68 +125,69 @@ export async function GET(request: Request) {
       }
     }
 
-    // Filter on-this-day entries (same month/day, different year)
+    // Filter on-this-day entries
     const onThisDayEntries = allEntries
       .filter((entry) => {
-        const entryDate = entry.date instanceof Date ? entry.date : new Date(entry.date)
+        const entryDate = new Date(entry.date)
         const entryYear = entryDate.getFullYear()
         return (
           entryDate.getMonth() + 1 === monthNum &&
           entryDate.getDate() === dayNum &&
-          entryYear !== parseInt(year) // Exclude current year
+          entryYear !== parseInt(year)
         )
       })
-      .slice(0, 3) // Max 3 entries
+      .slice(0, 3)
       .map((entry) => ({
-        id: String(entry.id),
-        date: entry.date instanceof Date
-          ? entry.date.toISOString().split('T')[0]
-          : String(entry.date).split('T')[0],
-        songTitle: String(entry.songTitle || ''),
-        artist: String(entry.artist || ''),
-        albumArt: entry.albumArt ? String(entry.albumArt) : null,
+        id: entry.id,
+        date: new Date(entry.date).toISOString().split('T')[0],
+        songTitle: entry.songTitle || '',
+        artist: entry.artist || '',
+        albumArt: entry.albumArt || null,
       }))
 
-    // Format existing entry if found
-    const existingEntry = existingEntryResult
+    // Format existing entry
+    const existingEntry = existingEntryResult.data
       ? {
-          id: existingEntryResult.id,
-          songTitle: existingEntryResult.songTitle,
-          artist: existingEntryResult.artist,
-          notes: existingEntryResult.notes || '',
-          people: existingEntryResult.people?.map((p: any) => ({ id: p.id, name: p.name })) || [],
-          mentions: existingEntryResult.mentions?.map((m: any) => m.user) || [],
+          id: existingEntryResult.data.id,
+          songTitle: existingEntryResult.data.songTitle,
+          artist: existingEntryResult.data.artist,
+          notes: existingEntryResult.data.notes || '',
+          people: (existingEntryResult.data.person_references || []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+          })),
+          mentions: [],
         }
       : null
 
     // Format friends list
-    const friendsList = friends.map((fr) => {
-      const friend = fr.sender.id === prismaUserId ? fr.receiver : fr.sender
+    const friendsList = (friendsResult.data || []).map((fr: any) => {
+      const friend = fr.senderId === prismaUserId ? fr.receiver : fr.sender
       return {
-        id: friend.id,
-        name: friend.name || friend.email?.split('@')[0] || 'Unknown',
-        email: friend.email,
+        id: friend?.id || '',
+        name: friend?.name || friend?.email?.split('@')[0] || 'Unknown',
+        email: friend?.email || '',
       }
-    })
+    }).filter((f: any) => f.id)
 
-    // Return all data in one response with short cache for performance
-    const response = NextResponse.json({
+    const duration = Date.now() - startTime
+    console.log('[today-data] Completed in', duration, 'ms')
+
+    return NextResponse.json({
       currentStreak,
       onThisDayEntries,
       existingEntry,
       friends: friendsList,
     })
-    
-    // Cache for 30 seconds on client, revalidate in background
-    response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60')
-    
-    return response
   } catch (error: any) {
-    console.error('Error in /api/today-data:', error?.message)
+    const duration = Date.now() - startTime
+    console.error('[today-data] Error after', duration, 'ms:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to fetch today data', message: error?.message },
+      {
+        error: 'Failed to fetch today data',
+        message: error?.message || 'Unknown error',
+      },
       { status: 500 }
     )
   }
 }
-

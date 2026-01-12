@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 export async function GET(
@@ -19,17 +19,14 @@ export async function GET(
     }
 
     const { username } = await params
+    const supabase = getSupabase()
 
     // Find the profile user
-    const profileUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { username: username },
-          { email: username },
-        ],
-      },
-      select: { id: true },
-    })
+    const { data: profileUser } = await supabase
+      .from('users')
+      .select('id')
+      .or(`username.eq.${username},email.eq.${username}`)
+      .maybeSingle()
 
     if (!profileUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -45,21 +42,12 @@ export async function GET(
       })
     }
 
-    // Check if they're friends
-    const friendRequest = await prisma.friendRequest.findFirst({
-      where: {
-        OR: [
-          {
-            senderId: currentUserId,
-            receiverId: profileUser.id,
-          },
-          {
-            senderId: profileUser.id,
-            receiverId: currentUserId,
-          },
-        ],
-      },
-    })
+    // Check friendship status
+    const { data: friendRequest } = await supabase
+      .from('friend_requests')
+      .select('id, senderId, receiverId, status')
+      .or(`and(senderId.eq.${currentUserId},receiverId.eq.${profileUser.id}),and(senderId.eq.${profileUser.id},receiverId.eq.${currentUserId})`)
+      .maybeSingle()
 
     if (!friendRequest) {
       return NextResponse.json({
@@ -81,12 +69,11 @@ export async function GET(
       requestDirection,
       requestId: friendRequest.id,
     })
-  } catch (error) {
-    console.error('Error checking friendship status:', error)
+  } catch (error: any) {
+    console.error('[users/[username]/friendship] Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to check friendship status' },
+      { error: 'Failed to check friendship status', message: error?.message },
       { status: 500 }
     )
   }
 }
-

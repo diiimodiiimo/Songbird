@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { areFriends } from '@/lib/friends'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 const mentionSchema = z.object({
   entryId: z.string(),
-  userId: z.string(), // The user being mentioned (Prisma user ID)
+  userId: z.string(),
 })
 
 // POST - Add a mention to an entry
@@ -18,7 +18,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const currentUserId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!currentUserId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -27,10 +26,14 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { entryId, userId: mentionedUserId } = mentionSchema.parse(body)
 
-    // Verify the entry exists and belongs to the current user
-    const entry = await prisma.entry.findUnique({
-      where: { id: entryId },
-    })
+    const supabase = getSupabase()
+
+    // Verify entry exists and belongs to current user
+    const { data: entry } = await supabase
+      .from('entries')
+      .select('id, userId')
+      .eq('id', entryId)
+      .single()
 
     if (!entry) {
       return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
@@ -43,24 +46,19 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check if users are friends (mentions only allowed between friends)
+    // Check if users are friends
     const isFriend = await areFriends(currentUserId, mentionedUserId)
     if (!isFriend) {
-      return NextResponse.json(
-        { error: 'You can only mention friends' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: 'You can only mention friends' }, { status: 403 })
     }
 
     // Check if mention already exists
-    const existingMention = await prisma.mention.findUnique({
-      where: {
-        entryId_userId: {
-          entryId,
-          userId: mentionedUserId,
-        },
-      },
-    })
+    const { data: existingMention } = await supabase
+      .from('mentions')
+      .select('id')
+      .eq('entryId', entryId)
+      .eq('userId', mentionedUserId)
+      .maybeSingle()
 
     if (existingMention) {
       return NextResponse.json(
@@ -70,43 +68,45 @@ export async function POST(request: Request) {
     }
 
     // Create the mention
-    const mention = await prisma.mention.create({
-      data: {
+    const { data: mention, error } = await supabase
+      .from('mentions')
+      .insert({
         entryId,
         userId: mentionedUserId,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            image: true,
-          },
-        },
-      },
+        createdAt: new Date().toISOString(),
+      })
+      .select('id, entryId, userId')
+      .single()
+
+    if (error) throw error
+
+    // Get mentioned user info
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, email, name, image')
+      .eq('id', mentionedUserId)
+      .single()
+
+    // Create notification
+    await supabase.from('notifications').insert({
+      userId: mentionedUserId,
+      type: 'mention',
+      relatedId: entryId,
+      read: false,
+      createdAt: new Date().toISOString(),
     })
 
-    // Create notification for the mentioned user
-    await prisma.notification.create({
-      data: {
-        userId: mentionedUserId,
-        type: 'mention',
-        relatedId: entryId,
-      },
-    })
-
-    return NextResponse.json({ mention }, { status: 201 })
-  } catch (error) {
+    return NextResponse.json({ mention: { ...mention, user } }, { status: 201 })
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid input', details: error.errors },
         { status: 400 }
       )
     }
-    console.error('Error creating mention:', error)
+    console.error('[mentions] POST Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to create mention' },
+      { error: 'Failed to create mention', message: error?.message },
       { status: 500 }
     )
   }
@@ -120,7 +120,6 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -137,10 +136,14 @@ export async function DELETE(request: Request) {
       )
     }
 
-    // Verify the entry belongs to the current user
-    const entry = await prisma.entry.findUnique({
-      where: { id: entryId },
-    })
+    const supabase = getSupabase()
+
+    // Verify entry belongs to current user
+    const { data: entry } = await supabase
+      .from('entries')
+      .select('id, userId')
+      .eq('id', entryId)
+      .single()
 
     if (!entry || entry.userId !== userId) {
       return NextResponse.json(
@@ -149,26 +152,20 @@ export async function DELETE(request: Request) {
       )
     }
 
-    await prisma.mention.delete({
-      where: {
-        entryId_userId: {
-          entryId,
-          userId: mentionedUserId,
-        },
-      },
-    })
+    const { error } = await supabase
+      .from('mentions')
+      .delete()
+      .eq('entryId', entryId)
+      .eq('userId', mentionedUserId)
+
+    if (error) throw error
 
     return NextResponse.json({ message: 'Mention removed' })
-  } catch (error) {
-    console.error('Error deleting mention:', error)
+  } catch (error: any) {
+    console.error('[mentions] DELETE Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to remove mention' },
+      { error: 'Failed to remove mention', message: error?.message },
       { status: 500 }
     )
   }
 }
-
-
-
-
-

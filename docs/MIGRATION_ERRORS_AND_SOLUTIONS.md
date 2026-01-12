@@ -530,3 +530,4 @@ When migrating authentication systems:
 *Migration: NextAuth.js → Clerk*
 *Status: In Progress - Database connection pending*
 
+

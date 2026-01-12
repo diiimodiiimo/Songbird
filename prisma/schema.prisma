@@ -1,38 +1,34 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
   id              String   @id @default(cuid())
   email           String   @unique
   name            String?
-  username        String?  @unique // Display name/username for the app
-  password        String? // Optional - only used for legacy NextAuth accounts
-  clerkId         String?  @unique // Clerk user ID for authentication
+  username        String?  @unique
+  password        String?
+  clerkId         String?  @unique
   image           String?
-  bio             String? // User bio (max 160 chars)
-  favoriteArtists String? // JSON array of favorite artist names
-  favoriteSongs   String? // JSON array of favorite songs (title + artist)
+  bio             String?
+  favoriteArtists String?
+  favoriteSongs   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  entries          Entry[]
-  taggedEntries    EntryTag[]
-  mentions         Mention[]
-  notifications    Notification[]
-  personReferences PersonReference[]
-
-  // Friends system - two-way friendships
+  entries                Entry[]
+  taggedEntries          EntryTag[]
   sentFriendRequests     FriendRequest[] @relation("Sender")
   receivedFriendRequests FriendRequest[] @relation("Receiver")
+  mentions               Mention[]
+  notifications          Notification[]
+  personReferences       PersonReference[]
 
   @@map("users")
 }
@@ -78,12 +74,11 @@ model EntryTag {
   @@map("entry_tags")
 }
 
-// Two-way friendship system
 model FriendRequest {
   id         String   @id @default(cuid())
   senderId   String
   receiverId String
-  status     String   @default("pending") // "pending", "accepted", "declined"
+  status     String   @default("pending")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -94,11 +89,10 @@ model FriendRequest {
   @@map("friend_requests")
 }
 
-// Mentions - explicit social mentions (separate from private tags)
 model Mention {
   id        String   @id @default(cuid())
   entryId   String
-  userId    String // The user being mentioned
+  userId    String
   createdAt DateTime @default(now())
 
   entry Entry @relation(fields: [entryId], references: [id], onDelete: Cascade)
@@ -108,12 +102,11 @@ model Mention {
   @@map("mentions")
 }
 
-// Notifications
 model Notification {
   id        String   @id @default(cuid())
-  userId    String // The user receiving the notification
-  type      String // "mention", "friend_request_accepted"
-  relatedId String? // ID of related entity (entryId, friendRequestId, etc.)
+  userId    String
+  type      String
+  relatedId String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
@@ -122,19 +115,17 @@ model Notification {
   @@map("notifications")
 }
 
-// Person References - for tagging people who may or may not be on the app
-// This is separate from EntryTag (which is for users on the app) and Mention (which is social)
 model PersonReference {
   id        String   @id @default(cuid())
   entryId   String
-  name      String // The person's name (e.g., "Nick", "Grace")
-  userId    String? // Optional: if this person has an account, link to their User ID
-  source    String? // Optional: "manual" (default), "auto_migration", etc.
+  name      String
+  userId    String?
+  source    String?
   createdAt DateTime @default(now())
 
   entry Entry @relation(fields: [entryId], references: [id], onDelete: Cascade)
   user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@unique([entryId, name]) // Prevent duplicate names per entry
+  @@unique([entryId, name])
   @@map("person_references")
 }

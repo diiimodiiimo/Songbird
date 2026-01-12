@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
@@ -30,16 +30,20 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { id } = await params
-    const entry = await prisma.entry.findUnique({
-      where: { id },
-    })
+    const supabase = getSupabase()
+
+    // Check entry exists and belongs to user
+    const { data: entry } = await supabase
+      .from('entries')
+      .select('id, userId')
+      .eq('id', id)
+      .single()
 
     if (!entry) {
       return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
@@ -52,161 +56,109 @@ export async function PUT(
     const body = await request.json()
     const data = updateEntrySchema.parse(body)
 
-    // Delete existing tags and create new ones if provided
+    // Delete existing tags if updating
     if (data.taggedUserIds !== undefined) {
-      await prisma.entryTag.deleteMany({
-        where: { entryId: id },
-      })
+      await supabase.from('entry_tags').delete().eq('entryId', id)
     }
 
-    // Delete existing people references and create new ones if provided
+    // Delete existing people references if updating
     if (data.peopleNames !== undefined) {
-      await prisma.personReference.deleteMany({
-        where: { entryId: id },
-      })
+      await supabase.from('person_references').delete().eq('entryId', id)
     }
 
-    // Helper function to match people names to users
-    const matchPeopleToUsers = async (peopleNames: string[]): Promise<Array<{ name: string; userId: string | null }>> => {
-      if (!peopleNames || peopleNames.length === 0) return []
-      
-      const allUsers = await prisma.user.findMany({
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          email: true,
-        },
-      })
-      
-      // Group people by lowercase name to handle case-insensitive duplicates
-      const nameMap = new Map<string, string>()
-      peopleNames.forEach((name) => {
-        const trimmed = name.trim()
-        if (trimmed) {
-          const lower = trimmed.toLowerCase()
-          // Keep the first capitalization we see
-          if (!nameMap.has(lower)) {
-            nameMap.set(lower, trimmed)
+    // Build update object
+    const updateData: Record<string, any> = {
+      updatedAt: new Date().toISOString(),
+    }
+    if (data.songTitle) updateData.songTitle = data.songTitle
+    if (data.artist) updateData.artist = data.artist
+    if (data.albumTitle) updateData.albumTitle = data.albumTitle
+    if (data.albumArt) updateData.albumArt = data.albumArt
+    if (data.durationMs !== undefined) updateData.durationMs = data.durationMs
+    if (data.explicit !== undefined) updateData.explicit = data.explicit
+    if (data.popularity !== undefined) updateData.popularity = data.popularity
+    if (data.releaseDate !== undefined) updateData.releaseDate = data.releaseDate
+    if (data.trackId) updateData.trackId = data.trackId
+    if (data.uri) updateData.uri = data.uri
+    if (data.notes !== undefined) updateData.notes = data.notes
+
+    const { data: updatedEntry, error: updateError } = await supabase
+      .from('entries')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (updateError) throw updateError
+
+    // Create new tags
+    if (data.taggedUserIds && data.taggedUserIds.length > 0) {
+      await supabase.from('entry_tags').insert(
+        data.taggedUserIds.map((taggedUserId) => ({
+          entryId: id,
+          userId: taggedUserId,
+          createdAt: new Date().toISOString(),
+        }))
+      )
+    }
+
+    // Create new people references
+    if (data.peopleNames && data.peopleNames.length > 0) {
+      // Match people to users
+      const { data: allUsers } = await supabase
+        .from('users')
+        .select('id, name, username, email')
+
+      const peopleToCreate = data.peopleNames
+        .map((name) => name.trim())
+        .filter((name) => name)
+        .map((name) => {
+          const matchedUser = (allUsers || []).find(
+            (user: any) =>
+              user.name?.toLowerCase() === name.toLowerCase() ||
+              user.username?.toLowerCase() === name.toLowerCase() ||
+              user.email?.toLowerCase().split('@')[0] === name.toLowerCase()
+          )
+          return {
+            entryId: id,
+            name,
+            userId: matchedUser?.id || null,
+            createdAt: new Date().toISOString(),
           }
-        }
-      })
+        })
 
-      return Array.from(nameMap.values()).map((trimmedName) => {
-        const matchedUser = allUsers.find(
-          (user) =>
-            user.name?.toLowerCase() === trimmedName.toLowerCase() ||
-            user.username?.toLowerCase() === trimmedName.toLowerCase() ||
-            user.email.toLowerCase().split('@')[0] === trimmedName.toLowerCase()
-        )
-        
-        return {
-          name: trimmedName,
-          userId: matchedUser?.id || null,
-        }
-      })
+      if (peopleToCreate.length > 0) {
+        await supabase.from('person_references').insert(peopleToCreate)
+      }
     }
 
-    // Match people names to users if provided
-    const peopleWithMatches = data.peopleNames !== undefined
-      ? await matchPeopleToUsers(data.peopleNames)
-      : []
+    // Get user info
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, name, email, image')
+      .eq('id', userId)
+      .single()
 
-    const updatedEntry = await prisma.entry.update({
-      where: { id },
-      data: {
-        ...(data.songTitle && { songTitle: data.songTitle }),
-        ...(data.artist && { artist: data.artist }),
-        ...(data.albumTitle && { albumTitle: data.albumTitle }),
-        ...(data.albumArt && { albumArt: data.albumArt }),
-        ...(data.durationMs !== undefined && { durationMs: data.durationMs }),
-        ...(data.explicit !== undefined && { explicit: data.explicit }),
-        ...(data.popularity !== undefined && { popularity: data.popularity }),
-        ...(data.releaseDate !== undefined && { releaseDate: data.releaseDate }),
-        ...(data.trackId && { trackId: data.trackId }),
-        ...(data.uri && { uri: data.uri }),
-        ...(data.notes !== undefined && { notes: data.notes }),
-        ...(data.taggedUserIds !== undefined && {
-          tags: {
-            create: data.taggedUserIds.map((taggedUserId) => ({
-              userId: taggedUserId,
-            })),
-          },
-        }),
-        ...(data.peopleNames !== undefined && {
-          people: {
-            create: peopleWithMatches.map((person) => ({
-              name: person.name,
-              userId: person.userId,
-            })),
-          },
-        }),
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        tags: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-              },
-            },
-          },
-        },
-        mentions: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-              },
-            },
-          },
-        },
-        people: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-              },
-            },
-          },
-        },
+    return NextResponse.json({
+      entry: {
+        ...updatedEntry,
+        date: new Date(updatedEntry.date).toISOString().split('T')[0],
+        user,
+        tags: [],
+        mentions: [],
+        people: [],
       },
     })
-
-    // Format date consistently
-    const formattedEntry = {
-      ...updatedEntry,
-      date: new Date(updatedEntry.date).toISOString().split('T')[0],
-    }
-
-    return NextResponse.json({ entry: formattedEntry })
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid input', details: error.errors },
         { status: 400 }
       )
     }
-    console.error('Error updating entry:', error)
+    console.error('[entries/[id]] PUT Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to update entry' },
+      { error: 'Failed to update entry', message: error?.message },
       { status: 500 }
     )
   }
@@ -222,16 +174,19 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { id } = await params
-    const entry = await prisma.entry.findUnique({
-      where: { id },
-    })
+    const supabase = getSupabase()
+
+    const { data: entry } = await supabase
+      .from('entries')
+      .select('id, userId')
+      .eq('id', id)
+      .single()
 
     if (!entry) {
       return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
@@ -241,18 +196,16 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await prisma.entry.delete({
-      where: { id },
-    })
+    const { error } = await supabase.from('entries').delete().eq('id', id)
+
+    if (error) throw error
 
     return NextResponse.json({ message: 'Entry deleted successfully' })
-  } catch (error) {
-    console.error('Error deleting entry:', error)
+  } catch (error: any) {
+    console.error('[entries/[id]] DELETE Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to delete entry' },
+      { error: 'Failed to delete entry', message: error?.message },
       { status: 500 }
     )
   }
 }
-
-

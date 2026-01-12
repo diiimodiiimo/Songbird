@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 
 export async function GET(request: Request) {
   try {
@@ -12,39 +12,36 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const timeFilter = searchParams.get('time') || 'all'
 
+    const supabase = getSupabase()
+
     // Calculate date range based on time filter
-    let startDate: Date | undefined
+    let startDate: string | undefined
     const now = new Date()
 
     if (timeFilter === 'week') {
-      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
     } else if (timeFilter === 'month') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     } else if (timeFilter === 'year') {
-      startDate = new Date(now.getFullYear(), 0, 1)
+      startDate = new Date(now.getFullYear(), 0, 1).toISOString()
     }
 
-    // Get all entries (filtered by date if applicable)
-    const entries = await prisma.entry.findMany({
-      where: startDate ? {
-        date: {
-          gte: startDate,
-        },
-      } : undefined,
-      select: {
-        artist: true,
-        songTitle: true,
-        albumArt: true,
-      },
-    })
+    // Get entries
+    let query = supabase.from('entries').select('artist, songTitle, albumArt')
+    if (startDate) {
+      query = query.gte('date', startDate)
+    }
+
+    const { data: entries, error } = await query
+
+    if (error) throw error
 
     // Count artists
     const artistCounts: Record<string, number> = {}
-    entries.forEach((entry) => {
+    ;(entries || []).forEach((entry) => {
       artistCounts[entry.artist] = (artistCounts[entry.artist] || 0) + 1
     })
 
-    // Get top 50 artists
     const topArtists = Object.entries(artistCounts)
       .map(([artist, count]) => ({ artist, count }))
       .sort((a, b) => b.count - a.count)
@@ -52,7 +49,7 @@ export async function GET(request: Request) {
 
     // Count songs
     const songCounts: Record<string, { songTitle: string; artist: string; albumArt: string | null; count: number }> = {}
-    entries.forEach((entry) => {
+    ;(entries || []).forEach((entry) => {
       const key = `${entry.songTitle}|||${entry.artist}`
       if (!songCounts[key]) {
         songCounts[key] = {
@@ -65,28 +62,28 @@ export async function GET(request: Request) {
       songCounts[key].count++
     })
 
-    // Get top 50 songs
     const topSongs = Object.values(songCounts)
       .sort((a, b) => b.count - a.count)
       .slice(0, 50)
 
     // Get total stats
-    const totalUsers = await prisma.user.count()
-    const totalEntries = entries.length
+    const { count: totalUsers } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
 
     return NextResponse.json({
       topArtists,
       topSongs,
       stats: {
-        totalUsers,
-        totalEntries,
+        totalUsers: totalUsers || 0,
+        totalEntries: (entries || []).length,
         timeFilter,
       },
     })
-  } catch (error) {
-    console.error('Error fetching leaderboard data:', error)
+  } catch (error: any) {
+    console.error('[leaderboard] Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to fetch leaderboard data' },
+      { error: 'Failed to fetch leaderboard data', message: error?.message },
       { status: 500 }
     )
   }

@@ -525,3 +525,4 @@ export function Bird({ mood = 'calm', animation = 'idle', className }: BirdProps
 
 **End of Animation Specifications**
 
+

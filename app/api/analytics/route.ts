@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 export async function GET(request: Request) {
@@ -10,7 +10,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!prismaUserId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -21,32 +20,43 @@ export async function GET(request: Request) {
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
 
-    const where: any = { userId }
+    const supabase = getSupabase()
+
+    let query = supabase
+      .from('entries')
+      .select('artist, songTitle, date, albumArt')
+      .eq('userId', userId)
+
     if (startDate && endDate) {
-      where.date = {
-        gte: new Date(startDate),
-        lte: new Date(endDate),
-      }
+      query = query.gte('date', startDate).lte('date', endDate)
     }
 
-    const entries = await prisma.entry.findMany({
-      where,
-      select: {
-        artist: true,
-        songTitle: true,
-        date: true,
-        albumArt: true,
-        people: {
-          select: {
-            name: true,
-          },
-        },
-      },
+    const { data: entries, error } = await query
+
+    if (error) throw error
+
+    // Get person references for entries
+    const entryIds = (entries || []).map(e => e.id).filter(Boolean)
+    let personRefs: any[] = []
+    if (entryIds.length > 0) {
+      const { data } = await supabase
+        .from('person_references')
+        .select('entryId, name')
+        .in('entryId', entryIds)
+      personRefs = data || []
+    }
+
+    // Group person refs by entry
+    const personRefsByEntry = new Map<string, string[]>()
+    personRefs.forEach((pr) => {
+      const existing = personRefsByEntry.get(pr.entryId) || []
+      existing.push(pr.name)
+      personRefsByEntry.set(pr.entryId, existing)
     })
 
     // Calculate top artists
     const artistCounts: Record<string, number> = {}
-    entries.forEach((entry) => {
+    ;(entries || []).forEach((entry) => {
       artistCounts[entry.artist] = (artistCounts[entry.artist] || 0) + 1
     })
 
@@ -57,7 +67,7 @@ export async function GET(request: Request) {
 
     // Calculate top songs
     const songCounts: Record<string, number> = {}
-    entries.forEach((entry) => {
+    ;(entries || []).forEach((entry) => {
       const key = `${entry.songTitle} - ${entry.artist}`
       songCounts[key] = (songCounts[key] || 0) + 1
     })
@@ -65,7 +75,7 @@ export async function GET(request: Request) {
     const topSongs = Object.entries(songCounts)
       .map(([song, count]) => {
         const [songTitle, artist] = song.split(' - ')
-        const entry = entries.find(e => e.songTitle === songTitle && e.artist === artist)
+        const entry = (entries || []).find(e => e.songTitle === songTitle && e.artist === artist)
         return { 
           songTitle, 
           artist, 
@@ -78,25 +88,21 @@ export async function GET(request: Request) {
 
     // Calculate top people
     const peopleCounts: Record<string, number> = {}
-    entries.forEach((entry) => {
-      entry.people.forEach((person) => {
-        peopleCounts[person.name] = (peopleCounts[person.name] || 0) + 1
-      })
+    personRefs.forEach((pr) => {
+      peopleCounts[pr.name] = (peopleCounts[pr.name] || 0) + 1
     })
 
     const topPeople = Object.entries(peopleCounts)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 20) // Show top 20 people
+      .slice(0, 20)
 
     return NextResponse.json({ topArtists, topSongs, topPeople })
-  } catch (error) {
-    console.error('Error fetching analytics:', error)
+  } catch (error: any) {
+    console.error('[analytics] Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to fetch analytics' },
+      { error: 'Failed to fetch analytics', message: error?.message },
       { status: 500 }
     )
   }
 }
-
-

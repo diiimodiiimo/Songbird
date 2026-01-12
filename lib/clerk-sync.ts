@@ -1,77 +1,150 @@
-import { prisma } from './prisma'
+import { supabase } from './supabase'
 
 // In-memory cache for clerk-to-prisma user ID mapping
-// This drastically reduces database calls on serverless
 const userIdCache = new Map<string, { id: string; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
+function generateCuid(): string {
+  // Simple cuid-like generator
+  const timestamp = Date.now().toString(36)
+  const randomPart = Math.random().toString(36).substring(2, 15)
+  return `c${timestamp}${randomPart}`
+}
+
 /**
- * Get the Prisma user ID from Clerk user ID
- * OPTIMIZED: Single database query with in-memory caching
+ * Get the database user ID from Clerk user ID
+ * Uses Supabase REST API (more reliable on Vercel than Prisma)
  */
 export async function getPrismaUserIdFromClerk(clerkUserId: string): Promise<string | null> {
-  if (!clerkUserId) return null
+  if (!clerkUserId) {
+    console.log('[clerk-sync] No clerkUserId provided')
+    return null
+  }
 
   // Check cache first
   const cached = userIdCache.get(clerkUserId)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log('[clerk-sync] Cache hit for:', clerkUserId)
     return cached.id
   }
 
+  if (!supabase) {
+    throw new Error('Supabase not configured - missing SUPABASE_SERVICE_ROLE_KEY')
+  }
+
   try {
-    // OPTIMIZED: Single query that checks both id and clerkId
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { id: clerkUserId },
-          { clerkId: clerkUserId },
-        ],
-      },
-      select: { id: true },
-    })
+    console.log('[clerk-sync] Looking up user:', clerkUserId)
+
+    // Try to find user by id or clerkId
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id')
+      .or(`id.eq.${clerkUserId},clerkId.eq.${clerkUserId}`)
+      .limit(1)
+      .maybeSingle()
+
+    if (error) {
+      console.error('[clerk-sync] Supabase error:', error)
+      throw error
+    }
 
     if (user) {
-      // Cache the result
+      console.log('[clerk-sync] Found user by id/clerkId:', user.id)
       userIdCache.set(clerkUserId, { id: user.id, timestamp: Date.now() })
       return user.id
     }
 
-    // If not found by id/clerkId, we need email lookup
-    // This is a fallback for first-time users - import currentUser lazily
+    console.log('[clerk-sync] User not found by id/clerkId, trying email lookup')
+
+    // If not found, get email from Clerk and look up by email
     const { currentUser } = await import('@clerk/nextjs/server')
     const clerkUser = await currentUser()
-    
+
     if (clerkUser?.emailAddresses?.[0]?.emailAddress) {
       const email = clerkUser.emailAddresses[0].emailAddress
-      
-      const userByEmail = await prisma.user.findUnique({
-        where: { email },
-        select: { id: true },
-      })
+      console.log('[clerk-sync] Looking up by email:', email)
+
+      const { data: userByEmail, error: emailError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle()
+
+      if (emailError) {
+        console.error('[clerk-sync] Email lookup error:', emailError)
+        throw emailError
+      }
 
       if (userByEmail) {
-        // Link clerkId for future lookups (fire and forget)
-        prisma.user.update({
-          where: { id: userByEmail.id },
-          data: { clerkId: clerkUserId },
-        }).catch(() => {}) // Non-blocking update
-        
-        // Cache the result
+        console.log('[clerk-sync] Found user by email:', userByEmail.id)
+
+        // Link clerkId for future lookups
+        await supabase
+          .from('users')
+          .update({ clerkId: clerkUserId })
+          .eq('id', userByEmail.id)
+
         userIdCache.set(clerkUserId, { id: userByEmail.id, timestamp: Date.now() })
         return userByEmail.id
       }
+
+      // User doesn't exist - create them
+      console.log('[clerk-sync] User not found, creating new user for:', email)
+
+      const newUserId = clerkUserId // Use Clerk ID as database ID
+      const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert({
+          id: newUserId,
+          email,
+          name: clerkUser.firstName
+            ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim()
+            : email.split('@')[0],
+          username: clerkUser.username || null,
+          image: clerkUser.imageUrl || null,
+          clerkId: clerkUserId,
+          password: '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .select('id')
+        .single()
+
+      if (createError) {
+        // Handle unique constraint - user might have been created concurrently
+        if (createError.code === '23505') {
+          console.log('[clerk-sync] User already exists, retrying lookup')
+          const { data: existingUser } = await supabase
+            .from('users')
+            .select('id')
+            .or(`id.eq.${clerkUserId},email.eq.${email}`)
+            .limit(1)
+            .maybeSingle()
+
+          if (existingUser) {
+            userIdCache.set(clerkUserId, { id: existingUser.id, timestamp: Date.now() })
+            return existingUser.id
+          }
+        }
+        console.error('[clerk-sync] Create user error:', createError)
+        throw createError
+      }
+
+      console.log('[clerk-sync] Created new user:', newUser.id)
+      userIdCache.set(clerkUserId, { id: newUser.id, timestamp: Date.now() })
+      return newUser.id
     }
 
+    console.log('[clerk-sync] No email found for Clerk user')
     return null
-  } catch (error) {
-    console.error('Error in getPrismaUserIdFromClerk:', error)
-    return null
+  } catch (error: any) {
+    console.error('[clerk-sync] Error:', error?.message || error)
+    throw error
   }
 }
 
 /**
- * Helper to get Prisma user ID from Clerk auth
- * Use this in API routes to convert Clerk userId to database userId
+ * Helper to get database user ID from Clerk auth
  */
 export async function getPrismaUserId(): Promise<string | null> {
   const { auth } = await import('@clerk/nextjs/server')
@@ -79,4 +152,3 @@ export async function getPrismaUserId(): Promise<string | null> {
   if (!userId) return null
   return await getPrismaUserIdFromClerk(userId)
 }
-

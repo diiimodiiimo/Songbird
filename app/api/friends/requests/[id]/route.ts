@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
@@ -19,7 +19,6 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -29,19 +28,19 @@ export async function PUT(
     const body = await request.json()
     const { action } = updateRequestSchema.parse(body)
 
+    const supabase = getSupabase()
+
     // Find the friend request
-    const friendRequest = await prisma.friendRequest.findUnique({
-      where: { id },
-    })
+    const { data: friendRequest } = await supabase
+      .from('friend_requests')
+      .select('id, senderId, receiverId, status')
+      .eq('id', id)
+      .single()
 
     if (!friendRequest) {
-      return NextResponse.json(
-        { error: 'Friend request not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Friend request not found' }, { status: 404 })
     }
 
-    // Only the receiver can accept/decline
     if (friendRequest.receiverId !== userId) {
       return NextResponse.json(
         { error: 'You can only respond to requests sent to you' },
@@ -57,59 +56,57 @@ export async function PUT(
     }
 
     // Update the request status
-    const updatedRequest = await prisma.friendRequest.update({
-      where: { id },
-      data: {
-        status: action === 'accept' ? 'accepted' : 'declined',
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            image: true,
-          },
-        },
-        receiver: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            image: true,
-          },
-        },
-      },
-    })
+    const newStatus = action === 'accept' ? 'accepted' : 'declined'
+    const { error: updateError } = await supabase
+      .from('friend_requests')
+      .update({ status: newStatus, updatedAt: new Date().toISOString() })
+      .eq('id', id)
 
-    // If accepted, create notification for the sender
+    if (updateError) throw updateError
+
+    // Get user info
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, email, name, image')
+      .in('id', [friendRequest.senderId, friendRequest.receiverId])
+
+    const userMap = new Map((users || []).map(u => [u.id, u]))
+
+    // If accepted, create notification
     if (action === 'accept') {
-      await prisma.notification.create({
-        data: {
-          userId: friendRequest.senderId,
-          type: 'friend_request_accepted',
-          relatedId: friendRequest.id,
-        },
+      await supabase.from('notifications').insert({
+        userId: friendRequest.senderId,
+        type: 'friend_request_accepted',
+        relatedId: friendRequest.id,
+        read: false,
+        createdAt: new Date().toISOString(),
       })
     }
 
-    return NextResponse.json({ friendRequest: updatedRequest })
-  } catch (error) {
+    return NextResponse.json({
+      friendRequest: {
+        ...friendRequest,
+        status: newStatus,
+        sender: userMap.get(friendRequest.senderId) || null,
+        receiver: userMap.get(friendRequest.receiverId) || null,
+      },
+    })
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid input', details: error.errors },
         { status: 400 }
       )
     }
-    console.error('Error updating friend request:', error)
+    console.error('[friends/requests/[id]] PUT Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to update friend request' },
+      { error: 'Failed to update friend request', message: error?.message },
       { status: 500 }
     )
   }
 }
 
-// DELETE - Cancel a friend request (only sender can cancel)
+// DELETE - Cancel a friend request
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -120,25 +117,24 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { id } = await params
-    const friendRequest = await prisma.friendRequest.findUnique({
-      where: { id },
-    })
+    const supabase = getSupabase()
+
+    const { data: friendRequest } = await supabase
+      .from('friend_requests')
+      .select('id, senderId')
+      .eq('id', id)
+      .single()
 
     if (!friendRequest) {
-      return NextResponse.json(
-        { error: 'Friend request not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Friend request not found' }, { status: 404 })
     }
 
-    // Only the sender can cancel
     if (friendRequest.senderId !== userId) {
       return NextResponse.json(
         { error: 'You can only cancel requests you sent' },
@@ -146,17 +142,16 @@ export async function DELETE(
       )
     }
 
-    await prisma.friendRequest.delete({
-      where: { id },
-    })
+    const { error } = await supabase.from('friend_requests').delete().eq('id', id)
+
+    if (error) throw error
 
     return NextResponse.json({ message: 'Friend request cancelled' })
-  } catch (error) {
-    console.error('Error deleting friend request:', error)
+  } catch (error: any) {
+    console.error('[friends/requests/[id]] DELETE Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to cancel friend request' },
+      { error: 'Failed to cancel friend request', message: error?.message },
       { status: 500 }
     )
   }
 }
-

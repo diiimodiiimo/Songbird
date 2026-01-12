@@ -1,37 +1,30 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const { userId: clerkUserId } = await auth()
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        username: true,
-        image: true,
-        bio: true,
-        favoriteArtists: true,
-        favoriteSongs: true,
-      },
-    })
+    const supabase = getSupabase()
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email, name, username, image, bio, favoriteArtists, favoriteSongs')
+      .eq('id', userId)
+      .single()
 
-    if (!user) {
+    if (error || !user) {
+      console.error('[profile] Error fetching user:', error)
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
@@ -43,13 +36,12 @@ export async function GET(request: Request) {
     }
 
     const response = NextResponse.json({ user: responseUser })
-    // Cache for 60 seconds to reduce repeated calls
     response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=120')
     return response
-  } catch (error) {
-    console.error('Error fetching profile:', error)
+  } catch (error: any) {
+    console.error('Error fetching profile:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to fetch profile' },
+      { error: 'Failed to fetch profile', message: error?.message },
       { status: 500 }
     )
   }
@@ -96,7 +88,6 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -105,14 +96,16 @@ export async function PUT(request: Request) {
     const body = await request.json()
     const data = updateProfileSchema.parse(body)
 
+    const supabase = getSupabase()
+
     // Check if username is already taken (if provided)
     if (data.username) {
-      const existingUser = await prisma.user.findFirst({
-        where: {
-          username: data.username,
-          NOT: { id: userId },
-        },
-      })
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', data.username)
+        .neq('id', userId)
+        .maybeSingle()
 
       if (existingUser) {
         return NextResponse.json(
@@ -122,26 +115,27 @@ export async function PUT(request: Request) {
       }
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        username: data.username !== undefined ? (data.username || null) : undefined,
-        image: data.image !== undefined ? (data.image || null) : undefined,
-        bio: data.bio !== undefined ? (data.bio || null) : undefined,
-        favoriteArtists: data.favoriteArtists !== undefined ? JSON.stringify(data.favoriteArtists || []) : undefined,
-        favoriteSongs: data.favoriteSongs !== undefined ? JSON.stringify(data.favoriteSongs || []) : undefined,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        username: true,
-        image: true,
-        bio: true,
-        favoriteArtists: true,
-        favoriteSongs: true,
-      },
-    })
+    // Build update object
+    const updateData: Record<string, any> = {
+      updatedAt: new Date().toISOString(),
+    }
+    if (data.username !== undefined) updateData.username = data.username || null
+    if (data.image !== undefined) updateData.image = data.image || null
+    if (data.bio !== undefined) updateData.bio = data.bio || null
+    if (data.favoriteArtists !== undefined) updateData.favoriteArtists = JSON.stringify(data.favoriteArtists || [])
+    if (data.favoriteSongs !== undefined) updateData.favoriteSongs = JSON.stringify(data.favoriteSongs || [])
+
+    const { data: updatedUser, error } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', userId)
+      .select('id, email, name, username, image, bio, favoriteArtists, favoriteSongs')
+      .single()
+
+    if (error) {
+      console.error('[profile] Update error:', error)
+      throw error
+    }
 
     // Parse JSON fields for response
     const responseUser = {
@@ -151,18 +145,17 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json({ user: responseUser })
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid input', details: error.errors },
         { status: 400 }
       )
     }
-    console.error('Error updating profile:', error)
+    console.error('Error updating profile:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to update profile' },
+      { error: 'Failed to update profile', message: error?.message },
       { status: 500 }
     )
   }
 }
-

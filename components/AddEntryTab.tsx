@@ -35,14 +35,16 @@ export default function AddEntryTab() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [existingEntry, setExistingEntry] = useState<{ id: string; songTitle: string; artist: string; notes?: string } | null>(null)
-  const [checkingEntry, setCheckingEntry] = useState(false)
+  const [checkingEntry, setCheckingEntry] = useState(true) // Start true for initial load
   const [showFlyingAnimation, setShowFlyingAnimation] = useState(false)
   const [onThisDayEntries, setOnThisDayEntries] = useState<Array<{ id: string; date: string; songTitle: string; artist: string; albumArt: string | null }>>([])
   const [currentStreak, setCurrentStreak] = useState(0)
-  const [loadingStreak, setLoadingStreak] = useState(false)
+  const [loadingStreak, setLoadingStreak] = useState(true) // Start true for initial load
   const [selectedMood, setSelectedMood] = useState<string | null>(null)
   const [showMoodPicker, setShowMoodPicker] = useState(false)
   const [showBSideCTA, setShowBSideCTA] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false)
 
   // Check if it's today's date
   const isToday = date === new Date().toISOString().split('T')[0]
@@ -56,64 +58,74 @@ export default function AddEntryTab() {
 
     setCheckingEntry(true)
     setLoadingStreak(true)
-    
+    setApiError(null)
+
     try {
+      console.log('[AddEntryTab] Fetching today data for date:', date)
       const res = await fetch(`/api/today-data?date=${date}`)
       const data = await res.json()
-      
-      if (res.ok) {
-        // Set streak
-        if (data.currentStreak !== undefined) {
-          setCurrentStreak(data.currentStreak)
-        }
-        
-        // Set friends
-        if (data.friends) {
-          setFriends(data.friends)
-        }
-        
-        // Set On This Day entries
-        if (data.onThisDayEntries && data.onThisDayEntries.length > 0) {
-          setOnThisDayEntries(data.onThisDayEntries)
+
+      if (!res.ok) {
+        console.error('[AddEntryTab] API error:', data)
+        setApiError(data.message || data.error || `Error ${res.status}`)
+        return
+      }
+
+      console.log('[AddEntryTab] Got data:', { streak: data.currentStreak, entries: data.onThisDayEntries?.length })
+
+      // Set streak
+      if (data.currentStreak !== undefined) {
+        setCurrentStreak(data.currentStreak)
+      }
+
+      // Set friends
+      if (data.friends) {
+        setFriends(data.friends)
+      }
+
+      // Set On This Day entries
+      if (data.onThisDayEntries && data.onThisDayEntries.length > 0) {
+        setOnThisDayEntries(data.onThisDayEntries)
+      } else {
+        setOnThisDayEntries([])
+      }
+
+      // Set existing entry
+      if (data.existingEntry) {
+        setExistingEntry({
+          id: data.existingEntry.id,
+          songTitle: data.existingEntry.songTitle,
+          artist: data.existingEntry.artist,
+          notes: data.existingEntry.notes || '',
+        })
+        setNotes(data.existingEntry.notes || '')
+        if (data.existingEntry.mentions && data.existingEntry.mentions.length > 0) {
+          setMentionedUsers(data.existingEntry.mentions)
         } else {
-          setOnThisDayEntries([])
+          setMentionedUsers([])
         }
-        
-        // Set existing entry
-        if (data.existingEntry) {
-          setExistingEntry({
-            id: data.existingEntry.id,
-            songTitle: data.existingEntry.songTitle,
-            artist: data.existingEntry.artist,
-            notes: data.existingEntry.notes || '',
-          })
-          setNotes(data.existingEntry.notes || '')
-          if (data.existingEntry.mentions && data.existingEntry.mentions.length > 0) {
-            setMentionedUsers(data.existingEntry.mentions)
-          } else {
-            setMentionedUsers([])
-          }
-          if (data.existingEntry.people && data.existingEntry.people.length > 0) {
-            setPeopleNames(data.existingEntry.people.map((person: any) => person.name))
-          } else {
-            setPeopleNames([])
-          }
+        if (data.existingEntry.people && data.existingEntry.people.length > 0) {
+          setPeopleNames(data.existingEntry.people.map((person: any) => person.name))
+        } else {
+          setPeopleNames([])
+        }
+        setPeopleInput('')
+      } else {
+        setExistingEntry(null)
+        if (!selectedTrack) {
+          setNotes('')
+          setMentionedUsers([])
+          setPeopleNames([])
           setPeopleInput('')
-        } else {
-          setExistingEntry(null)
-          if (!selectedTrack) {
-            setNotes('')
-            setMentionedUsers([])
-            setPeopleNames([])
-            setPeopleInput('')
-          }
         }
       }
-    } catch (error) {
-      console.error('Error fetching today data:', error)
+    } catch (error: any) {
+      console.error('[AddEntryTab] Fetch error:', error)
+      setApiError(error?.message || 'Failed to connect to server')
     } finally {
       setCheckingEntry(false)
       setLoadingStreak(false)
+      setInitialLoadComplete(true)
     }
   }
 
@@ -122,11 +134,54 @@ export default function AddEntryTab() {
     fetchTodayData()
   }, [date, isLoaded, isSignedIn])
   
+  // Show loading state while Clerk or initial data is loading
+  if (!isLoaded || (isSignedIn && !initialLoadComplete)) {
+    return (
+      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+          <div className="animate-pulse">
+            <Image
+              src="/SongBirdlogo.png"
+              alt="SongBird"
+              width={100}
+              height={100}
+              className="object-contain opacity-50"
+              priority
+            />
+          </div>
+          <p className="text-text/60 text-sm">Loading your music...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state if API failed
+  if (apiError) {
+    return (
+      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+          <div className="text-4xl">😵</div>
+          <h2 className="text-xl font-semibold text-text">Something went wrong</h2>
+          <p className="text-text/60 text-sm text-center max-w-md">{apiError}</p>
+          <button
+            onClick={() => {
+              setApiError(null)
+              fetchTodayData()
+            }}
+            className="px-4 py-2 bg-primary text-bg font-medium rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // If today and no form shown and no existing entry, show the songbird landing page
   if (isToday && !showForm && !existingEntry) {
-    const fullDateString = today.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      month: 'long', 
+    const fullDateString = today.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
       day: 'numeric',
       year: 'numeric'
     })

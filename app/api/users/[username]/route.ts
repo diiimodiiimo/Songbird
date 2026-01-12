@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 
 export async function GET(
   request: Request,
@@ -7,48 +7,35 @@ export async function GET(
 ) {
   try {
     const { username } = await params
+    const supabase = getSupabase()
 
-    // Find user by username or email (if username is an email)
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { username: username },
-          { email: username }, // Allow lookup by email if username is not set
-        ],
-      },
-      select: {
-        id: true,
-        username: true,
-        name: true,
-        email: true,
-        image: true,
-        bio: true,
-        favoriteArtists: true,
-        favoriteSongs: true,
-        entries: {
-          select: {
-            id: true,
-          },
-        },
-      },
-    })
+    // Find user by username or email
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, username, name, email, image, bio, favoriteArtists, favoriteSongs')
+      .or(`username.eq.${username},email.eq.${username}`)
+      .maybeSingle()
+
+    if (error) throw error
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Count accepted friendships
-    const friendsCount = await prisma.friendRequest.count({
-      where: {
-        status: 'accepted',
-        OR: [
-          { senderId: user.id },
-          { receiverId: user.id },
-        ],
-      },
-    })
+    // Count entries
+    const { count: entriesCount } = await supabase
+      .from('entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('userId', user.id)
 
-    // Parse favorite artists and songs (if stored as JSON strings)
+    // Count friends
+    const { count: friendsCount } = await supabase
+      .from('friend_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'accepted')
+      .or(`senderId.eq.${user.id},receiverId.eq.${user.id}`)
+
+    // Parse favorite artists and songs
     let favoriteArtists: string[] = []
     let favoriteSongs: Array<{ songTitle: string; artist: string }> = []
 
@@ -57,7 +44,7 @@ export async function GET(
         favoriteArtists = typeof user.favoriteArtists === 'string' 
           ? JSON.parse(user.favoriteArtists) 
           : user.favoriteArtists
-      } catch (e) {
+      } catch {
         favoriteArtists = []
       }
     }
@@ -67,13 +54,13 @@ export async function GET(
         favoriteSongs = typeof user.favoriteSongs === 'string'
           ? JSON.parse(user.favoriteSongs)
           : user.favoriteSongs
-      } catch (e) {
+      } catch {
         favoriteSongs = []
       }
     }
 
     return NextResponse.json({
-      username: user.username || user.email.split('@')[0],
+      username: user.username || user.email?.split('@')[0],
       name: user.name,
       email: user.email,
       image: user.image,
@@ -81,14 +68,14 @@ export async function GET(
       favoriteArtists,
       favoriteSongs,
       stats: {
-        totalEntries: user.entries.length,
-        friendsCount,
+        totalEntries: entriesCount || 0,
+        friendsCount: friendsCount || 0,
       },
     })
-  } catch (error) {
-    console.error('Error fetching public profile:', error)
+  } catch (error: any) {
+    console.error('[users/[username]] Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to fetch profile' },
+      { error: 'Failed to fetch profile', message: error?.message },
       { status: 500 }
     )
   }

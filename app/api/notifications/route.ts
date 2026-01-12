@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 // GET - Get notifications for current user
@@ -11,7 +11,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -20,65 +19,64 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const unreadOnly = searchParams.get('unreadOnly') === 'true'
 
-    const where: any = { userId: userId }
+    const supabase = getSupabase()
+    
+    let query = supabase
+      .from('notifications')
+      .select('*')
+      .eq('userId', userId)
+      .order('createdAt', { ascending: false })
+      .limit(50)
+
     if (unreadOnly) {
-      where.read = false
+      query = query.eq('read', false)
     }
 
-    const notifications = await prisma.notification.findMany({
-      where,
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: 50,
-    })
+    const { data: notifications, error } = await query
+
+    if (error) {
+      console.error('[notifications] Error:', error)
+      throw error
+    }
 
     // Enrich notifications with related data
     const enrichedNotifications = await Promise.all(
-      notifications.map(async (notification) => {
+      (notifications || []).map(async (notification) => {
         let relatedData = null
 
         if (notification.type === 'mention' && notification.relatedId) {
-          const entry = await prisma.entry.findUnique({
-            where: { id: notification.relatedId },
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  email: true,
-                  name: true,
-                  image: true,
-                },
-              },
-            },
-          })
-          relatedData = entry
-        } else if (
-          notification.type === 'friend_request_accepted' &&
-          notification.relatedId
-        ) {
-          const friendRequest = await prisma.friendRequest.findUnique({
-            where: { id: notification.relatedId },
-            include: {
-              sender: {
-                select: {
-                  id: true,
-                  email: true,
-                  name: true,
-                  image: true,
-                },
-              },
-              receiver: {
-                select: {
-                  id: true,
-                  email: true,
-                  name: true,
-                  image: true,
-                },
-              },
-            },
-          })
-          relatedData = friendRequest
+          const { data: entry } = await supabase
+            .from('entries')
+            .select('id, songTitle, artist, date, userId')
+            .eq('id', notification.relatedId)
+            .single()
+          
+          if (entry) {
+            const { data: user } = await supabase
+              .from('users')
+              .select('id, email, name, image')
+              .eq('id', entry.userId)
+              .single()
+            relatedData = { ...entry, user }
+          }
+        } else if (notification.type === 'friend_request_accepted' && notification.relatedId) {
+          const { data: friendRequest } = await supabase
+            .from('friend_requests')
+            .select('id, senderId, receiverId, status')
+            .eq('id', notification.relatedId)
+            .single()
+
+          if (friendRequest) {
+            const [senderRes, receiverRes] = await Promise.all([
+              supabase.from('users').select('id, email, name, image').eq('id', friendRequest.senderId).single(),
+              supabase.from('users').select('id, email, name, image').eq('id', friendRequest.receiverId).single(),
+            ])
+            relatedData = {
+              ...friendRequest,
+              sender: senderRes.data,
+              receiver: receiverRes.data,
+            }
+          }
         }
 
         return {
@@ -89,10 +87,10 @@ export async function GET(request: Request) {
     )
 
     return NextResponse.json({ notifications: enrichedNotifications })
-  } catch (error) {
-    console.error('Error fetching notifications:', error)
+  } catch (error: any) {
+    console.error('Error fetching notifications:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to fetch notifications' },
+      { error: 'Failed to fetch notifications', message: error?.message },
       { status: 500 }
     )
   }
@@ -106,7 +104,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -122,29 +119,24 @@ export async function PATCH(request: Request) {
       )
     }
 
-    await prisma.notification.updateMany({
-      where: {
-        id: {
-          in: notificationIds,
-        },
-        userId: userId, // Ensure user can only mark their own notifications as read
-      },
-      data: {
-        read: true,
-      },
-    })
+    const supabase = getSupabase()
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('userId', userId)
+      .in('id', notificationIds)
+
+    if (error) {
+      console.error('[notifications] Update error:', error)
+      throw error
+    }
 
     return NextResponse.json({ message: 'Notifications marked as read' })
-  } catch (error) {
-    console.error('Error updating notifications:', error)
+  } catch (error: any) {
+    console.error('Error updating notifications:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to update notifications' },
+      { error: 'Failed to update notifications', message: error?.message },
       { status: 500 }
     )
   }
 }
-
-
-
-
-

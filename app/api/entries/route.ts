@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 export async function GET(request: Request) {
@@ -10,7 +10,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!prismaUserId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -19,224 +18,127 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const targetUserId = searchParams.get('userId') || prismaUserId
     const date = searchParams.get('date')
-    const excludeImages = searchParams.get('excludeImages') === 'true' // For archive page
+    const excludeImages = searchParams.get('excludeImages') === 'true'
 
-    // Pagination - REDUCED page size to prevent string length errors
     const page = Number(searchParams.get('page') || 1)
-    const pageSize = Math.min(Number(searchParams.get('pageSize') || 100), excludeImages ? 1000 : 100) // Larger page size for archive without images
-    const skip = (page - 1) * pageSize
+    const pageSize = Math.min(Number(searchParams.get('pageSize') || 100), excludeImages ? 1000 : 100)
+    const offset = (page - 1) * pageSize
 
-    const where: any = { userId: String(targetUserId) }
+    const supabase = getSupabase()
 
     if (date) {
+      // Single-day view with full details
       const dateStr = date.includes('T') ? date.split('T')[0] : date
-      const targetDate = new Date(dateStr + 'T12:00:00.000Z')
-      const startOfDay = new Date(targetDate)
-      startOfDay.setUTCHours(0, 0, 0, 0)
-      const endOfDay = new Date(targetDate)
-      endOfDay.setUTCHours(23, 59, 59, 999)
-      where.date = { gte: startOfDay, lte: endOfDay }
-    }
+      const startOfDay = `${dateStr}T00:00:00.000Z`
+      const endOfDay = `${dateStr}T23:59:59.999Z`
 
-    const isAllEntriesQuery = !date
+      const { data: entries, error } = await supabase
+        .from('entries')
+        .select(`
+          id, date, songTitle, artist, albumTitle, albumArt, notes, userId,
+          person_references (id, name, userId)
+        `)
+        .eq('userId', targetUserId)
+        .gte('date', startOfDay)
+        .lte('date', endOfDay)
+        .order('date', { ascending: false })
 
-    let entries: any[] = []
+      if (error) throw error
 
-    if (isAllEntriesQuery) {
-      // Fetch user info separately for bulk queries
-      const user = await prisma.user.findUnique({
-        where: { id: String(targetUserId) },
-        select: { id: true, name: true, email: true, image: true },
-      }).catch(() => null)
+      // Get user info
+      const { data: user } = await supabase
+        .from('users')
+        .select('id, name, email, image')
+        .eq('id', targetUserId)
+        .single()
 
-      // Paginated fetch for large history - conditionally include albumArt
-      const selectFields: any = {
-        id: true,
-        date: true,
-        songTitle: true,
-        artist: true,
-        albumTitle: true,
-        notes: true,
-      }
-      
-      // Only include albumArt if not excluding images
-      if (!excludeImages) {
-        selectFields.albumArt = true
-      }
-      
-      entries = await prisma.entry.findMany({
-        where: { userId: String(targetUserId) },
-        select: {
-          ...selectFields,
-          people: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-        orderBy: { date: 'desc' },
-        skip,
-        take: pageSize,
-      })
+      const formattedEntries = (entries || []).map((entry: any) => ({
+        id: entry.id,
+        date: new Date(entry.date).toISOString().split('T')[0],
+        songTitle: entry.songTitle,
+        artist: entry.artist,
+        albumTitle: entry.albumTitle,
+        albumArt: entry.albumArt,
+        notes: entry.notes,
+        user: user ? {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          image: user.image && !user.image.startsWith('data:image') ? user.image : null,
+        } : null,
+        tags: [],
+        mentions: [],
+        people: (entry.person_references || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          userId: p.userId,
+        })),
+      }))
 
-      const userInfo = user || { id: String(targetUserId), name: null, email: null, image: null }
-      // CRITICAL: Filter out base64 images from user.image - they're too large
-      const userImage = userInfo.image && !userInfo.image.startsWith('data:image')
-        ? String(userInfo.image).substring(0, 500) // Limit URL length too
-        : null
-      
-      entries = entries.map((entry) => {
-        // Convert date - MUST be string, not Date object
-        const dateStr = entry.date instanceof Date
-          ? entry.date.toISOString().split('T')[0]
-          : String(entry.date || '').split('T')[0].substring(0, 10)
-        
-        // AGGRESSIVELY truncate notes - max 200 chars to prevent huge strings
-        const notes = entry.notes
-          ? String(entry.notes).substring(0, 200) + (entry.notes.length > 200 ? '...' : '')
-          : null
-        
-        // Ensure all strings are limited in length
-        return {
-          id: String(entry.id || '').substring(0, 100),
-          date: dateStr,
-          songTitle: String(entry.songTitle || '').substring(0, 200),
-          artist: String(entry.artist || '').substring(0, 200),
-          albumTitle: String(entry.albumTitle || '').substring(0, 200),
-          notes: notes,
-          albumArt: excludeImages ? null : (entry.albumArt ? String(entry.albumArt) : null), // Exclude for archive
-          user: {
-            id: String(userInfo.id || '').substring(0, 100),
-            name: userInfo.name ? String(userInfo.name).substring(0, 100) : null,
-            email: userInfo.email ? String(userInfo.email).substring(0, 200) : null,
-            image: userImage,
-          },
-          tags: [],
-          mentions: [],
-          people: Array.isArray(entry.people) ? entry.people.map((person: any) => ({
-            id: String(person.id || '').substring(0, 100),
-            name: String(person.name || '').substring(0, 200),
-          })) : [],
-        }
+      return NextResponse.json({
+        entries: formattedEntries,
+        page,
+        pageSize,
+        hasMore: false,
       })
     } else {
-      // Full detail for single-day view
-      entries = await prisma.entry.findMany({
-        where,
-        include: {
-          user: { select: { id: true, name: true, email: true, image: true } },
-          tags: {
-            include: {
-              user: { select: { id: true, name: true, email: true, image: true } },
-            },
-          },
-          mentions: {
-            include: {
-              user: { select: { id: true, name: true, email: true, image: true } },
-            },
-          },
-          people: {
-            include: {
-              user: { select: { id: true, name: true, email: true, image: true } },
-            },
-          },
+      // All entries (paginated)
+      const selectFields = excludeImages 
+        ? 'id, date, songTitle, artist, albumTitle, notes'
+        : 'id, date, songTitle, artist, albumTitle, albumArt, notes'
+
+      const { data: entries, error } = await supabase
+        .from('entries')
+        .select(`${selectFields}, person_references (id, name)`)
+        .eq('userId', targetUserId)
+        .order('date', { ascending: false })
+        .range(offset, offset + pageSize - 1)
+
+      if (error) throw error
+
+      // Get user info separately
+      const { data: user } = await supabase
+        .from('users')
+        .select('id, name, email, image')
+        .eq('id', targetUserId)
+        .single()
+
+      const userInfo = user || { id: targetUserId, name: null, email: null, image: null }
+      const userImage = userInfo.image && !userInfo.image.startsWith('data:image') ? userInfo.image : null
+
+      const formattedEntries = (entries || []).map((entry: any) => ({
+        id: entry.id,
+        date: new Date(entry.date).toISOString().split('T')[0],
+        songTitle: String(entry.songTitle || '').substring(0, 200),
+        artist: String(entry.artist || '').substring(0, 200),
+        albumTitle: String(entry.albumTitle || '').substring(0, 200),
+        notes: entry.notes ? String(entry.notes).substring(0, 200) : null,
+        albumArt: excludeImages ? null : entry.albumArt,
+        user: {
+          id: userInfo.id,
+          name: userInfo.name,
+          email: userInfo.email,
+          image: userImage,
         },
-        orderBy: { date: 'desc' },
-      })
+        tags: [],
+        mentions: [],
+        people: (entry.person_references || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+        })),
+      }))
 
-      // Format single-day entries - ensure all Date objects are converted
-      entries = entries.map((entry) => {
-        // Convert main date
-        const dateStr = entry.date instanceof Date
-          ? entry.date.toISOString().split('T')[0]
-          : String(entry.date).split('T')[0]
-
-        // Convert user - EXCLUDE base64 images
-        const user = entry.user ? {
-          id: String(entry.user.id).substring(0, 100),
-          name: entry.user.name ? String(entry.user.name).substring(0, 100) : null,
-          email: String(entry.user.email).substring(0, 200),
-          image: entry.user.image && !entry.user.image.startsWith('data:image')
-            ? String(entry.user.image).substring(0, 500)
-            : null,
-        } : null
-
-        // Convert tags, mentions, people - remove Date objects and base64 images
-        const tags = Array.isArray(entry.tags) ? entry.tags.map((tag: any) => ({
-          id: String(tag.id || '').substring(0, 100),
-          userId: String(tag.userId || '').substring(0, 100),
-          user: tag.user ? {
-            id: String(tag.user.id || '').substring(0, 100),
-            name: tag.user.name ? String(tag.user.name).substring(0, 100) : null,
-            email: String(tag.user.email || '').substring(0, 200),
-            image: tag.user.image && !tag.user.image.startsWith('data:image')
-              ? String(tag.user.image).substring(0, 500)
-              : null,
-          } : null,
-        })) : []
-
-        const mentions = Array.isArray(entry.mentions) ? entry.mentions.map((mention: any) => ({
-          id: String(mention.id || '').substring(0, 100),
-          userId: String(mention.userId || '').substring(0, 100),
-          user: mention.user ? {
-            id: String(mention.user.id || '').substring(0, 100),
-            name: mention.user.name ? String(mention.user.name).substring(0, 100) : null,
-            email: String(mention.user.email || '').substring(0, 200),
-            image: mention.user.image && !mention.user.image.startsWith('data:image')
-              ? String(mention.user.image).substring(0, 500)
-              : null,
-          } : null,
-        })) : []
-
-        const people = Array.isArray(entry.people) ? entry.people.map((person: any) => ({
-          id: String(person.id || '').substring(0, 100),
-          name: String(person.name || '').substring(0, 200),
-          userId: person.userId ? String(person.userId).substring(0, 100) : null,
-          user: person.user ? {
-            id: String(person.user.id || '').substring(0, 100),
-            name: person.user.name ? String(person.user.name).substring(0, 100) : null,
-            email: String(person.user.email || '').substring(0, 200),
-            image: person.user.image && !person.user.image.startsWith('data:image')
-              ? String(person.user.image).substring(0, 500)
-              : null,
-          } : null,
-        })) : []
-
-        return {
-          id: String(entry.id),
-          date: dateStr,
-          songTitle: String(entry.songTitle),
-          artist: String(entry.artist),
-          albumTitle: String(entry.albumTitle),
-          albumArt: entry.albumArt ? String(entry.albumArt) : null, // Include base64 images for archive
-          notes: entry.notes ? String(entry.notes).substring(0, 1000) : null,
-          user: user,
-          tags: tags,
-          mentions: mentions,
-          people: people,
-        }
+      return NextResponse.json({
+        entries: formattedEntries,
+        page,
+        pageSize,
+        hasMore: (entries?.length || 0) === pageSize,
       })
     }
-
-    // Calculate hasMore - if we got a full page, there might be more
-    // This avoids an expensive count query on every request
-    const hasMore = entries.length === pageSize
-
-    return NextResponse.json({
-      entries,
-      page,
-      pageSize,
-      hasMore,
-    })
   } catch (error: any) {
-    console.error('=== ERROR IN /api/entries ===')
-    console.error(error?.message)
+    console.error('[entries] GET error:', error?.message || error)
     return NextResponse.json(
-      {
-        error: 'Failed to fetch entries',
-        message: error?.message || 'Unknown error',
-      },
+      { error: 'Failed to fetch entries', message: error?.message },
       { status: 500 }
     )
   }
@@ -249,7 +151,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -279,68 +180,22 @@ export async function POST(request: Request) {
       )
     }
 
-    // Helper function to match people names to users
-    const matchPeopleToUsers = async (peopleNames: string[]): Promise<Array<{ name: string; userId: string | null }>> => {
-      if (!peopleNames || peopleNames.length === 0) return []
-      
-      const allUsers = await prisma.user.findMany({
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          email: true,
-        },
-      })
-      
-      // Group people by lowercase name to handle case-insensitive duplicates
-      const nameMap = new Map<string, string>()
-      peopleNames.forEach((name: string) => {
-        const trimmed = name.trim()
-        if (trimmed) {
-          const lower = trimmed.toLowerCase()
-          // Keep the first capitalization we see
-          if (!nameMap.has(lower)) {
-            nameMap.set(lower, trimmed)
-          }
-        }
-      })
+    const supabase = getSupabase()
 
-      return Array.from(nameMap.values()).map((trimmedName) => {
-        const matchedUser = allUsers.find(
-          (user) =>
-            user.name?.toLowerCase() === trimmedName.toLowerCase() ||
-            user.username?.toLowerCase() === trimmedName.toLowerCase() ||
-            user.email.toLowerCase().split('@')[0] === trimmedName.toLowerCase()
-        )
-        
-        return {
-          name: trimmedName,
-          userId: matchedUser?.id || null,
-        }
-      })
-    }
-
-    // Match people names to users
-    const peopleWithMatches = await matchPeopleToUsers(peopleNames)
-
-    // Parse date - ensure it's a Date object
+    // Parse date
     const dateStr = date.includes('T') ? date.split('T')[0] : date
     const targetDate = new Date(dateStr + 'T12:00:00.000Z')
-    const startOfDay = new Date(targetDate)
-    startOfDay.setUTCHours(0, 0, 0, 0)
-    const endOfDay = new Date(targetDate)
-    endOfDay.setUTCHours(23, 59, 59, 999)
+    const startOfDay = `${dateStr}T00:00:00.000Z`
+    const endOfDay = `${dateStr}T23:59:59.999Z`
 
-    // Check if entry already exists for this date
-    const existingEntry = await prisma.entry.findFirst({
-      where: {
-        userId: userId,
-        date: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
-    })
+    // Check if entry already exists
+    const { data: existingEntry } = await supabase
+      .from('entries')
+      .select('id')
+      .eq('userId', userId)
+      .gte('date', startOfDay)
+      .lte('date', endOfDay)
+      .maybeSingle()
 
     if (existingEntry) {
       return NextResponse.json(
@@ -349,11 +204,12 @@ export async function POST(request: Request) {
       )
     }
 
-    // Create the entry
-    const entry = await prisma.entry.create({
-      data: {
-        userId: userId,
-        date: targetDate,
+    // Create entry
+    const { data: entry, error: createError } = await supabase
+      .from('entries')
+      .insert({
+        userId,
+        date: targetDate.toISOString(),
         songTitle,
         artist,
         albumTitle: albumTitle || '',
@@ -365,29 +221,61 @@ export async function POST(request: Request) {
         trackId: trackId || '',
         uri: uri || '',
         notes: notes || null,
-        people: {
-          create: peopleWithMatches.map((person) => ({
-            name: person.name,
-            userId: person.userId,
-          })),
-        },
-      },
-      include: {
-        user: {
-          select: { id: true, name: true, email: true, image: true },
-        },
-        people: true,
-      },
-    })
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      .select('*')
+      .single()
 
-    return NextResponse.json({ entry }, { status: 201 })
-  } catch (error: any) {
-    console.error('Error creating entry:', error)
-    return NextResponse.json(
-      {
-        error: 'Failed to create entry',
-        message: error?.message || 'Unknown error',
+    if (createError) throw createError
+
+    // Match people to users and create person references
+    if (peopleNames && peopleNames.length > 0) {
+      const { data: allUsers } = await supabase
+        .from('users')
+        .select('id, name, username, email')
+
+      const peopleToCreate = peopleNames
+        .map((name: string) => name.trim())
+        .filter((name: string) => name)
+        .map((name: string) => {
+          const matchedUser = (allUsers || []).find(
+            (user: any) =>
+              user.name?.toLowerCase() === name.toLowerCase() ||
+              user.username?.toLowerCase() === name.toLowerCase() ||
+              user.email?.toLowerCase().split('@')[0] === name.toLowerCase()
+          )
+          return {
+            entryId: entry.id,
+            name,
+            userId: matchedUser?.id || null,
+            createdAt: new Date().toISOString(),
+          }
+        })
+
+      if (peopleToCreate.length > 0) {
+        await supabase.from('person_references').insert(peopleToCreate)
+      }
+    }
+
+    // Get user info
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, name, email, image')
+      .eq('id', userId)
+      .single()
+
+    return NextResponse.json({
+      entry: {
+        ...entry,
+        user,
+        people: [],
       },
+    }, { status: 201 })
+  } catch (error: any) {
+    console.error('[entries] POST error:', error?.message || error)
+    return NextResponse.json(
+      { error: 'Failed to create entry', message: error?.message },
       { status: 500 }
     )
   }

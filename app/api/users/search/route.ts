@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 export async function GET(request: Request) {
@@ -10,7 +10,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert Clerk user ID to Prisma user ID
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -23,35 +22,32 @@ export async function GET(request: Request) {
       return NextResponse.json({ users: [] })
     }
 
-    // SQLite doesn't support case-insensitive mode, so we'll filter in memory
-    const allUsers = await prisma.user.findMany({
-      where: {
-        NOT: { id: userId },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        image: true,
-      },
-    })
+    const supabase = getSupabase()
+
+    // Get all users except current user
+    const { data: allUsers, error } = await supabase
+      .from('users')
+      .select('id, name, email, image, username')
+      .neq('id', userId)
+
+    if (error) throw error
 
     const queryLower = query.toLowerCase()
-    const users = allUsers
+    const users = (allUsers || [])
       .filter(
         (user) =>
           user.name?.toLowerCase().includes(queryLower) ||
-          user.email.toLowerCase().includes(queryLower)
+          user.email?.toLowerCase().includes(queryLower) ||
+          user.username?.toLowerCase().includes(queryLower)
       )
       .slice(0, 10)
 
     return NextResponse.json({ users })
-  } catch (error) {
-    console.error('Error searching users:', error)
+  } catch (error: any) {
+    console.error('[users/search] Error:', error?.message || error)
     return NextResponse.json(
-      { error: 'Failed to search users' },
+      { error: 'Failed to search users', message: error?.message },
       { status: 500 }
     )
   }
 }
-
