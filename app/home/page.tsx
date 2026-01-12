@@ -1,13 +1,13 @@
 'use client'
 
-import { useUser, SignOutButton } from '@clerk/nextjs'
+import { useUser, SignOutButton, useClerk } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Image from 'next/image'
-import { SignInButton, SignUpButton } from '@clerk/nextjs'
 
 export default function HomePage() {
   const { isSignedIn, isLoaded } = useUser()
+  const { openSignIn, openSignUp } = useClerk()
   const router = useRouter()
 
   // Auto-redirect authenticated users to dashboard
@@ -68,16 +68,18 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="space-y-4 w-full">
-            <SignInButton mode="modal" forceRedirectUrl="/">
-              <button className="w-full px-8 py-4 bg-accent text-bg font-semibold rounded-lg hover:bg-accent/90 transition-colors text-center text-lg">
-                Sign In
-              </button>
-            </SignInButton>
-            <SignUpButton mode="modal" forceRedirectUrl="/welcome">
-              <button className="w-full px-8 py-4 bg-surface border-2 border-accent text-accent font-semibold rounded-lg hover:bg-surface/80 transition-colors text-center text-lg">
-                Create Account
-              </button>
-            </SignUpButton>
+            <button
+              onClick={() => openSignIn({ redirectUrl: '/' })}
+              className="w-full px-8 py-4 bg-surface border-2 border-accent text-accent font-semibold rounded-lg hover:bg-surface/80 transition-colors text-center text-lg"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => openSignUp({ redirectUrl: '/welcome' })}
+              className="w-full px-8 py-4 bg-surface border-2 border-accent text-accent font-semibold rounded-lg hover:bg-surface/80 transition-colors text-center text-lg"
+            >
+              Create Account
+            </button>
           </div>
         )}
       </div>
