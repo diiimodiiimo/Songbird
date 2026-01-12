@@ -9,7 +9,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       signInUrl="/home"
       signUpUrl="/home"
       signInFallbackRedirectUrl="/"
-      signUpFallbackRedirectUrl="/"
+      signUpFallbackRedirectUrl="/welcome"
       afterSignOutUrl="/home"
     >
       {children}

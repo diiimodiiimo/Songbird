@@ -69,13 +69,13 @@ export default function HomePage() {
         ) : (
           <div className="space-y-4 w-full">
             <SignInButton mode="modal" forceRedirectUrl="/">
-              <button className="w-full px-8 py-4 bg-surface border-2 border-accent text-accent font-semibold rounded-lg hover:bg-surface/80 transition-colors text-center text-lg">
+              <button className="w-full px-8 py-4 bg-accent text-bg font-semibold rounded-lg hover:bg-accent/90 transition-colors text-center text-lg">
                 Sign In
               </button>
             </SignInButton>
-            <SignUpButton mode="modal" forceRedirectUrl="/">
+            <SignUpButton mode="modal" forceRedirectUrl="/welcome">
               <button className="w-full px-8 py-4 bg-surface border-2 border-accent text-accent font-semibold rounded-lg hover:bg-surface/80 transition-colors text-center text-lg">
-                Sign Up
+                Create Account
               </button>
             </SignUpButton>
           </div>
