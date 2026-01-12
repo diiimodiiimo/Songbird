@@ -72,9 +72,11 @@ export async function PUT(
 
     const userMap = new Map((users || []).map(u => [u.id, u]))
 
-    // If accepted, create notification
+    // If accepted, create notification with generated ID
     if (action === 'accept') {
+      const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
       await supabase.from('notifications').insert({
+        id: notifId,
         userId: friendRequest.senderId,
         type: 'friend_request_accepted',
         relatedId: friendRequest.id,

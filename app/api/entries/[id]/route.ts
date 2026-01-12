@@ -120,6 +120,7 @@ export async function PUT(
               user.email?.toLowerCase().split('@')[0] === name.toLowerCase()
           )
           return {
+            id: `pref_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
             entryId: id,
             name,
             userId: matchedUser?.id || null,

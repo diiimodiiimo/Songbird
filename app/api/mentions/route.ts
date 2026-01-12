@@ -67,10 +67,12 @@ export async function POST(request: Request) {
       )
     }
 
-    // Create the mention
+    // Create the mention with generated ID
+    const mentionId = `mention_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
     const { data: mention, error } = await supabase
       .from('mentions')
       .insert({
+        id: mentionId,
         entryId,
         userId: mentionedUserId,
         createdAt: new Date().toISOString(),
@@ -87,8 +89,10 @@ export async function POST(request: Request) {
       .eq('id', mentionedUserId)
       .single()
 
-    // Create notification
+    // Create notification with generated ID
+    const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
     await supabase.from('notifications').insert({
+      id: notifId,
       userId: mentionedUserId,
       type: 'mention',
       relatedId: entryId,

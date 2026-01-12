@@ -234,11 +234,14 @@ export async function POST(request: Request) {
       )
     }
 
-    // Create entry
-    console.log('[entries POST] Creating entry for date:', dateStr, 'user:', userId)
+    // Create entry with generated ID (Supabase REST API doesn't auto-generate like Prisma)
+    const entryId = `entry_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    console.log('[entries POST] Creating entry for date:', dateStr, 'user:', userId, 'id:', entryId)
+    
     const { data: entry, error: createError } = await supabase
       .from('entries')
       .insert({
+        id: entryId,
         userId,
         date: targetDate.toISOString(),
         songTitle,
@@ -285,6 +288,7 @@ export async function POST(request: Request) {
               user.email?.toLowerCase().split('@')[0] === name.toLowerCase()
           )
           return {
+            id: `pref_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
             entryId: entry.id,
             name,
             userId: matchedUser?.id || null,

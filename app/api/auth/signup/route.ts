@@ -31,10 +31,14 @@ export async function POST(request: Request) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10)
+    
+    // Generate ID for Supabase (it doesn't auto-generate like Prisma)
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
 
     const { data: user, error } = await supabase
       .from('users')
       .insert({
+        id: userId,
         email,
         password: hashedPassword,
         name: name || null,
