@@ -34,6 +34,7 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
   const [showSettings, setShowSettings] = useState(false)
   const [showAddFriendModal, setShowAddFriendModal] = useState(false)
   const [friendUsernameInput, setFriendUsernameInput] = useState('')
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
   const [theatricsEnabled, setTheatricsEnabled] = useState(() => {
     // Load from localStorage
     if (typeof window !== 'undefined') {
@@ -54,8 +55,21 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
       fetchProfile()
       fetchFriends()
       fetchEntryCount()
+      fetchPendingRequests()
     }
   }, [isLoaded, user])
+
+  const fetchPendingRequests = async () => {
+    try {
+      const res = await fetch('/api/friends/requests')
+      const data = await res.json()
+      if (res.ok && data.requests) {
+        setPendingRequestsCount(data.requests.length)
+      }
+    } catch (error) {
+      console.error('Error fetching pending requests:', error)
+    }
+  }
 
   const fetchEntryCount = async () => {
     if (!user || !isLoaded) return
@@ -219,9 +233,14 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => setShowFriendsSection(!showFriendsSection)}
-                className="px-4 py-2 bg-accent/10 border border-accent/30 rounded-lg text-accent font-medium hover:bg-accent/20 transition-colors"
+                className="relative px-4 py-2 bg-accent/10 border border-accent/30 rounded-lg text-accent font-medium hover:bg-accent/20 transition-colors"
               >
                 View Friends
+                {pendingRequestsCount > 0 && (
+                  <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full animate-pulse">
+                    {pendingRequestsCount} pending
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setShowAddFriendModal(true)}

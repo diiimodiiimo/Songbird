@@ -76,6 +76,12 @@ export default function Notifications() {
         return `${entry.user.name || entry.user.email} mentioned you in "${entry.songTitle}"`
       }
       return 'Someone mentioned you in a song'
+    } else if (notification.type === 'friend_request') {
+      const request = notification.relatedData
+      if (request?.sender) {
+        return `${request.sender.name || request.sender.email} sent you a friend request`
+      }
+      return 'You have a new friend request!'
     } else if (notification.type === 'friend_request_accepted') {
       const request = notification.relatedData
       if (request) {
@@ -85,6 +91,13 @@ export default function Notifications() {
       return 'Friend request accepted'
     }
     return 'New notification'
+  }
+
+  const getNotificationIcon = (type: string): string => {
+    if (type === 'mention') return '💬'
+    if (type === 'friend_request') return '👋'
+    if (type === 'friend_request_accepted') return '🎉'
+    return '🔔'
   }
 
   return (
@@ -136,14 +149,28 @@ export default function Notifications() {
                 notifications.map((notification) => (
                   <button
                     key={notification.id}
-                    onClick={() => handleNotificationClick(notification)}
+                    onClick={() => {
+                      handleNotificationClick(notification)
+                      // Navigate to appropriate page based on notification type
+                      if (notification.type === 'friend_request') {
+                        window.dispatchEvent(new CustomEvent('navigateToFriends'))
+                      }
+                    }}
                     className={`w-full text-left p-3 hover:bg-primary/5 transition-colors ${
-                      !notification.read ? 'bg-primary/10' : ''
+                      !notification.read ? 'bg-accent/20 border-l-2 border-accent' : ''
                     }`}
                   >
-                    <div className="text-sm">{getNotificationText(notification)}</div>
-                    <div className="text-xs text-primary/60 mt-1">
-                      {new Date(notification.createdAt).toLocaleDateString()}
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg">{getNotificationIcon(notification.type)}</span>
+                      <div className="flex-1">
+                        <div className="text-sm">{getNotificationText(notification)}</div>
+                        <div className="text-xs text-text/50 mt-1">
+                          {new Date(notification.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      {!notification.read && (
+                        <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0 mt-1.5" />
+                      )}
                     </div>
                   </button>
                 ))

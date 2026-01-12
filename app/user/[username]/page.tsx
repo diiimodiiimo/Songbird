@@ -38,6 +38,9 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true)
   const [sendingRequest, setSendingRequest] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [showFriendsModal, setShowFriendsModal] = useState(false)
+  const [friends, setFriends] = useState<Array<{ id: string; username: string | null; name: string | null; image: string | null }>>([])
+  const [loadingFriends, setLoadingFriends] = useState(false)
 
   useEffect(() => {
     fetchPublicProfile()
@@ -45,6 +48,28 @@ export default function UserProfilePage() {
       fetchFriendshipStatus()
     }
   }, [username, isLoaded, currentUser])
+
+  useEffect(() => {
+    if (showFriendsModal && profile) {
+      fetchFriends()
+    }
+  }, [showFriendsModal, profile])
+
+  const fetchFriends = async () => {
+    if (!profile) return
+    setLoadingFriends(true)
+    try {
+      const res = await fetch(`/api/users/${username}/friends`)
+      if (res.ok) {
+        const data = await res.json()
+        setFriends(data.friends || [])
+      }
+    } catch (error) {
+      console.error('Error fetching friends:', error)
+    } finally {
+      setLoadingFriends(false)
+    }
+  }
 
   const fetchPublicProfile = async () => {
     try {
@@ -189,16 +214,15 @@ export default function UserProfilePage() {
           <div className="flex justify-center gap-8 mb-6 pb-6 border-b border-bg">
             <div className="text-center">
               <div className="text-2xl font-bold">{profile.stats.totalEntries}</div>
-              <div className="text-sm text-text/60">Songs</div>
+              <div className="text-sm text-text/60">Entries</div>
             </div>
-            <div className="text-center">
+            <button 
+              onClick={() => setShowFriendsModal(true)}
+              className="text-center hover:bg-accent/10 px-4 py-2 -my-2 rounded-lg transition-colors"
+            >
               <div className="text-2xl font-bold">{profile.stats.friendsCount}</div>
               <div className="text-sm text-text/60">Friends</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold">{profile.favoriteArtists.length}</div>
-              <div className="text-sm text-text/60">Fav Artists</div>
-            </div>
+            </button>
           </div>
 
           {/* Bio */}
@@ -318,6 +342,61 @@ export default function UserProfilePage() {
           )}
         </div>
       </div>
+
+      {/* Friends Modal */}
+      {showFriendsModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-xl w-full max-w-md max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-bg">
+              <h3 className="text-lg font-bold">{profile.name || profile.username}'s Friends</h3>
+              <button
+                onClick={() => setShowFriendsModal(false)}
+                className="p-2 hover:bg-bg rounded-lg transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto max-h-96 p-4">
+              {loadingFriends ? (
+                <div className="text-center py-8 text-text/60">Loading friends...</div>
+              ) : friends.length === 0 ? (
+                <div className="text-center py-8 text-text/60">No friends yet</div>
+              ) : (
+                <div className="space-y-3">
+                  {friends.map((friend) => (
+                    <Link
+                      key={friend.id}
+                      href={`/user/${friend.username || friend.id}`}
+                      onClick={() => setShowFriendsModal(false)}
+                      className="flex items-center gap-3 p-3 bg-bg rounded-lg hover:bg-accent/10 transition-colors"
+                    >
+                      {friend.image ? (
+                        <Image
+                          src={friend.image}
+                          alt={friend.name || 'User'}
+                          width={40}
+                          height={40}
+                          className="rounded-full"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold">
+                          {(friend.name || friend.username || '?').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-semibold">{friend.name || friend.username}</div>
+                        {friend.username && (
+                          <div className="text-sm text-text/60">@{friend.username}</div>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

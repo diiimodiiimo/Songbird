@@ -59,6 +59,25 @@ export async function GET(request: Request) {
               .single()
             relatedData = { ...entry, user }
           }
+        } else if (notification.type === 'friend_request' && notification.relatedId) {
+          // For incoming friend requests - show who sent it
+          const { data: friendRequest } = await supabase
+            .from('friend_requests')
+            .select('id, senderId, receiverId, status')
+            .eq('id', notification.relatedId)
+            .single()
+
+          if (friendRequest) {
+            const { data: sender } = await supabase
+              .from('users')
+              .select('id, email, name, image, username')
+              .eq('id', friendRequest.senderId)
+              .single()
+            relatedData = {
+              ...friendRequest,
+              sender,
+            }
+          }
         } else if (notification.type === 'friend_request_accepted' && notification.relatedId) {
           const { data: friendRequest } = await supabase
             .from('friend_requests')

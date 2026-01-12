@@ -187,6 +187,18 @@ export async function POST(request: Request) {
     
     console.log('[friend-request] Successfully created:', friendRequest)
 
+    // Create notification for the receiver about the friend request
+    const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    await supabase.from('notifications').insert({
+      id: notifId,
+      userId: receiver.id,
+      type: 'friend_request',
+      relatedId: friendRequest.id,
+      read: false,
+      createdAt: new Date().toISOString(),
+    })
+    console.log('[friend-request] Notification created for receiver')
+
     return NextResponse.json({
       friendRequest: {
         ...friendRequest,
