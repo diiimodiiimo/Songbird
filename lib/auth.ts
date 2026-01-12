@@ -33,6 +33,11 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        // If user has no password (Clerk user), they can't use password auth
+        if (!user.password) {
+          return null
+        }
+
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
           user.password
