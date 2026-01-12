@@ -272,7 +272,7 @@ export default function AddEntryTab() {
               </button>
             </div>
             <div className="space-y-3">
-              {onThisDayEntries.slice(0, 3).map((entry) => (
+              {onThisDayEntries.map((entry) => (
                 <button
                   key={entry.id}
                   onClick={() => {

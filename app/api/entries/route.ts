@@ -19,9 +19,12 @@ export async function GET(request: Request) {
     const targetUserId = searchParams.get('userId') || prismaUserId
     const date = searchParams.get('date')
     const excludeImages = searchParams.get('excludeImages') === 'true'
+    const fetchAll = searchParams.get('all') === 'true' // New param to fetch ALL entries
 
     const page = Number(searchParams.get('page') || 1)
-    const pageSize = Math.min(Number(searchParams.get('pageSize') || 100), excludeImages ? 1000 : 100)
+    // Allow higher page sizes, especially when fetching all or excluding images
+    const maxPageSize = fetchAll ? 10000 : (excludeImages ? 5000 : 500)
+    const pageSize = Math.min(Number(searchParams.get('pageSize') || 100), maxPageSize)
     const offset = (page - 1) * pageSize
 
     const supabase = getSupabase()
@@ -82,19 +85,29 @@ export async function GET(request: Request) {
         hasMore: false,
       })
     } else {
-      // All entries (paginated)
+      // All entries (paginated or fetch all)
       const selectFields = excludeImages 
         ? 'id, date, songTitle, artist, albumTitle, notes'
         : 'id, date, songTitle, artist, albumTitle, albumArt, notes'
 
-      const { data: entries, error } = await supabase
+      let query = supabase
         .from('entries')
         .select(`${selectFields}, person_references (id, name)`)
         .eq('userId', targetUserId)
         .order('date', { ascending: false })
-        .range(offset, offset + pageSize - 1)
+
+      // If fetching all, use high limit instead of pagination range
+      if (fetchAll) {
+        query = query.limit(10000) // Fetch ALL entries
+      } else {
+        query = query.range(offset, offset + pageSize - 1)
+      }
+
+      const { data: entries, error } = await query
 
       if (error) throw error
+      
+      console.log('[entries] Fetched:', entries?.length || 0, 'entries, fetchAll:', fetchAll, 'page:', page)
 
       // Get user info separately
       const { data: user } = await supabase
@@ -132,7 +145,8 @@ export async function GET(request: Request) {
         entries: formattedEntries,
         page,
         pageSize,
-        hasMore: (entries?.length || 0) === pageSize,
+        hasMore: fetchAll ? false : (entries?.length || 0) === pageSize,
+        totalFetched: entries?.length || 0,
       })
     }
   } catch (error: any) {

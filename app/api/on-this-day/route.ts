@@ -29,20 +29,49 @@ export async function GET(request: Request) {
 
     const supabase = getSupabase()
 
-    const { data: allEntries, error } = await supabase
-      .from('entries')
-      .select('id, date, songTitle, artist, albumArt, notes')
-      .eq('userId', userId)
-      .order('date', { ascending: false })
-      .limit(5000)
+    // Fetch ALL entries using pagination to avoid any limits
+    let allEntries: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let hasMore = true
 
-    if (error) throw error
+    while (hasMore) {
+      const { data: pageData, error: pageError } = await supabase
+        .from('entries')
+        .select('id, date, songTitle, artist, albumArt, notes')
+        .eq('userId', userId)
+        .order('date', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1)
 
-    // Filter entries where month/day matches
+      if (pageError) throw pageError
+
+      if (pageData && pageData.length > 0) {
+        allEntries = [...allEntries, ...pageData]
+        page++
+        hasMore = pageData.length === pageSize
+      } else {
+        hasMore = false
+      }
+    }
+
+    console.log('[on-this-day] Total entries for user:', allEntries.length)
+
+    // Filter entries where month/day matches - include ALL years
+    // Use string parsing to avoid timezone issues
     const entries = (allEntries || []).filter((entry) => {
-      const entryDate = new Date(entry.date)
-      return entryDate.getMonth() + 1 === monthNum && entryDate.getDate() === dayNum
+      const dateStr = typeof entry.date === 'string' ? entry.date.split('T')[0] : new Date(entry.date).toISOString().split('T')[0]
+      const [, entryMonthStr, entryDayStr] = dateStr.split('-')
+      const entryMonth = parseInt(entryMonthStr)
+      const entryDay = parseInt(entryDayStr)
+      
+      const matches = entryMonth === monthNum && entryDay === dayNum
+      if (matches) {
+        console.log('[on-this-day] Found matching entry:', dateStr, entry.songTitle)
+      }
+      return matches
     })
+
+    console.log('[on-this-day] Matching entries for', monthNum, '/', dayNum, ':', entries.length)
 
     // Get person references
     const entryIds = entries.map(e => e.id)

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 
 // POST - Link current Clerk user to existing database user by email
 export async function POST(request: Request) {
@@ -21,17 +21,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No email found in Clerk account' }, { status: 400 })
     }
 
+    const supabase = getSupabase()
+
     // Find user in database by email
-    const dbUser = await prisma.user.findUnique({
-      where: { email },
-      include: {
-        _count: {
-          select: {
-            entries: true,
-          },
-        },
-      },
-    })
+    const { data: dbUser, error: findError } = await supabase
+      .from('users')
+      .select('id, email, name, clerkId')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (findError) throw findError
 
     if (!dbUser) {
       return NextResponse.json(
@@ -42,6 +41,12 @@ export async function POST(request: Request) {
         { status: 404 }
       )
     }
+
+    // Get entry count
+    const { count: entriesCount } = await supabase
+      .from('entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('userId', dbUser.id)
 
     // Check if user already has a different Clerk ID
     if (dbUser.clerkId && dbUser.clerkId !== clerkUserId) {
@@ -55,10 +60,14 @@ export async function POST(request: Request) {
     }
 
     // Update user with Clerk ID
-    const updatedUser = await prisma.user.update({
-      where: { id: dbUser.id },
-      data: { clerkId: clerkUserId },
-    })
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({ clerkId: clerkUserId, updatedAt: new Date().toISOString() })
+      .eq('id', dbUser.id)
+      .select('id, email, name, clerkId')
+      .single()
+
+    if (updateError) throw updateError
 
     return NextResponse.json({
       success: true,
@@ -68,7 +77,7 @@ export async function POST(request: Request) {
         email: updatedUser.email,
         name: updatedUser.name,
         clerkId: updatedUser.clerkId,
-        entriesCount: dbUser._count.entries,
+        entriesCount: entriesCount || 0,
       },
     })
   } catch (error: any) {

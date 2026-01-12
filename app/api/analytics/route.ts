@@ -22,27 +22,67 @@ export async function GET(request: Request) {
 
     const supabase = getSupabase()
 
-    let query = supabase
+    // First, get the TOTAL count of entries (no filters, no limits)
+    const { count: totalCount } = await supabase
       .from('entries')
-      .select('artist, songTitle, date, albumArt')
+      .select('id', { count: 'exact', head: true })
       .eq('userId', userId)
 
-    if (startDate && endDate) {
-      query = query.gte('date', startDate).lte('date', endDate)
+    console.log('[analytics] TOTAL entries in database for user:', totalCount)
+
+    // Now fetch ALL entries - no limit issues
+    // We'll do pagination if needed to get everything
+    let allEntries: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let hasMore = true
+
+    while (hasMore) {
+      let query = supabase
+        .from('entries')
+        .select('id, artist, songTitle, date, albumArt')
+        .eq('userId', userId)
+        .order('date', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+
+      const { data: pageData, error: pageError } = await query
+      
+      if (pageError) throw pageError
+      
+      if (pageData && pageData.length > 0) {
+        allEntries = [...allEntries, ...pageData]
+        page++
+        hasMore = pageData.length === pageSize
+      } else {
+        hasMore = false
+      }
     }
 
-    const { data: entries, error } = await query
+    console.log('[analytics] Fetched ALL entries via pagination:', allEntries.length)
 
-    if (error) throw error
+    // Now filter by date if needed
+    let entries = allEntries
+    if (startDate && endDate) {
+      const start = new Date(startDate).getTime()
+      const end = new Date(endDate).getTime()
+      entries = allEntries.filter(e => {
+        const entryTime = new Date(e.date).getTime()
+        return entryTime >= start && entryTime <= end
+      })
+      console.log('[analytics] After date filter:', entries.length, 'entries from', startDate, 'to', endDate)
+    }
 
-    // Get person references for entries
-    const entryIds = (entries || []).map(e => e.id).filter(Boolean)
+    console.log('[analytics] Final entries count for stats:', entries.length)
+
+    // Get person references for entries - also needs high limit
+    const entryIds = (entries || []).map((e: any) => e.id).filter(Boolean)
     let personRefs: any[] = []
     if (entryIds.length > 0) {
       const { data } = await supabase
         .from('person_references')
         .select('entryId, name')
         .in('entryId', entryIds)
+        .limit(50000) // High limit for person refs
       personRefs = data || []
     }
 
@@ -97,7 +137,16 @@ export async function GET(request: Request) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 20)
 
-    return NextResponse.json({ topArtists, topSongs, topPeople })
+    return NextResponse.json({ 
+      topArtists, 
+      topSongs, 
+      topPeople,
+      _debug: {
+        totalEntriesInDb: totalCount,
+        fetchedEntries: allEntries.length,
+        afterDateFilter: entries.length,
+      }
+    })
   } catch (error: any) {
     console.error('[analytics] Error:', error?.message || error)
     return NextResponse.json(

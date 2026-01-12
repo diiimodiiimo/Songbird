@@ -1,34 +1,34 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-// Supabase client for server-side usage
-// This uses the REST API which works reliably on Vercel (no TCP connection needed)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+// Lazy initialization - client is created on first use, not at module load
+let _supabase: SupabaseClient | null = null
 
-// Create client with service role key for server-side operations
-// This bypasses RLS and gives full access
-export const supabase: SupabaseClient | null = 
-  supabaseUrl && supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      })
-    : null
-
-// Helper to check if supabase is configured
 export function getSupabase(): SupabaseClient {
-  if (!supabase) {
-    const missing = []
-    if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL')
-    if (!supabaseServiceKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
-    throw new Error(`Supabase not configured. Missing: ${missing.join(', ')}`)
+  if (_supabase) {
+    return _supabase
   }
-  return supabase
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set')
+  }
+
+  _supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+
+  return _supabase
 }
 
-// Types for our database tables (snake_case to match Supabase)
+// For backwards compatibility - but prefer getSupabase()
+export const supabase = null as SupabaseClient | null
+
+// Types for our database tables
 export interface DbUser {
   id: string
   email: string

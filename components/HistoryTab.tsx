@@ -11,6 +11,7 @@ interface Entry {
   artist: string
   albumArt: string | null
   notes?: string
+  notesPreview?: string | null
   people?: Array<{ name: string }>
 }
 
@@ -214,7 +215,7 @@ function TimelineView({ onEditPeople, refreshKey }: { onEditPeople: (entry: Entr
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
-  const pageSize = 200
+  const pageSize = 500 // Increased for faster loading
 
   // Reset when refreshKey changes
   useEffect(() => {
@@ -399,14 +400,11 @@ function OnThisDayView({ onEditPeople, refreshKey }: { onEditPeople: (entry: Ent
     
     setLoading(true)
     try {
-      const res = await fetch('/api/entries')
+      // Use dedicated on-this-day endpoint to fetch all entries for this day across all years
+      const res = await fetch(`/api/on-this-day?date=${selectedDate}`)
       const data = await res.json()
       if (res.ok) {
-        const selectedMonthDay = selectedDate.substring(5) // MM-DD
-        const filtered = data.entries.filter((entry: Entry) => {
-          return entry.date.substring(5) === selectedMonthDay
-        })
-        setEntries(filtered.sort((a: Entry, b: Entry) => b.date.localeCompare(a.date)))
+        setEntries((data.entries || []).sort((a: Entry, b: Entry) => b.date.localeCompare(a.date)))
       }
     } catch (error) {
       console.error('Error fetching history:', error)
@@ -457,9 +455,9 @@ function OnThisDayView({ onEditPeople, refreshKey }: { onEditPeople: (entry: Ent
                   <div className="text-text/70 mb-3">
                     {entry.artist}
                   </div>
-                  {entry.notes && (
+                  {(entry.notes || entry.notesPreview) && (
                     <p className="text-text/80 mb-3">
-                      {entry.notes}
+                      {entry.notes || entry.notesPreview}
                     </p>
                   )}
                   

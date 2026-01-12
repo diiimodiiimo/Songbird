@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { getSupabase } from './supabase'
 
 // In-memory cache for clerk-to-prisma user ID mapping
 const userIdCache = new Map<string, { id: string; timestamp: number }>()
@@ -28,9 +28,7 @@ export async function getPrismaUserIdFromClerk(clerkUserId: string): Promise<str
     return cached.id
   }
 
-  if (!supabase) {
-    throw new Error('Supabase not configured - missing SUPABASE_SERVICE_ROLE_KEY')
-  }
+  const supabase = getSupabase()
 
   try {
     console.log('[clerk-sync] Looking up user:', clerkUserId)

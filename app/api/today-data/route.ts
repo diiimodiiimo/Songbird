@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
 /**
@@ -20,12 +20,7 @@ export async function GET(request: Request) {
     }
     console.log('[today-data] Clerk userId:', clerkUserId)
 
-    if (!supabase) {
-      return NextResponse.json({
-        error: 'Database not configured',
-        message: 'Missing SUPABASE_SERVICE_ROLE_KEY',
-      }, { status: 500 })
-    }
+    const supabase = getSupabase()
 
     let prismaUserId: string | null = null
     try {
@@ -59,15 +54,33 @@ export async function GET(request: Request) {
 
     console.log('[today-data] Fetching data for date:', dateParam)
 
-    // Run queries in parallel using Supabase
-    const [entriesResult, existingEntryResult, friendsResult] = await Promise.all([
-      // Get all entries for streak + on-this-day
-      supabase
+    // Fetch ALL entries using pagination (separate from other queries)
+    let allEntries: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let hasMore = true
+
+    while (hasMore) {
+      const { data: pageData, error: pageError } = await supabase
         .from('entries')
         .select('id, date, songTitle, artist, albumArt, notes')
         .eq('userId', prismaUserId)
-        .order('date', { ascending: false }),
+        .order('date', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1)
 
+      if (pageError) throw pageError
+
+      if (pageData && pageData.length > 0) {
+        allEntries = [...allEntries, ...pageData]
+        page++
+        hasMore = pageData.length === pageSize
+      } else {
+        hasMore = false
+      }
+    }
+
+    // Run other queries in parallel
+    const [existingEntryResult, friendsResult] = await Promise.all([
       // Check for existing entry on selected date
       supabase
         .from('entries')
@@ -92,13 +105,16 @@ export async function GET(request: Request) {
         .or(`senderId.eq.${prismaUserId},receiverId.eq.${prismaUserId}`),
     ])
 
-    if (entriesResult.error) {
-      console.error('[today-data] Entries query error:', entriesResult.error)
-      throw entriesResult.error
+    console.log('[today-data] Total entries for user:', allEntries.length)
+    
+    // Log the year range of entries for debugging
+    if (allEntries.length > 0) {
+      const years = new Set(allEntries.map(e => {
+        const dateStr = typeof e.date === 'string' ? e.date.split('T')[0] : new Date(e.date).toISOString().split('T')[0]
+        return parseInt(dateStr.split('-')[0])
+      }))
+      console.log('[today-data] Years with entries:', Array.from(years).sort())
     }
-
-    const allEntries = entriesResult.data || []
-    console.log('[today-data] Found entries:', allEntries.length)
 
     // Calculate streak
     let currentStreak = 0
@@ -125,18 +141,24 @@ export async function GET(request: Request) {
       }
     }
 
-    // Filter on-this-day entries
+    // Filter on-this-day entries - show ALL previous years (exclude current year only)
+    // Use UTC methods to avoid timezone issues
     const onThisDayEntries = allEntries
       .filter((entry) => {
-        const entryDate = new Date(entry.date)
-        const entryYear = entryDate.getFullYear()
-        return (
-          entryDate.getMonth() + 1 === monthNum &&
-          entryDate.getDate() === dayNum &&
-          entryYear !== parseInt(year)
-        )
+        // Parse the date string directly to avoid timezone issues
+        const dateStr = typeof entry.date === 'string' ? entry.date.split('T')[0] : new Date(entry.date).toISOString().split('T')[0]
+        const [entryYearStr, entryMonthStr, entryDayStr] = dateStr.split('-')
+        const entryYear = parseInt(entryYearStr)
+        const entryMonth = parseInt(entryMonthStr)
+        const entryDay = parseInt(entryDayStr)
+        
+        const matches = entryMonth === monthNum && entryDay === dayNum && entryYear !== parseInt(year)
+        if (matches) {
+          console.log('[today-data] On This Day match:', entryYear, entry.songTitle)
+        }
+        return matches
       })
-      .slice(0, 3)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) // Sort newest first
       .map((entry) => ({
         id: entry.id,
         date: new Date(entry.date).toISOString().split('T')[0],
@@ -144,6 +166,8 @@ export async function GET(request: Request) {
         artist: entry.artist || '',
         albumArt: entry.albumArt || null,
       }))
+    
+    console.log('[today-data] On This Day entries found:', onThisDayEntries.length)
 
     // Format existing entry
     const existingEntry = existingEntryResult.data

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getSupabase } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 
@@ -14,9 +14,14 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { email, password, name } = signupSchema.parse(body)
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    })
+    const supabase = getSupabase()
+
+    // Check if user exists
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle()
 
     if (existingUser) {
       return NextResponse.json(
@@ -27,13 +32,19 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    const user = await prisma.user.create({
-      data: {
+    const { data: user, error } = await supabase
+      .from('users')
+      .insert({
         email,
         password: hashedPassword,
         name: name || null,
-      },
-    })
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      .select('id')
+      .single()
+
+    if (error) throw error
 
     return NextResponse.json(
       { message: 'User created successfully', userId: user.id },
@@ -41,28 +52,6 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     console.error('Signup error:', error)
-    
-    // More detailed error logging
-    if (error instanceof Error) {
-      console.error('Error name:', error.name)
-      console.error('Error message:', error.message)
-      
-      // Check for database connection errors
-      if (error.message.includes('P1001') || error.message.includes('Can\'t reach database')) {
-        return NextResponse.json(
-          { error: 'Database connection failed', message: 'Please check DATABASE_URL environment variable' },
-          { status: 500 }
-        )
-      }
-      
-      // Check for Prisma client errors
-      if (error.message.includes('P2002')) {
-        return NextResponse.json(
-          { error: 'User already exists' },
-          { status: 400 }
-        )
-      }
-    }
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
