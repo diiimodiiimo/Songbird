@@ -74,7 +74,7 @@ export default function FriendsTab() {
 
   const sendFriendRequest = async () => {
     if (!user || !isLoaded || !friendUsername.trim()) {
-      setMessage({ type: 'error', text: 'Please enter a username' })
+      setMessage({ type: 'error', text: 'Please enter a username, email, or name' })
       return
     }
 
@@ -85,16 +85,18 @@ export default function FriendsTab() {
       const res = await fetch('/api/friends/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receiverUsername: friendUsername.trim() }),
+        body: JSON.stringify({ receiverUsername: friendUsername.trim().replace('@', '') }),
       })
 
       const data = await res.json()
       if (res.ok) {
-        setMessage({ type: 'success', text: `Friend request sent to @${friendUsername}!` })
+        setMessage({ type: 'success', text: `Friend request sent!` })
         setFriendUsername('')
         fetchFriendRequests()
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to send friend request' })
+        // Show helpful hint if available
+        const hint = data.hint ? ` ${data.hint}` : ''
+        setMessage({ type: 'error', text: (data.error || 'Failed to send friend request') + hint })
       }
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to send friend request' })
@@ -154,14 +156,14 @@ export default function FriendsTab() {
 
       {/* Send Friend Request */}
       <div className="bg-card border border-primary rounded p-4">
-        <h4 className="text-lg font-semibold mb-3">Add Friend by Username</h4>
+        <h4 className="text-lg font-semibold mb-3">Add Friend</h4>
         <p className="text-sm text-primary/60 mb-3">
-          Enter a username to send a friend request
+          Search by username, email, or name to send a friend request
         </p>
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
-            placeholder="Enter username (e.g., @username)"
+            placeholder="Username, email, or name"
             value={friendUsername}
             onChange={(e) => setFriendUsername(e.target.value)}
             className="flex-grow px-4 py-2 bg-bg border border-primary rounded text-primary placeholder:text-primary/40"

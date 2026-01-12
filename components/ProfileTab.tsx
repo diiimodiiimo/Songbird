@@ -235,19 +235,19 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
             {showAddFriendModal && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                 <div className="bg-surface rounded-xl p-6 max-w-md w-full">
-                  <h3 className="text-xl font-bold mb-4">Add Friend</h3>
+                  <h3 className="text-xl font-bold mb-4">Find a Friend</h3>
                   <p className="text-text/70 text-sm mb-4">
-                    Enter a username to view their profile
+                    Search by username, email, or name to view their profile
                   </p>
                   <div className="flex gap-2 mb-4">
                     <input
                       type="text"
-                      placeholder="Enter username (e.g., username)"
+                      placeholder="Username, email, or name"
                       value={friendUsernameInput}
                       onChange={(e) => setFriendUsernameInput(e.target.value.replace('@', ''))}
                       onKeyPress={(e) => {
                         if (e.key === 'Enter' && friendUsernameInput.trim()) {
-                          window.location.href = `/user/${friendUsernameInput.trim()}`
+                          window.location.href = `/user/${encodeURIComponent(friendUsernameInput.trim())}`
                         }
                       }}
                       className="flex-1 px-4 py-2 bg-bg border border-text/20 rounded-lg text-text placeholder:text-text/40"
@@ -258,7 +258,7 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
                     <button
                       onClick={() => {
                         if (friendUsernameInput.trim()) {
-                          window.location.href = `/user/${friendUsernameInput.trim()}`
+                          window.location.href = `/user/${encodeURIComponent(friendUsernameInput.trim())}`
                         }
                       }}
                       disabled={!friendUsernameInput.trim()}

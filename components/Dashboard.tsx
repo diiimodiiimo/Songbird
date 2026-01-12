@@ -12,6 +12,7 @@ import ProfileTab from './ProfileTab'
 import WrappedTab from './WrappedTab'
 import LeaderboardTab from './LeaderboardTab'
 import Navigation from './Navigation'
+import WelcomeModal from './WelcomeModal'
 
 // Custom SongBird-style icon components (temporary SVG placeholders)
 const TodayIcon = ({ active }: { active: boolean }) => (
@@ -55,38 +56,38 @@ export default function Dashboard() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState('today')
   const [insightsSubTab, setInsightsSubTab] = useState<'analytics' | 'wrapped' | 'leaderboard'>('analytics')
-  const [checkingUsername, setCheckingUsername] = useState(true)
+  const [showWelcome, setShowWelcome] = useState(false)
+  const [suggestedUsername, setSuggestedUsername] = useState('')
 
   // Check if username is set on first load (non-blocking)
   useEffect(() => {
     if (isLoaded && user) {
-      // Non-blocking check - don't block UI rendering
-      setCheckingUsername(false)
-      
       // Check username in background after a short delay
-      // This prevents blocking the initial render
       const timer = setTimeout(async () => {
         try {
           const res = await fetch('/api/profile')
           if (res.ok) {
             const data = await res.json()
             if (!data.user?.username) {
-              const shouldSetUsername = confirm(
-                'Welcome to SongBird! To get started, you need to set a username. This will be your unique identifier in the app.\n\nWould you like to set it now?'
+              // Generate suggested username from email or name
+              const email = user.emailAddresses?.[0]?.emailAddress || ''
+              const name = user.firstName || ''
+              setSuggestedUsername(
+                name.toLowerCase().replace(/[^a-z0-9_]/g, '') || 
+                email.split('@')[0].replace(/[^a-z0-9_]/g, '') || 
+                ''
               )
-              if (shouldSetUsername) {
-                router.push('/profile/edit?setup=true')
-              }
+              setShowWelcome(true)
             }
           }
         } catch (error) {
           console.error('Error checking username:', error)
         }
-      }, 500) // Delay check to not block initial render
+      }, 500)
       
       return () => clearTimeout(timer)
     }
-  }, [isLoaded, user, router])
+  }, [isLoaded, user])
 
   useEffect(() => {
     const handleNavigateToWrapped = () => {
@@ -220,6 +221,13 @@ export default function Dashboard() {
           })}
         </div>
       </div>
+
+      {/* Welcome Modal for new users */}
+      <WelcomeModal 
+        isOpen={showWelcome} 
+        onClose={() => setShowWelcome(false)}
+        suggestedUsername={suggestedUsername}
+      />
     </div>
   )
 }

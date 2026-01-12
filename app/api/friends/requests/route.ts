@@ -92,15 +92,34 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase()
 
-    // Find the receiver user by username
-    const { data: receiver } = await supabase
+    // Find the receiver user by username, email, or name
+    // First try exact username match
+    let { data: receiver } = await supabase
       .from('users')
-      .select('id, email, name, image')
+      .select('id, email, name, username, image')
       .eq('username', receiverUsername)
-      .single()
+      .maybeSingle()
+
+    // If not found by username, try email (without @domain if provided)
+    if (!receiver) {
+      const searchTerm = receiverUsername.toLowerCase()
+      const { data: allUsers } = await supabase
+        .from('users')
+        .select('id, email, name, username, image')
+      
+      // Find by email prefix, full email, or name
+      receiver = (allUsers || []).find(u => 
+        u.email?.toLowerCase() === searchTerm ||
+        u.email?.toLowerCase().split('@')[0] === searchTerm ||
+        u.name?.toLowerCase() === searchTerm
+      ) || null
+    }
 
     if (!receiver) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      return NextResponse.json({ 
+        error: 'User not found', 
+        hint: 'Try searching by their email or full name' 
+      }, { status: 404 })
     }
 
     if (receiver.id === userId) {

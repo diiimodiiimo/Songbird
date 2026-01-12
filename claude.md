@@ -40,10 +40,10 @@
 - Has 4.5 years of personal data (~1,400 entries)
 
 ### Current Status
-- MVP built but auth is broken (being fixed)
+- MVP built with full Clerk authentication
 - Has 4.5 years of founder's personal data (~1,400 entries)
-- No external users yet
-- **Goal: 10 test users (friends/family) in 2 weeks**
+- Ready for test users
+- **Goal: 10 test users (friends/family)**
 - Long-term: App Store launch
 
 ---
@@ -96,10 +96,10 @@ No app combines:
 
 ## Tech Stack
 
-- **Framework**: Next.js 16 (App Router)
+- **Framework**: Next.js 14+ (App Router)
 - **Language**: TypeScript
 - **Database**: PostgreSQL with Prisma ORM
-- **Authentication**: Clerk (migrating from NextAuth)
+- **Authentication**: Clerk
 - **Styling**: Tailwind CSS
 - **Hosting**: Vercel
 - **Music API**: Spotify Web API
@@ -143,7 +143,7 @@ sotd/
 │   └── Navigation.tsx    # Navigation component
 ├── lib/
 │   ├── prisma.ts         # Prisma client
-│   ├── auth.ts           # NextAuth config (legacy, to be removed)
+│   ├── clerk-sync.ts     # Clerk user sync helper
 │   ├── spotify.ts        # Spotify API client
 │   └── friends.ts        # Friend utilities
 ├── prisma/
@@ -160,7 +160,6 @@ sotd/
 - `email` (String, unique)
 - `name`, `username` (String, optional)
 - `clerkId` (String, unique) - Clerk authentication ID
-- `password` (String, optional) - Legacy NextAuth
 - `image`, `bio` (String, optional)
 - `favoriteArtists`, `favoriteSongs` (JSON strings)
 - Relations: entries, taggedEntries, mentions, notifications, personReferences, friendRequests
@@ -201,76 +200,39 @@ sotd/
 
 ---
 
-# Current Status & Critical Issues
+# Current Status
 
 ## ✅ What's Working
 
 - Core functionality (add entries, view history, analytics)
-- Database schema and Prisma setup
-- API routes structure
-- Basic UI/UX
+- Database schema and Prisma setup (PostgreSQL)
+- All API routes with Clerk authentication
+- All components with Clerk authentication
 - Home screen with logo
-- Clerk installation and basic setup
-- Middleware updated for Clerk
-- Layout wrapped with ClerkProvider
+- Sign-in/Sign-up with Clerk
+- User sync between Clerk and database
+- Social features (friends, feed, mentions)
+- On This Day memories
+- Analytics and Wrapped features
 
-## ⚠️ Critical Issues
+## Authentication
 
-### 1. Authentication Migration (IN PROGRESS)
+**Status**: ✅ Complete - Using Clerk
 
-**Status**: Partially migrated from NextAuth to Clerk
+All components use `useUser()` from `@clerk/nextjs` for client-side auth.
+All API routes use `auth()` from `@clerk/nextjs/server` for server-side auth.
+User sync is handled via `lib/clerk-sync.ts`.
 
-**What's Done**:
-- ✅ Clerk package installed
-- ✅ Home screen created (`/home` with logo)
-- ✅ Sign-in/Sign-up pages created (`/sign-in`, `/sign-up`)
-- ✅ Middleware updated for Clerk
-- ✅ `app/page.tsx` updated to use Clerk auth
-- ✅ `app/layout.tsx` wrapped with ClerkProvider
+## Environment Variables
 
-**What's NOT Done** (CRITICAL):
-- ❌ All components still use `useSession` from NextAuth (needs `useUser()` from Clerk)
-- ❌ All API routes still use `getServerSession` (needs `auth()` from Clerk)
-- ❌ User ID mapping: Clerk uses different user IDs than database
-- ❌ User sync strategy not implemented (Clerk manages users separately)
+Use `.env.local` for local development with:
+- `DATABASE_URL` - PostgreSQL connection string
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` - Clerk public key
+- `CLERK_SECRET_KEY` - Clerk secret key
+- `SPOTIPY_CLIENT_ID` - Spotify API client ID
+- `SPOTIPY_CLIENT_SECRET` - Spotify API client secret
 
-**Migration Tasks**:
-
-1. **Update Components** (11 files):
-   - Find all `useSession` imports from `next-auth/react`
-   - Replace with `useUser()` from `@clerk/nextjs`
-   - Replace `session.user.id` with `user?.id`
-   - Replace `signOut()` with `useClerk().signOut()`
-   - Files: Navigation, AddEntryTab, FeedTab, AnalyticsTab, MemoryTab, HistoryTab, ProfileTab, FriendsTab, WrappedTab, Notifications, FullHistoryTab
-
-2. **Update API Routes** (20+ files):
-   - Find all `getServerSession(authOptions)` calls
-   - Replace with `auth()` from `@clerk/nextjs/server`
-   - Replace `session.user.id` with `userId` from `auth()`
-   - Update error handling
-
-3. **Database User Sync**:
-   - Add `clerkUserId` field to User model (already exists as `clerkId`)
-   - Create helper function to sync Clerk users to database
-   - Handle user creation on first Clerk login
-
-4. **Cleanup**:
-   - Remove `next-auth` package
-   - Delete `lib/auth.ts` (NextAuth config)
-   - Delete `app/api/auth/[...nextauth]/route.ts`
-   - Remove NextAuth types
-
-### 2. Environment Variables
-
-- Keys added to `.env` file
-- Server needs restart to load new env vars
-- Should use `.env.local` for local development
-
-### 3. File Lock Issues (Windows/OneDrive)
-
-- Project located in OneDrive folder
-- Can cause file locking errors (EBUSY)
-- Recommendation: Move project out of OneDrive for development
+**Important**: Restart dev server after changing environment variables.
 
 ---
 
@@ -305,7 +267,7 @@ sotd/
 - Never fetch base64 images in bulk queries (use `excludeImages=true`)
 
 ### API Route Patterns
-- Always check authentication with `auth()` from `@clerk/nextjs/server` (after migration)
+- Always check authentication with `auth()` from `@clerk/nextjs/server`
 - Return proper HTTP status codes
 - Use NextResponse.json for responses
 - Handle errors gracefully with try/catch
@@ -365,21 +327,6 @@ const fetchEntries = async () => {
 ```
 
 ## Agent Instructions by Task Type
-
-### 🔐 Authentication Migration Agent
-
-**Your Goal**: Complete the migration from NextAuth to Clerk
-
-**Key Files**:
-- `components/*.tsx` - All components using `useSession`
-- `app/api/**/route.ts` - All API routes using `getServerSession`
-- `prisma/schema.prisma` - Already has `clerkId` field
-- `types/next-auth.d.ts` - Can remove after migration
-
-**Reference**:
-- Clerk docs: https://clerk.com/docs
-- Use `useUser()` hook for client components
-- Use `auth()` function for server components/API routes
 
 ### 🎨 Design & Layout Improvement Agent
 
@@ -443,16 +390,7 @@ const fetchEntries = async () => {
 
 # Feature Roadmap
 
-## Phase 1: Complete Authentication Migration
-**Priority**: 🔴 CRITICAL
-
-- Update all components to use Clerk
-- Update all API routes to use Clerk
-- Implement user sync strategy
-- Remove NextAuth dependencies
-- Test authentication flow
-
-## Phase 2: Improve Design & Layout
+## Phase 1: Improve Design & Layout
 **Priority**: 🟡 Medium
 
 - Standardize spacing/padding
@@ -462,7 +400,7 @@ const fetchEntries = async () => {
 - Improved loading/empty states
 - Better typography hierarchy
 
-## Phase 3: Backend Improvements
+## Phase 2: Backend Improvements
 **Priority**: 🟡 Medium
 
 - Optimize database queries
@@ -472,7 +410,7 @@ const fetchEntries = async () => {
 - Better pagination
 - Consider caching strategies
 
-## Phase 4: Planned Features
+## Phase 3: Planned Features
 **Priority**: 🟢 Low-Medium
 
 1. **Mood/vibe emoji tags** — Capture emotional context
@@ -482,7 +420,7 @@ const fetchEntries = async () => {
 5. **Notifications** — "On This Day" reminders, streak nudges
 6. **Shareable Wrapped** — Instagram-ready year-end summaries
 
-## Phase 5: Future Considerations
+## Phase 4: Future Considerations
 **Priority**: 🟢 Low
 
 - Customizable bird avatar
@@ -651,25 +589,19 @@ Before starting work:
 
 # Next Steps Summary
 
-1. **IMMEDIATE** (Before anything else):
-   - Complete Clerk authentication migration
-   - Update all components and API routes
-   - Test authentication flow
-   - Remove NextAuth dependencies
-
-2. **SHORT TERM** (After auth works):
+1. **SHORT TERM**:
    - Improve design and layout
    - Fix any remaining bugs
    - Optimize performance
    - Get 10 test users
 
-3. **MEDIUM TERM**:
+2. **MEDIUM TERM**:
    - Backend improvements
    - Feature enhancements (mood tags, B-sides, streaks)
    - User experience improvements
    - Launch preparation
 
-4. **LONG TERM**:
+3. **LONG TERM**:
    - New features (playlist generation, notifications)
    - Integrations (Apple Music)
    - App Store launch

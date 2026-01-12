@@ -9,14 +9,27 @@ export async function GET(
     const { username } = await params
     const supabase = getSupabase()
 
-    // Find user by username or email
-    const { data: user, error } = await supabase
+    // Find user by username, email, or name (case-insensitive for flexible lookup)
+    let { data: user, error } = await supabase
       .from('users')
       .select('id, username, name, email, image, bio, favoriteArtists, favoriteSongs')
       .or(`username.eq.${username},email.eq.${username}`)
       .maybeSingle()
 
     if (error) throw error
+
+    // If not found by username/email, try case-insensitive search by name or email prefix
+    if (!user) {
+      const searchTerm = username.toLowerCase()
+      const { data: allUsers } = await supabase
+        .from('users')
+        .select('id, username, name, email, image, bio, favoriteArtists, favoriteSongs')
+      
+      user = (allUsers || []).find(u => 
+        u.name?.toLowerCase() === searchTerm ||
+        u.email?.toLowerCase().split('@')[0] === searchTerm
+      ) || null
+    }
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })

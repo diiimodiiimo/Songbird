@@ -1,246 +1,185 @@
 # Deployment Guide for SongBird
 
-## 🚨 Critical: Don't Share Your Local IP
+## Recommended: Deploy to Vercel
 
-Sharing your local IP address is **NOT recommended** for production use. Here's why and what to do instead.
-
-## Why Not Local IP?
-
-- ❌ Requires your computer to be on 24/7
-- ❌ Security risk (exposes your local network)
-- ❌ SQLite can't handle 50+ concurrent users
-- ❌ No HTTPS (required for many features)
-- ❌ Unreliable (goes down if computer restarts)
-
-## Recommended Deployment Options
-
-### Option 1: Vercel (Recommended - Easiest)
-
-**Pros:**
-- Free tier (perfect for 50 users)
+### Why Vercel?
+- Free tier (perfect for personal projects)
 - One-click deploy from GitHub
 - Automatic HTTPS
 - Built-in Next.js optimization
 - Global CDN
 
-**Steps:**
-1. Push your code to GitHub
-2. Go to [vercel.com](https://vercel.com)
-3. Import your GitHub repository
-4. Add environment variables
-5. Deploy!
+## Prerequisites
 
-**Cost:** Free for personal projects
+Before deploying, ensure you have:
+- A PostgreSQL database (Supabase recommended)
+- Clerk account with API keys
+- Spotify Developer credentials
 
 ---
 
-### Option 2: Railway
+## Step 1: Set Up PostgreSQL Database
 
-**Pros:**
-- Free tier available
-- Easy PostgreSQL setup
-- Simple deployment
-- Good for Next.js apps
-
-**Steps:**
-1. Go to [railway.app](https://railway.app)
+### Option A: Supabase (Recommended - Free)
+1. Go to [supabase.com](https://supabase.com)
 2. Create new project
-3. Add PostgreSQL database
-4. Deploy from GitHub
-5. Set environment variables
+3. Go to **Settings** → **Database**
+4. Copy the **Connection string** (URI format)
+5. For Vercel serverless, use the **pooler** connection (port 6543):
+   ```
+   postgresql://postgres.[ref]:[password]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+   ```
 
-**Cost:** ~$5-10/month after free tier
+### Option B: Railway
+1. Go to [railway.app](https://railway.app)
+2. Create new project → Add PostgreSQL
+3. Copy the `DATABASE_URL`
 
----
-
-### Option 3: Render
-
-**Pros:**
-- Free tier available
-- Easy PostgreSQL setup
-- Simple deployment
-
-**Steps:**
-1. Go to [render.com](https://render.com)
-2. Create new Web Service
-3. Connect GitHub repository
-4. Add PostgreSQL database
-5. Set environment variables
-
-**Cost:** Free tier available, then ~$7/month
+### Option C: Neon
+1. Go to [neon.tech](https://neon.tech)
+2. Create new project
+3. Copy the connection string
 
 ---
 
-## Database Migration: SQLite → PostgreSQL
-
-**CRITICAL:** You MUST upgrade from SQLite to PostgreSQL for 50+ users.
-
-### Step 1: Create PostgreSQL Database
-
-Choose one:
-- **Railway**: Automatic when you create a project
-- **Render**: Add PostgreSQL service
-- **Supabase**: Free PostgreSQL (recommended for easy setup)
-- **Neon**: Free PostgreSQL
-
-### Step 2: Update Prisma Schema
-
-Change `prisma/schema.prisma`:
-
-```prisma
-datasource db {
-  provider = "postgresql"  // Changed from "sqlite"
-  url      = env("DATABASE_URL")
-}
-```
-
-### Step 3: Update Environment Variables
-
-Your `.env` should have:
-
-```env
-# PostgreSQL connection string (from your database provider)
-DATABASE_URL="postgresql://user:password@host:5432/dbname?sslmode=require"
-
-# NextAuth
-NEXTAUTH_URL=https://your-app.vercel.app  # Your deployed URL
-NEXTAUTH_SECRET=your-secret-key-here
-
-# Spotify API
-SPOTIPY_CLIENT_ID=your-spotify-client-id
-SPOTIPY_CLIENT_SECRET=your-spotify-client-secret
-```
-
-### Step 4: Migrate Data
+## Step 2: Push to GitHub
 
 ```bash
-# Generate Prisma client
-npx prisma generate
-
-# Push schema to PostgreSQL
-npx prisma db push
-
-# (Optional) Migrate existing SQLite data to PostgreSQL
-# You may need a migration script for this
+git add .
+git commit -m "Ready for deployment"
+git push origin main
 ```
 
 ---
 
-## Mobile App vs Web App
+## Step 3: Deploy to Vercel
 
-### Current Status: Web App (Works on Mobile)
-
-Your app already works on mobile browsers! Users can:
-- Add to home screen (iOS/Android)
-- Use it like an app
-- Works offline (with service workers)
-
-### Should You Make a Native App?
-
-**Probably Not Needed:**
-- Your web app already works great on mobile
-- Native apps require:
-  - App Store approval ($99/year for iOS)
-  - More development time
-  - Separate codebase (React Native)
-  - More maintenance
-
-**Consider PWA (Progressive Web App):**
-- Add a `manifest.json` file
-- Add service worker for offline support
-- Users can "Install" it on their phone
-- Feels like a native app
+1. Go to [vercel.com](https://vercel.com)
+2. Sign up/login with GitHub
+3. Click **"New Project"**
+4. Import your GitHub repository
+5. Vercel will auto-detect Next.js
 
 ---
 
-## Deployment Checklist
+## Step 4: Configure Environment Variables
 
-### Before Deploying:
+In Vercel project settings → **Environment Variables**, add:
 
-- [ ] Upgrade database to PostgreSQL
-- [ ] Update `DATABASE_URL` in environment variables
-- [ ] Update `NEXTAUTH_URL` to your production URL
-- [ ] Generate new `NEXTAUTH_SECRET` (don't use dev secret)
-- [ ] Update Spotify redirect URIs in Spotify Developer Dashboard
-- [ ] Test locally with production database
-- [ ] Run `npm run build` to check for errors
+### Database
+```
+DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+```
 
-### Environment Variables Needed:
+### Clerk Authentication
+```
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
+```
 
-```env
-# Database
-DATABASE_URL=postgresql://...
-
-# NextAuth
-NEXTAUTH_URL=https://your-app.vercel.app
-NEXTAUTH_SECRET=generate-new-secret
-
-# Spotify
+### Spotify API
+```
 SPOTIPY_CLIENT_ID=your-client-id
 SPOTIPY_CLIENT_SECRET=your-client-secret
 ```
 
----
-
-## Quick Start: Deploy to Vercel (15 minutes)
-
-1. **Push to GitHub:**
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git remote add origin https://github.com/yourusername/songbird.git
-   git push -u origin main
-   ```
-
-2. **Create PostgreSQL Database:**
-   - Go to [supabase.com](https://supabase.com) (free)
-   - Create new project
-   - Copy connection string
-
-3. **Deploy to Vercel:**
-   - Go to [vercel.com](https://vercel.com)
-   - Sign up with GitHub
-   - Click "New Project"
-   - Import your repository
-   - Add environment variables:
-     - `DATABASE_URL` (from Supabase)
-     - `NEXTAUTH_URL` (will be auto-filled)
-     - `NEXTAUTH_SECRET` (generate: `openssl rand -base64 32`)
-     - `SPOTIPY_CLIENT_ID`
-     - `SPOTIPY_CLIENT_SECRET`
-   - Click "Deploy"
-
-4. **Update Prisma Schema:**
-   - Change `provider = "sqlite"` to `provider = "postgresql"`
-   - Push to GitHub
-   - Vercel will auto-deploy
-
-5. **Run Migration:**
-   ```bash
-   # In Vercel dashboard, go to your project → Settings → Environment Variables
-   # Add DATABASE_URL
-   # Then in Vercel Functions or via CLI:
-   npx prisma db push
-   ```
+**Important:** Set all variables for **Production**, **Preview**, and **Development** environments.
 
 ---
 
-## Testing with 50 Users
+## Step 5: Deploy
 
-Once deployed:
-1. Share the Vercel URL (e.g., `https://songbird.vercel.app`)
-2. Users can access from any device
-3. Monitor performance in Vercel dashboard
-4. Check database connection pool settings
+Click **"Deploy"** and wait for the build to complete.
+
+Your app will be available at: `https://your-project.vercel.app`
+
+---
+
+## Step 6: Update Clerk Settings
+
+1. Go to your Clerk Dashboard
+2. Add your Vercel domain to **Allowed Origins**
+3. Update redirect URLs if needed
+
+---
+
+## Post-Deployment Checklist
+
+- [ ] Database connection works
+- [ ] Clerk authentication works (sign up/sign in)
+- [ ] Spotify search works
+- [ ] Can create and view entries
+- [ ] Social features work (friends, feed)
+
+---
+
+## Alternative Deployment Options
+
+### Railway
+- Easy PostgreSQL setup included
+- ~$5-10/month after free tier
+
+### Render
+- Free tier available
+- Easy PostgreSQL setup
+- ~$7/month for paid tier
+
+---
+
+## Troubleshooting
+
+### 500 Error on Sign Up/Login
+- Check that Clerk keys are correct
+- Verify DATABASE_URL is set
+- Check Vercel function logs
+
+### Database Connection Failed
+- Use the pooler connection string (port 6543) for serverless
+- Verify password is URL-encoded if it contains special characters
+- Check SSL mode: add `?sslmode=require` if needed
+
+### Build Fails
+- Run `npm run build` locally first
+- Check for TypeScript errors
+- Verify all dependencies are installed
+
+### Environment Variables Not Working
+- Redeploy after adding/changing variables
+- Make sure variables are set for Production environment
+- Check for typos in variable names
+
+---
+
+## Monitoring
+
+### Vercel Dashboard
+- View deployment logs
+- Monitor function invocations
+- Check error rates
+
+### Database Monitoring
+- Supabase dashboard shows query performance
+- Monitor connection pool usage
+
+---
+
+## Scaling Considerations
+
+For more than 100 users:
+- Consider upgrading Supabase plan
+- Enable database connection pooling
+- Add caching (Redis) for frequent queries
+- Monitor Vercel function limits
 
 ---
 
 ## Support
 
-If you need help with deployment, check:
 - [Vercel Docs](https://vercel.com/docs)
-- [Prisma Migration Guide](https://www.prisma.io/docs/guides/migrate-to-prisma)
-- [Next.js Deployment](https://nextjs.org/docs/deployment)
-
-
+- [Clerk Docs](https://clerk.com/docs)
+- [Prisma Docs](https://www.prisma.io/docs)
+- [Supabase Docs](https://supabase.com/docs)
