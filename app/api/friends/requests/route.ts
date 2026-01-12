@@ -78,17 +78,25 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { userId: clerkUserId } = await auth()
+    console.log('[friend-request] Starting request, clerkUserId:', clerkUserId)
+    
     if (!clerkUserId) {
+      console.log('[friend-request] No clerkUserId - unauthorized')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    console.log('[friend-request] Database userId:', userId)
+    
     if (!userId) {
+      console.log('[friend-request] User not found in database')
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const body = await request.json()
+    console.log('[friend-request] Request body:', body)
     const { receiverUsername } = friendRequestSchema.parse(body)
+    console.log('[friend-request] Looking for receiver:', receiverUsername)
 
     const supabase = getSupabase()
 
@@ -116,13 +124,17 @@ export async function POST(request: Request) {
     }
 
     if (!receiver) {
+      console.log('[friend-request] Receiver not found for:', receiverUsername)
       return NextResponse.json({ 
         error: 'User not found', 
         hint: 'Try searching by their email or full name' 
       }, { status: 404 })
     }
 
+    console.log('[friend-request] Found receiver:', receiver.id, receiver.username || receiver.email)
+
     if (receiver.id === userId) {
+      console.log('[friend-request] Trying to add self as friend')
       return NextResponse.json(
         { error: 'Cannot send friend request to yourself' },
         { status: 400 }
@@ -130,13 +142,19 @@ export async function POST(request: Request) {
     }
 
     // Check if a request already exists
-    const { data: existingRequest } = await supabase
+    console.log('[friend-request] Checking for existing request between', userId, 'and', receiver.id)
+    const { data: existingRequest, error: existingError } = await supabase
       .from('friend_requests')
       .select('id, status')
       .or(`and(senderId.eq.${userId},receiverId.eq.${receiver.id}),and(senderId.eq.${receiver.id},receiverId.eq.${userId})`)
       .maybeSingle()
 
+    if (existingError) {
+      console.error('[friend-request] Error checking existing:', existingError)
+    }
+
     if (existingRequest) {
+      console.log('[friend-request] Existing request found:', existingRequest)
       if (existingRequest.status === 'pending') {
         return NextResponse.json({ error: 'Friend request already exists' }, { status: 400 })
       }
@@ -145,10 +163,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create the friend request
+    // Create the friend request with generated ID
+    const requestId = `fr_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    console.log('[friend-request] Creating new request from', userId, 'to', receiver.id, 'with id:', requestId)
+    
     const { data: friendRequest, error } = await supabase
       .from('friend_requests')
       .insert({
+        id: requestId,
         senderId: userId,
         receiverId: receiver.id,
         status: 'pending',
@@ -158,7 +180,12 @@ export async function POST(request: Request) {
       .select('id, senderId, receiverId, status, createdAt')
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('[friend-request] Insert error:', error)
+      throw error
+    }
+    
+    console.log('[friend-request] Successfully created:', friendRequest)
 
     return NextResponse.json({
       friendRequest: {
