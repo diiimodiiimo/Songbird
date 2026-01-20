@@ -5,6 +5,7 @@ import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
+import ThemeBird from './ThemeBird'
 
 interface Entry {
   id: string
@@ -15,6 +16,11 @@ interface Entry {
   notesPreview?: string
   notes?: string
   people?: Array<{ id: string; name: string }>
+  // Additional metadata for AI insights
+  durationMs?: number | null
+  explicit?: boolean
+  popularity?: number | null
+  releaseDate?: string | null
 }
 
 export default function MemoryTab() {
@@ -69,12 +75,33 @@ export default function MemoryTab() {
   const fetchAiInsight = async (entries: Entry[]) => {
     setLoadingInsight(true)
     try {
+      // Extract all data dimensions for richer AI insights
       const artists = entries.map(e => e.artist)
       const songs = entries.map(e => e.songTitle)
+      const popularity = entries.map(e => e.popularity).filter((p): p is number => p !== null && p !== undefined)
+      const duration = entries.map(e => e.durationMs).filter((d): d is number => d !== null && d !== undefined)
+      const explicit = entries.map(e => e.explicit || false)
+      const releaseDate = entries.map(e => e.releaseDate).filter((r): r is string => r !== null && r !== undefined)
+      const notes = entries.map(e => e.notes).filter((n): n is string => n !== null && n !== undefined)
+      const people = entries.flatMap(e => e.people?.map(p => p.name) || [])
+      const years = entries.map(e => parseInt(e.date.split('-')[0]))
+      
       const res = await fetch('/api/ai-insight', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ artists, songs, date: selectedDate }),
+        body: JSON.stringify({ 
+          artists, 
+          songs, 
+          date: selectedDate,
+          // Extended data for richer insights
+          popularity,
+          duration,
+          explicit,
+          releaseDate,
+          notes,
+          people,
+          years,
+        }),
       })
       const data = await res.json()
       if (res.ok && data.insight) {
@@ -155,21 +182,31 @@ export default function MemoryTab() {
         )}
 
         {loadingOnThisDay ? (
-          <div className="text-center py-12 text-text/60">Loading memories...</div>
+          <div className="text-center py-12">
+            <div className="flex justify-center mb-4">
+              <ThemeBird size={64} state="curious" className="animate-pulse" />
+            </div>
+            <p className="text-text/60">Searching your memories...</p>
+          </div>
         ) : onThisDayEntries.length > 0 ? (
           <div className="space-y-4">
             {onThisDayEntries.map((entry) => (
               <div key={entry.id} className="bg-surface rounded-xl p-6 hover:bg-surface/80 transition-colors">
                 <div className="flex gap-4">
                   {entry.albumArt && (
-                    <Image
-                      src={entry.albumArt}
-                      alt={entry.songTitle}
-                      width={120}
-                      height={120}
-                      className="rounded-lg flex-shrink-0"
-                      style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
-                    />
+                    <div className="flex-shrink-0 self-stretch flex items-center">
+                      <div className="relative group">
+                        <div className="absolute -inset-1 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-xl opacity-75 blur-sm group-hover:opacity-100 transition-opacity"></div>
+                        <Image
+                          src={entry.albumArt}
+                          alt={entry.songTitle}
+                          width={120}
+                          height={120}
+                          className="relative rounded-lg h-full w-auto border-2 border-white/10"
+                          style={{ objectFit: 'contain' }}
+                        />
+                      </div>
+                    </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-accent mb-2 font-semibold">
@@ -207,9 +244,14 @@ export default function MemoryTab() {
           </div>
         ) : (
           <div className="text-center py-12">
-            <div className="text-5xl mb-4">📅</div>
-            <p className="text-text/60">
+            <div className="flex justify-center mb-4">
+              <ThemeBird size={72} state="curious" />
+            </div>
+            <p className="text-text/60 mb-2">
               No memories from this day yet.
+            </p>
+            <p className="text-text/40 text-sm">
+              Keep logging songs to build your musical timeline!
             </p>
           </div>
         )}
@@ -228,21 +270,31 @@ export default function MemoryTab() {
         </div>
 
         {loadingRecent ? (
-          <div className="text-center py-8 text-text/60">Loading recent entries...</div>
+          <div className="text-center py-8">
+            <div className="flex justify-center mb-3">
+              <ThemeBird size={48} state="bounce" className="animate-bounce" />
+            </div>
+            <p className="text-text/60">Loading recent entries...</p>
+          </div>
         ) : recentEntries.length > 0 ? (
           <div className="space-y-3">
             {recentEntries.map((entry) => (
               <div key={entry.id} className="bg-surface rounded-lg p-4 hover:bg-surface/80 transition-colors">
                 <div className="flex gap-3">
                   {entry.albumArt && (
-                    <Image
-                      src={entry.albumArt}
-                      alt={entry.songTitle}
-                      width={60}
-                      height={60}
-                      className="rounded-lg flex-shrink-0"
-                      style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
-                    />
+                    <div className="flex-shrink-0 self-stretch flex items-center">
+                      <div className="relative group">
+                        <div className="absolute -inset-0.5 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-lg opacity-50 blur-[2px] group-hover:opacity-80 transition-opacity"></div>
+                        <Image
+                          src={entry.albumArt}
+                          alt={entry.songTitle}
+                          width={60}
+                          height={60}
+                          className="relative rounded-lg h-full w-auto border border-white/10"
+                          style={{ objectFit: 'contain' }}
+                        />
+                      </div>
+                    </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-text/60 mb-1">
@@ -273,8 +325,12 @@ export default function MemoryTab() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-8 text-text/60">
-            No recent entries yet.
+          <div className="text-center py-8">
+            <div className="flex justify-center mb-3">
+              <ThemeBird size={56} />
+            </div>
+            <p className="text-text/60">No recent entries yet.</p>
+            <p className="text-text/40 text-sm mt-1">Start logging songs to see them here!</p>
           </div>
         )}
       </div>

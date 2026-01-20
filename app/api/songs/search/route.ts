@@ -3,8 +3,8 @@ import { auth } from '@clerk/nextjs/server'
 import SpotifyWebApi from 'spotify-web-api-node'
 
 const spotifyApi = new SpotifyWebApi({
-  clientId: process.env.SPOTIPY_CLIENT_ID || 'e419e60b293c4c13b7c67ab86780c2ef',
-  clientSecret: process.env.SPOTIPY_CLIENT_SECRET || 'aff4838b31af4d36965b1d84c40d24da',
+  clientId: process.env.SPOTIPY_CLIENT_ID,
+  clientSecret: process.env.SPOTIPY_CLIENT_SECRET,
 })
 
 // Get access token using client credentials flow

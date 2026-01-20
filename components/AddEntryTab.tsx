@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import ThemeBird from './ThemeBird'
 
 interface Track {
   id: string
@@ -32,11 +33,15 @@ export default function AddEntryTab() {
   const [peopleNames, setPeopleNames] = useState<string[]>([])
   const [peopleInput, setPeopleInput] = useState<string>('')
   const [friends, setFriends] = useState<Array<{ id: string; name: string; email: string }>>([])
+  const [friendSearch, setFriendSearch] = useState('')
+  const [peopleSearch, setPeopleSearch] = useState('')
+  const [showPeopleFriendPicker, setShowPeopleFriendPicker] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [existingEntry, setExistingEntry] = useState<{ id: string; songTitle: string; artist: string; notes?: string } | null>(null)
   const [checkingEntry, setCheckingEntry] = useState(true) // Start true for initial load
   const [showFlyingAnimation, setShowFlyingAnimation] = useState(false)
+  const [animateSwipeIn, setAnimateSwipeIn] = useState(false)
   const [onThisDayEntries, setOnThisDayEntries] = useState<Array<{ id: string; date: string; songTitle: string; artist: string; albumArt: string | null }>>([])
   const [currentStreak, setCurrentStreak] = useState(0)
   const [loadingStreak, setLoadingStreak] = useState(true) // Start true for initial load
@@ -139,15 +144,8 @@ export default function AddEntryTab() {
     return (
       <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
         <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
-          <div className="animate-pulse">
-            <Image
-              src="/SongBirdlogo.png"
-              alt="SongBird"
-              width={100}
-              height={100}
-              className="object-contain opacity-50"
-              priority
-            />
+          <div className="animate-pulse opacity-50">
+            <ThemeBird size={100} />
           </div>
           <p className="text-text/60 text-sm">Loading your music...</p>
         </div>
@@ -209,50 +207,70 @@ export default function AddEntryTab() {
         </p>
 
         {/* SongBird CTA - Entire bird is clickable */}
-        <div className="flex justify-center mb-8">
-          {showFlyingAnimation ? (
-            <div className="flex justify-center">
-              <video 
-                src="/movingbirdbrowon.mp4" 
-                autoPlay
-                loop={false}
-                muted
-                className="w-36 h-36 object-contain"
-                onEnded={() => {
-                  setShowForm(true)
-                  setShowFlyingAnimation(false)
-                }}
-              />
-            </div>
-          ) : (
+        <div className={`flex flex-col items-center mb-8 ${showFlyingAnimation ? 'pointer-events-none' : ''}`}>
+          <div className="relative">
+            {/* Music note trails - appear when flying */}
+            {showFlyingAnimation && (
+              <>
+                <span 
+                  className="absolute top-1/2 left-1/2 text-2xl text-primary animate-note-trail"
+                  style={{ animationDelay: '0.05s' }}
+                >
+                  ♪
+                </span>
+                <span 
+                  className="absolute top-1/3 left-1/3 text-xl text-accent animate-note-trail"
+                  style={{ animationDelay: '0.15s' }}
+                >
+                  ♫
+                </span>
+                <span 
+                  className="absolute top-2/3 left-2/3 text-lg text-primary animate-note-trail"
+                  style={{ animationDelay: '0.25s' }}
+                >
+                  ♪
+                </span>
+              </>
+            )}
+            
             <button
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
                 setShowFlyingAnimation(true)
+                // Bird flies off (0.5s) then form swipes in (0.4s)
                 setTimeout(() => {
+                  setAnimateSwipeIn(true)
                   setShowForm(true)
                   setShowFlyingAnimation(false)
-                }, 2000)
+                  // Reset swipe animation flag after it plays
+                  setTimeout(() => setAnimateSwipeIn(false), 500)
+                }, 600)
               }}
-              className="group relative transition-all hover:scale-105 active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/50 rounded-full"
+              className={`group relative transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/50 rounded-full
+                ${showFlyingAnimation ? 'animate-bird-flyoff' : 'hover:scale-105 active:scale-95'}
+              `}
               aria-label="Add today's song"
               type="button"
+              disabled={showFlyingAnimation}
             >
               {/* Subtle idle animation - pulse/glow */}
-              <div className="animate-pulse transition-all group-hover:drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] group-hover:animate-none" style={{ animationDuration: '3s' }}>
-                <Image 
-                  src="/SongBirdlogo.png" 
-                  alt="SongBird" 
-                  width={144} 
-                  height={144} 
-                  className="object-contain"
-                  priority
-                />
+              <div 
+                className={`transition-all ${showFlyingAnimation ? '' : 'animate-pulse group-hover:drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] group-hover:animate-none'}`} 
+                style={{ animationDuration: '3s' }}
+              >
+                <ThemeBird size={144} state={showFlyingAnimation ? 'fly' : 'bounce'} showParticles={false} />
               </div>
-              {/* TODO v1.5: Add more complex animations */}
             </button>
-          )}
+          </div>
+          
+          {/* Instruction hint - fades out when flying */}
+          <p 
+            className={`mt-3 text-text/50 text-sm transition-opacity duration-200 ${showFlyingAnimation ? 'opacity-0' : 'animate-pulse'}`} 
+            style={{ animationDuration: '2s' }}
+          >
+            Tap the songbird to log your song
+          </p>
         </div>
 
         {/* On This Day Section - BETWEEN bird and Wrapped banner */}
@@ -523,7 +541,7 @@ export default function AddEntryTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${animateSwipeIn ? 'animate-swipe-in' : ''}`}>
       <div>
         <h3 className="text-xl font-semibold mb-4">➕ Add a New Song of the Day</h3>
         
@@ -644,33 +662,139 @@ export default function AddEntryTab() {
               <label className="block mb-2">
                 People in Your Day <span className="text-sm text-primary/60">(Private)</span>
               </label>
-              <div className="flex flex-wrap gap-2 p-2 bg-bg border border-primary rounded min-h-[2.5rem] items-center">
-                {peopleNames.map((name, index) => (
-                  <span
-                    key={index}
-                    className="px-3 py-1 bg-blue-600/30 border border-blue-500/50 rounded-full text-sm flex items-center gap-2"
-                  >
-                    {name}
-                    <button
-                      onClick={() => removePerson(name)}
-                      className="hover:text-red-400 text-lg leading-none"
-                      type="button"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-                <input
-                  type="text"
-                  value={peopleInput}
-                  onChange={(e) => setPeopleInput(e.target.value)}
-                  onKeyDown={handlePeopleInputKeyDown}
-                  placeholder={peopleNames.length === 0 ? "Type a name and press Enter..." : ""}
-                  className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-primary placeholder:text-primary/40"
-                />
+              
+              {/* Tagged people display */}
+              {peopleNames.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {peopleNames.map((name, index) => {
+                    // Check if this person is a friend
+                    const isFriend = friends.some(f => f.name === name || f.email.split('@')[0] === name)
+                    return (
+                      <span
+                        key={index}
+                        className={`px-3 py-1 rounded-full text-sm flex items-center gap-2 ${
+                          isFriend 
+                            ? 'bg-accent/30 border border-accent/50' 
+                            : 'bg-blue-600/30 border border-blue-500/50'
+                        }`}
+                      >
+                        {isFriend && <span className="text-xs">👤</span>}
+                        {name}
+                        <button
+                          onClick={() => removePerson(name)}
+                          className="hover:text-red-400 text-lg leading-none"
+                          type="button"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Input area with friend picker toggle */}
+              <div className="relative">
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={peopleInput}
+                      onChange={(e) => {
+                        setPeopleInput(e.target.value)
+                        setPeopleSearch(e.target.value)
+                        setShowPeopleFriendPicker(e.target.value.length > 0)
+                      }}
+                      onKeyDown={handlePeopleInputKeyDown}
+                      onFocus={() => setShowPeopleFriendPicker(true)}
+                      placeholder="Type a name or search friends..."
+                      className="w-full px-3 py-2 bg-bg border border-primary rounded text-primary placeholder:text-primary/40"
+                    />
+                    
+                    {/* Friend suggestions dropdown */}
+                    {showPeopleFriendPicker && friends.length > 0 && (
+                      <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-card border border-primary rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {/* Show matching friends */}
+                        {friends
+                          .filter(f => {
+                            const searchLower = peopleSearch.toLowerCase()
+                            const name = f.name?.toLowerCase() || ''
+                            const email = f.email.toLowerCase()
+                            return (name.includes(searchLower) || email.includes(searchLower)) &&
+                              !peopleNames.includes(f.name || f.email.split('@')[0])
+                          })
+                          .slice(0, 5)
+                          .map((friend) => (
+                            <button
+                              key={friend.id}
+                              type="button"
+                              onClick={() => {
+                                addPerson(friend.name || friend.email.split('@')[0])
+                                setPeopleInput('')
+                                setPeopleSearch('')
+                                setShowPeopleFriendPicker(false)
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-primary/10 flex items-center gap-2 transition-colors"
+                            >
+                              <span className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-xs text-accent">
+                                {(friend.name || friend.email)[0].toUpperCase()}
+                              </span>
+                              <span className="flex-1 truncate">{friend.name || friend.email}</span>
+                              <span className="text-xs text-primary/50">Friend</span>
+                            </button>
+                          ))}
+                        
+                        {/* Option to add as custom name */}
+                        {peopleSearch.trim() && !friends.some(f => 
+                          (f.name?.toLowerCase() === peopleSearch.toLowerCase()) || 
+                          (f.email.split('@')[0].toLowerCase() === peopleSearch.toLowerCase())
+                        ) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addPerson(peopleSearch.trim())
+                              setPeopleInput('')
+                              setPeopleSearch('')
+                              setShowPeopleFriendPicker(false)
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-primary/10 flex items-center gap-2 border-t border-primary/20 transition-colors"
+                          >
+                            <span className="w-6 h-6 rounded-full bg-blue-600/20 flex items-center justify-center text-xs">
+                              +
+                            </span>
+                            <span className="flex-1">Add "{peopleSearch.trim()}"</span>
+                            <span className="text-xs text-primary/50">Custom</span>
+                          </button>
+                        )}
+
+                        {/* No results message */}
+                        {peopleSearch.trim() && 
+                          friends.filter(f => {
+                            const searchLower = peopleSearch.toLowerCase()
+                            const name = f.name?.toLowerCase() || ''
+                            const email = f.email.toLowerCase()
+                            return name.includes(searchLower) || email.includes(searchLower)
+                          }).length === 0 && (
+                          <div className="px-3 py-2 text-sm text-primary/50">
+                            No friends match. Press Enter to add "{peopleSearch.trim()}"
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Click outside to close */}
+                {showPeopleFriendPicker && (
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setShowPeopleFriendPicker(false)}
+                  />
+                )}
               </div>
+              
               <p className="text-xs text-primary/60 mt-1">
-                Type a name and press Enter. We'll automatically link them if they have an account.
+                Search for friends to tag, or type any name and press Enter.
               </p>
             </div>
 
@@ -678,56 +802,90 @@ export default function AddEntryTab() {
               <label className="block mb-2">
                 Mention Friends <span className="text-sm text-primary/60">(They'll be notified)</span>
               </label>
+              
+              {/* Selected mentions display */}
+              {mentionedUsers.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {mentionedUsers.map((user) => (
+                    <span
+                      key={user.id}
+                      className="px-3 py-1 bg-green-600/30 border border-green-500/50 rounded-full text-sm flex items-center gap-2"
+                    >
+                      @{user.name || user.email.split('@')[0]}
+                      <button
+                        onClick={() => removeMentionedUser(user.id)}
+                        className="hover:text-red-400"
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              
               {friends.length === 0 ? (
                 <div className="text-sm text-primary/60 p-2 bg-bg rounded border border-primary/30">
                   No friends yet. Add friends in the Friends tab to mention them!
                 </div>
               ) : (
-                <>
-                  <div className="border border-primary rounded bg-card max-h-40 overflow-y-auto">
-                    {friends.map((friend) => (
-                      <div
-                        key={friend.id}
-                        onClick={() => {
-                          if (mentionedUsers.find((u) => u.id === friend.id)) {
-                            removeMentionedUser(friend.id)
-                          } else {
-                            addMentionedUser(friend)
-                          }
-                        }}
-                        className={`p-2 hover:bg-primary/10 cursor-pointer flex items-center justify-between ${
-                          mentionedUsers.find((u) => u.id === friend.id)
-                            ? 'bg-primary/20'
-                            : ''
-                        }`}
-                      >
-                        <span>{friend.name || friend.email}</span>
-                        {mentionedUsers.find((u) => u.id === friend.id) && (
-                          <span className="text-green-400">✓</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  {mentionedUsers.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {mentionedUsers.map((user) => (
-                        <span
-                          key={user.id}
-                          className="px-3 py-1 bg-green-600/30 border border-green-500/50 rounded-full text-sm flex items-center gap-2"
-                        >
-                          @{user.name || user.email.split('@')[0]}
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={friendSearch}
+                    onChange={(e) => setFriendSearch(e.target.value)}
+                    placeholder="Search friends to mention..."
+                    className="w-full px-3 py-2 bg-bg border border-primary rounded text-primary placeholder:text-primary/40"
+                  />
+                  
+                  {/* Friend search results dropdown */}
+                  {friendSearch.trim() && (
+                    <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-card border border-primary rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {friends
+                        .filter(f => {
+                          const searchLower = friendSearch.toLowerCase()
+                          const name = f.name?.toLowerCase() || ''
+                          const email = f.email.toLowerCase()
+                          return (name.includes(searchLower) || email.includes(searchLower)) &&
+                            !mentionedUsers.find(u => u.id === f.id)
+                        })
+                        .slice(0, 8)
+                        .map((friend) => (
                           <button
-                            onClick={() => removeMentionedUser(user.id)}
-                            className="hover:text-red-400"
+                            key={friend.id}
+                            type="button"
+                            onClick={() => {
+                              addMentionedUser(friend)
+                              setFriendSearch('')
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-primary/10 flex items-center gap-2 transition-colors"
                           >
-                            ×
+                            <span className="w-6 h-6 rounded-full bg-green-600/20 flex items-center justify-center text-xs text-green-400">
+                              {(friend.name || friend.email)[0].toUpperCase()}
+                            </span>
+                            <span className="flex-1 truncate">{friend.name || friend.email}</span>
                           </button>
-                        </span>
-                      ))}
+                        ))}
+                      
+                      {friends.filter(f => {
+                        const searchLower = friendSearch.toLowerCase()
+                        const name = f.name?.toLowerCase() || ''
+                        const email = f.email.toLowerCase()
+                        return (name.includes(searchLower) || email.includes(searchLower)) &&
+                          !mentionedUsers.find(u => u.id === f.id)
+                      }).length === 0 && (
+                        <div className="px-3 py-2 text-sm text-primary/50">
+                          No friends found matching "{friendSearch}"
+                        </div>
+                      )}
                     </div>
                   )}
-                </>
+                </div>
               )}
+              
+              <p className="text-xs text-primary/60 mt-1">
+                Type to search your friends. They'll get a notification when you save.
+              </p>
             </div>
 
             <div className="mb-4">
@@ -813,13 +971,27 @@ export default function AddEntryTab() {
         {message && (
           <div className="space-y-3">
             <div
-              className={`p-4 rounded ${
+              className={`p-4 rounded-xl flex items-center gap-3 ${
                 message.type === 'success'
-                  ? 'bg-green-900/30 text-green-300'
-                  : 'bg-warn-bg text-warn-text'
+                  ? 'bg-green-900/30 text-green-300 border border-green-500/30'
+                  : 'bg-warn-bg text-warn-text border border-red-500/30'
               }`}
             >
-              {message.text}
+              {message.type === 'success' ? (
+                <div className="flex-shrink-0">
+                  <ThemeBird size={40} state="sing" />
+                </div>
+              ) : (
+                <div className="flex-shrink-0">
+                  <ThemeBird size={40} state="curious" />
+                </div>
+              )}
+              <div className="flex-1">
+                <div className="font-medium">{message.text}</div>
+                {message.type === 'success' && (
+                  <div className="text-xs text-green-400/70 mt-1">♪ ♫ ♪</div>
+                )}
+              </div>
             </div>
             {/* B-side CTA - Subtle, after save success */}
             {message.type === 'success' && showBSideCTA && (

@@ -40,6 +40,7 @@ export interface DbUser {
   bio: string | null
   favoriteArtists: string | null
   favoriteSongs: string | null
+  theme: string
   createdAt: string
   updatedAt: string
 }

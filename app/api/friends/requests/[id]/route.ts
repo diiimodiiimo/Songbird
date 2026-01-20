@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { sendPushToUser } from '@/lib/sendPushToUser'
 
 const updateRequestSchema = z.object({
   action: z.enum(['accept', 'decline']),
@@ -72,17 +73,24 @@ export async function PUT(
 
     const userMap = new Map((users || []).map(u => [u.id, u]))
 
-    // If accepted, create notification with generated ID
+    // If accepted, create notification and send push
     if (action === 'accept') {
-      const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
       await supabase.from('notifications').insert({
-        id: notifId,
         userId: friendRequest.senderId,
         type: 'friend_request_accepted',
         relatedId: friendRequest.id,
         read: false,
         createdAt: new Date().toISOString(),
       })
+
+      // Get accepter's name for push notification
+      const accepterName = userMap.get(userId)?.name || 'Someone'
+
+      // Send push notification (async, don't wait)
+      sendPushToUser(friendRequest.senderId, 'friend_request_accepted', {
+        userName: accepterName,
+        requestId: friendRequest.id
+      }).catch(err => console.error('[friends/requests/[id]] Push error:', err))
     }
 
     return NextResponse.json({

@@ -5,6 +5,7 @@ import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
+import { ThemeBirdLogo } from '@/components/ThemeBird'
 
 interface SuggestedArtist {
   name: string
@@ -74,13 +75,13 @@ export default function EditProfilePage() {
         const data = await res.json()
         // Map API response to expected format
         setSuggestedArtists(
-          (data.topArtists || []).slice(0, 8).map((item: { artist: string; count: number }) => ({
+          (data.topArtists || []).slice(0, 20).map((item: { artist: string; count: number }) => ({
             name: item.artist,
             count: item.count,
           }))
         )
         setSuggestedSongs(
-          (data.topSongs || []).slice(0, 8).map((item: { songTitle: string; artist: string; count: number }) => ({
+          (data.topSongs || []).slice(0, 20).map((item: { songTitle: string; artist: string; count: number }) => ({
             title: item.songTitle,
             artist: item.artist,
             count: item.count,
@@ -204,9 +205,8 @@ export default function EditProfilePage() {
       {/* Header */}
       <nav className="bg-card border-b border-primary/20 px-3 py-3 sm:px-4 sm:py-4">
         <div className="container mx-auto flex justify-between items-center">
-          <Link href="/" className="text-lg sm:text-xl font-bold text-primary flex items-center gap-2">
-            <Image src="/SongBirdlogo.png" alt="SongBird" width={24} height={24} className="object-contain" />
-            SongBird
+          <Link href="/" className="flex items-center">
+            <ThemeBirdLogo size={24} textSize="md" />
           </Link>
           <Link
             href="/"
@@ -242,22 +242,33 @@ export default function EditProfilePage() {
 
         {/* Profile Section */}
         <section className="bg-surface rounded-xl p-6 space-y-6">
-          {/* Profile Picture */}
+          {/* Profile Picture - Mobile Friendly */}
           <div className="flex flex-col items-center gap-4">
-            {profileImage ? (
-              <Image
-                src={profileImage}
-                alt="Profile"
-                width={120}
-                height={120}
-                className="rounded-full border-4 border-accent"
-                style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
-              />
-            ) : (
-              <div className="w-32 h-32 rounded-full bg-accent/20 border-4 border-accent flex items-center justify-center text-5xl font-bold text-accent">
-                {username.charAt(0).toUpperCase() || user?.emailAddresses[0]?.emailAddress?.charAt(0).toUpperCase() || '?'}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="relative group cursor-pointer"
+            >
+              {profileImage ? (
+                <Image
+                  src={profileImage}
+                  alt="Profile"
+                  width={120}
+                  height={120}
+                  className="rounded-full border-4 border-accent w-28 h-28 sm:w-32 sm:h-32"
+                  style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
+                />
+              ) : (
+                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-accent/20 border-4 border-accent flex items-center justify-center text-4xl sm:text-5xl font-bold text-accent">
+                  {username.charAt(0).toUpperCase() || user?.emailAddresses[0]?.emailAddress?.charAt(0).toUpperCase() || '?'}
+                </div>
+              )}
+              {/* Overlay on hover/tap */}
+              <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">
+                <span className="text-white text-sm font-medium">
+                  {profileImage ? 'Change' : 'Upload'}
+                </span>
               </div>
-            )}
+            </button>
             <input
               ref={fileInputRef}
               type="file"
@@ -265,14 +276,8 @@ export default function EditProfilePage() {
               onChange={handleImageUpload}
               className="hidden"
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors text-sm"
-            >
-              {profileImage ? 'Change Photo' : 'Upload Photo'}
-            </button>
             <p className="text-xs text-text/60 text-center">
-              JPG or PNG, max 5MB
+              Tap photo to {profileImage ? 'change' : 'upload'} • JPG or PNG, max 5MB
             </p>
           </div>
 

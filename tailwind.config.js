@@ -8,22 +8,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#B65A2A',
-        bg: '#1a1a1a',
-        card: '#2a2a2a',
-        text: '#ffffff',
-        'text-muted': '#b0b0b0',
-        'warn-bg': '#5c1d1d',
-        'warn-text': '#ffffff',
+        primary: 'var(--primary)',
+        accent: 'var(--accent)',
+        bg: 'var(--bg)',
+        surface: 'var(--surface)',
+        card: 'var(--card)',
+        text: 'var(--text)',
+        'text-muted': 'var(--text-muted)',
+        'warn-bg': 'var(--warn-bg)',
+        'warn-text': 'var(--warn-text)',
       },
     },
   },
   plugins: [],
 }
-
-
-
-
-
-
-

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
+import ThemeBird from './ThemeBird'
 
 interface WrappedData {
   year: number
@@ -292,7 +293,7 @@ export default function WrappedTab() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="mb-4 animate-bounce flex justify-center">
-            <Image src="/SongBirdlogo.png" alt="SongBird" width={64} height={64} className="object-contain" />
+            <ThemeBird size={64} state="bounce" />
           </div>
           <div className="text-primary/60">Loading your SongBird Wrapped...</div>
         </div>
@@ -304,8 +305,8 @@ export default function WrappedTab() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="mb-4 flex justify-center">
-            <Image src="/SongBirdlogo.png" alt="SongBird" width={64} height={64} className="object-contain animate-pulse" />
+          <div className="mb-4 flex justify-center animate-pulse">
+            <ThemeBird size={64} />
           </div>
           <div className="text-primary/60 mb-4">Loading your wrapped...</div>
           <div className="text-sm text-primary/40 mb-4">
@@ -321,7 +322,7 @@ export default function WrappedTab() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="mb-4 flex justify-center">
-            <Image src="/SongBirdlogo.png" alt="SongBird" width={64} height={64} className="object-contain" />
+            <ThemeBird size={64} />
           </div>
           <div className="text-primary/60 mb-4">No entries found for {currentYear}</div>
           <div className="text-sm text-primary/40 mb-4">
@@ -357,7 +358,7 @@ export default function WrappedTab() {
         return (
           <div className={`text-center ${slideClass}`}>
             <div className="mb-6 animate-bounce flex justify-center">
-              <Image src="/SongBirdlogo.png" alt="SongBird" width={96} height={96} className="object-contain" />
+              <ThemeBird size={96} state="bounce" />
             </div>
             <h2 className="text-4xl font-bold mb-4">SongBird Wrapped</h2>
             <h3 className="text-2xl text-primary/80 mb-8">{wrappedData.year}</h3>
@@ -530,7 +531,7 @@ export default function WrappedTab() {
 
             {/* Flying bird */}
             <div className="absolute top-12 left-1/2 -translate-x-1/2 animate-fly z-20">
-              <Image src="/SongBirdlogo.png" alt="SongBird" width={96} height={96} className="object-contain" />
+              <ThemeBird size={96} state="fly" />
             </div>
 
             {/* Season content */}
@@ -980,7 +981,7 @@ export default function WrappedTab() {
         return (
           <div className={`text-center ${slideClass}`}>
             <div className="mb-6 animate-bounce flex justify-center">
-              <Image src="/SongBirdlogo.png" alt="SongBird" width={96} height={96} className="object-contain" />
+              <ThemeBird size={96} state="happy" />
             </div>
             <h2 className="text-3xl font-bold mb-4">That's a wrap!</h2>
             <div className="text-lg text-primary/60 mb-6">
@@ -1024,13 +1025,13 @@ export default function WrappedTab() {
         {/* SongBird themed background elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-10 left-10 opacity-20 animate-bounce" style={{ animationDuration: '3s' }}>
-            <Image src="/SongBirdlogo.png" alt="SongBird" width={48} height={48} className="object-contain" />
+            <ThemeBird size={48} />
           </div>
           <div className="absolute top-20 right-16 opacity-15 animate-bounce" style={{ animationDuration: '4s', animationDelay: '1s' }}>
-            <Image src="/SongBirdlogo.png" alt="SongBird" width={36} height={36} className="object-contain" />
+            <ThemeBird size={36} />
           </div>
           <div className="absolute bottom-16 left-20 opacity-20 animate-bounce" style={{ animationDuration: '3.5s', animationDelay: '0.5s' }}>
-            <Image src="/SongBirdlogo.png" alt="SongBird" width={36} height={36} className="object-contain" />
+            <ThemeBird size={36} />
           </div>
           
           <div className="absolute top-4 left-4 text-2xl opacity-30 animate-pulse" style={{ animationDuration: '2s' }}>♪</div>

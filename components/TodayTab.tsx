@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import ThemeBird from './ThemeBird'
 
 interface TodayEntry {
   id: string
@@ -88,14 +89,15 @@ export default function TodayTab({ onNavigateToAddEntry }: { onNavigateToAddEntr
         <div className="space-y-4 sm:space-y-8">
           {/* Primary card - the song */}
           <article className="bg-surface rounded-2xl p-4 sm:p-8 shadow-lg">
-            {/* Album art - biggest element */}
-            <div className="relative mb-4 sm:mb-6 mx-auto max-w-md">
+            {/* Album art - biggest element with gradient border */}
+            <div className="relative mb-4 sm:mb-6 mx-auto max-w-md group">
+              <div className="absolute -inset-2 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-2xl opacity-75 blur-md group-hover:opacity-100 transition-opacity"></div>
               <Image
                 src={entry.albumArt || '/placeholder-album.png'}
                 alt={`${entry.songTitle} album art`}
                 width={400}
                 height={400}
-                className="rounded-xl w-full h-auto shadow-md"
+                className="relative rounded-xl w-full h-auto shadow-xl border-2 border-white/20"
                 style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
                 priority
               />
@@ -195,7 +197,7 @@ export default function TodayTab({ onNavigateToAddEntry }: { onNavigateToAddEntr
               className="mb-4 sm:mb-6 hover:scale-110 transition-transform cursor-pointer bg-transparent border-none"
               aria-label="Add today's song"
             >
-              <Image src="/SongBirdlogo.png" alt="SongBird" width={96} height={96} className="object-contain" />
+              <ThemeBird size={96} interactive showTooltip />
             </button>
             <h2 
               className="text-xl sm:text-2xl mb-3 sm:mb-4"

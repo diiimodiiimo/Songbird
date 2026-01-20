@@ -2,6 +2,43 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 
+// Helper to fetch all entries with pagination
+async function fetchAllEntries(supabase: any, startDate?: string) {
+  const allEntries: any[] = []
+  let page = 0
+  const pageSize = 1000
+  let hasMore = true
+
+  while (hasMore) {
+    let query = supabase
+      .from('entries')
+      .select('artist, songTitle, albumArt')
+      .range(page * pageSize, (page + 1) * pageSize - 1)
+      .order('date', { ascending: false })
+
+    if (startDate) {
+      query = query.gte('date', startDate)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+
+    if (data && data.length > 0) {
+      allEntries.push(...data)
+      hasMore = data.length === pageSize
+      page++
+    } else {
+      hasMore = false
+    }
+
+    // Safety limit: max 10 pages (10,000 entries)
+    if (page >= 10) break
+  }
+
+  return allEntries
+}
+
 export async function GET(request: Request) {
   try {
     const { userId } = await auth()
@@ -26,19 +63,12 @@ export async function GET(request: Request) {
       startDate = new Date(now.getFullYear(), 0, 1).toISOString()
     }
 
-    // Get entries
-    let query = supabase.from('entries').select('artist, songTitle, albumArt')
-    if (startDate) {
-      query = query.gte('date', startDate)
-    }
-
-    const { data: entries, error } = await query
-
-    if (error) throw error
+    // Get ALL entries with pagination
+    const entries = await fetchAllEntries(supabase, startDate)
 
     // Count artists
     const artistCounts: Record<string, number> = {}
-    ;(entries || []).forEach((entry) => {
+    entries.forEach((entry) => {
       artistCounts[entry.artist] = (artistCounts[entry.artist] || 0) + 1
     })
 
@@ -49,7 +79,7 @@ export async function GET(request: Request) {
 
     // Count songs
     const songCounts: Record<string, { songTitle: string; artist: string; albumArt: string | null; count: number }> = {}
-    ;(entries || []).forEach((entry) => {
+    entries.forEach((entry) => {
       const key = `${entry.songTitle}|||${entry.artist}`
       if (!songCounts[key]) {
         songCounts[key] = {
@@ -76,7 +106,7 @@ export async function GET(request: Request) {
       topSongs,
       stats: {
         totalUsers: totalUsers || 0,
-        totalEntries: (entries || []).length,
+        totalEntries: entries.length,
         timeFilter,
       },
     })

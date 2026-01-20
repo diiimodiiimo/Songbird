@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import ThemeBird from './ThemeBird'
 
 interface TodayEntry {
   id: string
@@ -38,7 +39,10 @@ export default function TodayScreen() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <div className="mb-4">
+          <ThemeBird size={64} state="bounce" className="animate-bounce" />
+        </div>
         <div className="text-muted">Loading...</div>
       </div>
     )
@@ -178,8 +182,8 @@ function EmptyState() {
 }
 
 function BottomNav() {
-  const navItems: Array<{ label: string; href: string; icon: string; iconImage?: string }> = [
-    { label: 'Today', href: '/', icon: '🐦', iconImage: '/SongBirdlogo.png' },
+  const navItems: Array<{ label: string; href: string; icon: string; useBird?: boolean }> = [
+    { label: 'Today', href: '/', icon: '🐦', useBird: true },
     { label: 'History', href: '/history', icon: '📖' },
     { label: 'Friends', href: '/friends', icon: '👥' },
     { label: 'Profile', href: '/profile', icon: '✨' },
@@ -216,8 +220,8 @@ function BottomNav() {
                   minWidth: '60px',
                 }}
               >
-                {item.iconImage ? (
-                  <Image src={item.iconImage} alt={item.label} width={24} height={24} className="object-contain" />
+                {item.useBird ? (
+                  <ThemeBird size={24} />
                 ) : (
                   <span style={{ fontSize: '1.25rem' }}>{item.icon}</span>
                 )}

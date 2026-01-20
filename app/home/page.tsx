@@ -1,21 +1,22 @@
 'use client'
 
-import { useUser, SignOutButton, useClerk } from '@clerk/nextjs'
+import { useUser, SignOutButton } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
 import Image from 'next/image'
+import { SignInButton, SignUpButton } from '@clerk/nextjs'
+import { useTheme } from '@/lib/theme'
 
 export default function HomePage() {
   const { isSignedIn, isLoaded } = useUser()
-  const { openSignIn, openSignUp } = useClerk()
   const router = useRouter()
+  const { currentTheme } = useTheme()
 
-  // Auto-redirect authenticated users to dashboard
-  useEffect(() => {
-    if (isLoaded && isSignedIn) {
-      router.push('/')
-    }
-  }, [isLoaded, isSignedIn, router])
+  // Don't auto-redirect - let user choose to sign in/out
+  // useEffect(() => {
+  //   if (isLoaded && isSignedIn) {
+  //     router.push('/')
+  //   }
+  // }, [isLoaded, isSignedIn, router])
 
   if (!isLoaded) {
     return (
@@ -28,11 +29,11 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-4">
       <div className="text-center space-y-8 max-w-md">
-        {/* Logo */}
+        {/* Logo - Uses current theme's bird */}
         <div className="flex justify-center mb-8">
           <Image
-            src="/SongBirdlogo.png"
-            alt="SongBird"
+            src={currentTheme.birdLogo}
+            alt={`${currentTheme.name} - SongBird`}
             width={200}
             height={200}
             className="object-contain animate-pulse"
@@ -68,18 +69,16 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="space-y-4 w-full">
-            <button
-              onClick={() => openSignIn({ redirectUrl: '/' })}
-              className="w-full px-8 py-4 bg-surface border-2 border-accent text-accent font-semibold rounded-lg hover:bg-surface/80 transition-colors text-center text-lg"
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => openSignUp({ redirectUrl: '/welcome' })}
-              className="w-full px-8 py-4 bg-surface border-2 border-accent text-accent font-semibold rounded-lg hover:bg-surface/80 transition-colors text-center text-lg"
-            >
-              Create Account
-            </button>
+            <SignInButton mode="modal" fallbackRedirectUrl="/">
+              <button className="w-full px-8 py-4 bg-accent text-bg font-semibold rounded-lg hover:bg-accent/90 transition-colors text-center text-lg">
+                Sign In
+              </button>
+            </SignInButton>
+            <SignUpButton mode="modal" forceRedirectUrl="/welcome">
+              <button className="w-full px-8 py-4 bg-surface border-2 border-accent text-accent font-semibold rounded-lg hover:bg-surface/80 transition-colors text-center text-lg">
+                Create Account
+              </button>
+            </SignUpButton>
           </div>
         )}
       </div>

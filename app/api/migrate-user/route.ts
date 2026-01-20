@@ -28,11 +28,9 @@ export async function POST(request: Request) {
       .from('users')
       .select('id, email, name, clerkId')
       .eq('email', email)
-      .maybeSingle()
+      .single()
 
-    if (findError) throw findError
-
-    if (!dbUser) {
+    if (findError || !dbUser) {
       return NextResponse.json(
         { 
           error: 'User not found in database',
@@ -41,12 +39,6 @@ export async function POST(request: Request) {
         { status: 404 }
       )
     }
-
-    // Get entry count
-    const { count: entriesCount } = await supabase
-      .from('entries')
-      .select('id', { count: 'exact', head: true })
-      .eq('userId', dbUser.id)
 
     // Check if user already has a different Clerk ID
     if (dbUser.clerkId && dbUser.clerkId !== clerkUserId) {
@@ -60,23 +52,27 @@ export async function POST(request: Request) {
     }
 
     // Update user with Clerk ID
-    const { data: updatedUser, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from('users')
-      .update({ clerkId: clerkUserId, updatedAt: new Date().toISOString() })
+      .update({ clerkId: clerkUserId })
       .eq('id', dbUser.id)
-      .select('id, email, name, clerkId')
-      .single()
 
     if (updateError) throw updateError
+
+    // Get entry count
+    const { count: entriesCount } = await supabase
+      .from('entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('userId', dbUser.id)
 
     return NextResponse.json({
       success: true,
       message: 'User successfully linked to Clerk account',
       user: {
-        id: updatedUser.id,
-        email: updatedUser.email,
-        name: updatedUser.name,
-        clerkId: updatedUser.clerkId,
+        id: dbUser.id,
+        email: dbUser.email,
+        name: dbUser.name,
+        clerkId: clerkUserId,
         entriesCount: entriesCount || 0,
       },
     })
@@ -91,4 +87,3 @@ export async function POST(request: Request) {
     )
   }
 }
-

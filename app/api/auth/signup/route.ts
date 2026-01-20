@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { v4 as uuidv4 } from 'uuid'
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -16,12 +17,12 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase()
 
-    // Check if user exists
+    // Check if user already exists
     const { data: existingUser } = await supabase
       .from('users')
       .select('id')
       .eq('email', email)
-      .maybeSingle()
+      .single()
 
     if (existingUser) {
       return NextResponse.json(
@@ -31,27 +32,25 @@ export async function POST(request: Request) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10)
-    
-    // Generate ID for Supabase (it doesn't auto-generate like Prisma)
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
 
-    const { data: user, error } = await supabase
+    const { data: user, error: insertError } = await supabase
       .from('users')
       .insert({
-        id: userId,
+        id: uuidv4(),
         email,
         password: hashedPassword,
         name: name || null,
+        theme: 'american-robin',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
       .select('id')
       .single()
 
-    if (error) throw error
+    if (insertError) throw insertError
 
     return NextResponse.json(
-      { message: 'User created successfully', userId: user.id },
+      { message: 'User created successfully', userId: user?.id },
       { status: 201 }
     )
   } catch (error) {
@@ -63,10 +62,10 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
+    
     return NextResponse.json(
       { error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }
 }
-

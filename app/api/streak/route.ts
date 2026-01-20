@@ -1,63 +1,56 @@
-import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { getSupabase } from '@/lib/supabase'
+import { NextResponse } from 'next/server'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { calculateStreak, restoreStreak } from '@/lib/streak'
 
+// Get current streak status
 export async function GET() {
   try {
-    const { userId: clerkUserId } = await auth()
-    if (!clerkUserId) {
+    const { userId: clerkId } = await auth()
+
+    if (!clerkId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
-    if (!prismaUserId) {
-      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
+    const userId = await getPrismaUserIdFromClerk(clerkId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const supabase = getSupabase()
+    const streakData = await calculateStreak(userId)
 
-    const { data: entries, error } = await supabase
-      .from('entries')
-      .select('date')
-      .eq('userId', prismaUserId)
-      .order('date', { ascending: false })
+    return NextResponse.json(streakData)
+  } catch (error) {
+    console.error('Error getting streak:', error)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
 
-    if (error) throw error
+// Restore a broken streak
+export async function POST(request: Request) {
+  try {
+    const { userId: clerkId } = await auth()
 
-    if (!entries || entries.length === 0) {
-      return NextResponse.json({ currentStreak: 0 })
+    if (!clerkId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Calculate current streak
-    let currentStreak = 0
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    
-    const entryDates = new Set(
-      entries.map((entry) => {
-        const date = new Date(entry.date)
-        date.setHours(0, 0, 0, 0)
-        return date.getTime()
-      })
-    )
-
-    let checkDate = new Date(today)
-    if (!entryDates.has(checkDate.getTime())) {
-      checkDate.setDate(checkDate.getDate() - 1)
+    const userId = await getPrismaUserIdFromClerk(clerkId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    while (entryDates.has(checkDate.getTime())) {
-      currentStreak++
-      checkDate.setDate(checkDate.getDate() - 1)
+    const body = await request.json()
+    const { action } = body
+
+    if (action === 'restore') {
+      const result = await restoreStreak(userId)
+      return NextResponse.json(result)
     }
 
-    return NextResponse.json({ currentStreak })
-  } catch (error: any) {
-    console.error('[streak] Error:', error?.message || error)
-    return NextResponse.json(
-      { error: 'Failed to calculate streak', message: error?.message },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+  } catch (error) {
+    console.error('Error restoring streak:', error)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

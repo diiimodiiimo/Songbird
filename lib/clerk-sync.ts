@@ -150,3 +150,95 @@ export async function getPrismaUserId(): Promise<string | null> {
   if (!userId) return null
   return await getPrismaUserIdFromClerk(userId)
 }
+
+/**
+ * Get or create a full user object from Clerk ID
+ * Returns the database user with common fields
+ */
+export async function getOrCreateUser(clerkUserId: string): Promise<{
+  id: string
+  email: string
+  name: string | null
+  username: string | null
+  image: string | null
+  inviteCode: string | null
+} | null> {
+  if (!clerkUserId) return null
+
+  const supabase = getSupabase()
+
+  // First try to get existing user
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id, email, name, username, image, inviteCode')
+    .or(`id.eq.${clerkUserId},clerkId.eq.${clerkUserId}`)
+    .limit(1)
+    .maybeSingle()
+
+  if (existingUser) {
+    return existingUser
+  }
+
+  // Get Clerk user info to create new user
+  const { currentUser } = await import('@clerk/nextjs/server')
+  const clerkUser = await currentUser()
+
+  if (!clerkUser?.emailAddresses?.[0]?.emailAddress) {
+    return null
+  }
+
+  const email = clerkUser.emailAddresses[0].emailAddress
+
+  // Check by email
+  const { data: userByEmail } = await supabase
+    .from('users')
+    .select('id, email, name, username, image, inviteCode')
+    .eq('email', email)
+    .maybeSingle()
+
+  if (userByEmail) {
+    // Link clerkId for future lookups
+    await supabase
+      .from('users')
+      .update({ clerkId: clerkUserId })
+      .eq('id', userByEmail.id)
+    return userByEmail
+  }
+
+  // Create new user
+  const newUserId = clerkUserId
+  const { data: newUser, error: createError } = await supabase
+    .from('users')
+    .insert({
+      id: newUserId,
+      email,
+      name: clerkUser.firstName
+        ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim()
+        : email.split('@')[0],
+      username: clerkUser.username || null,
+      image: clerkUser.imageUrl || null,
+      clerkId: clerkUserId,
+      password: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+    .select('id, email, name, username, image, inviteCode')
+    .single()
+
+  if (createError) {
+    // Handle unique constraint - retry lookup
+    if (createError.code === '23505') {
+      const { data: retryUser } = await supabase
+        .from('users')
+        .select('id, email, name, username, image, inviteCode')
+        .or(`id.eq.${clerkUserId},email.eq.${email}`)
+        .limit(1)
+        .maybeSingle()
+      return retryUser
+    }
+    console.error('[clerk-sync] Create user error:', createError)
+    return null
+  }
+
+  return newUser
+}

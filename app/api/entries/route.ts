@@ -3,6 +3,13 @@ import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
+// Generate a CUID-like ID
+function generateId(): string {
+  const timestamp = Date.now().toString(36)
+  const randomPart = Math.random().toString(36).substring(2, 10)
+  return `c${timestamp}${randomPart}`
+}
+
 export async function GET(request: Request) {
   try {
     const { userId: clerkUserId } = await auth()
@@ -19,12 +26,9 @@ export async function GET(request: Request) {
     const targetUserId = searchParams.get('userId') || prismaUserId
     const date = searchParams.get('date')
     const excludeImages = searchParams.get('excludeImages') === 'true'
-    const fetchAll = searchParams.get('all') === 'true' // New param to fetch ALL entries
 
     const page = Number(searchParams.get('page') || 1)
-    // Allow higher page sizes, especially when fetching all or excluding images
-    const maxPageSize = fetchAll ? 10000 : (excludeImages ? 5000 : 500)
-    const pageSize = Math.min(Number(searchParams.get('pageSize') || 100), maxPageSize)
+    const pageSize = Math.min(Number(searchParams.get('pageSize') || 100), excludeImages ? 1000 : 100)
     const offset = (page - 1) * pageSize
 
     const supabase = getSupabase()
@@ -85,29 +89,19 @@ export async function GET(request: Request) {
         hasMore: false,
       })
     } else {
-      // All entries (paginated or fetch all)
+      // All entries (paginated)
       const selectFields = excludeImages 
         ? 'id, date, songTitle, artist, albumTitle, notes'
         : 'id, date, songTitle, artist, albumTitle, albumArt, notes'
 
-      let query = supabase
+      const { data: entries, error } = await supabase
         .from('entries')
         .select(`${selectFields}, person_references (id, name)`)
         .eq('userId', targetUserId)
         .order('date', { ascending: false })
-
-      // If fetching all, use high limit instead of pagination range
-      if (fetchAll) {
-        query = query.limit(10000) // Fetch ALL entries
-      } else {
-        query = query.range(offset, offset + pageSize - 1)
-      }
-
-      const { data: entries, error } = await query
+        .range(offset, offset + pageSize - 1)
 
       if (error) throw error
-      
-      console.log('[entries] Fetched:', entries?.length || 0, 'entries, fetchAll:', fetchAll, 'page:', page)
 
       // Get user info separately
       const { data: user } = await supabase
@@ -145,8 +139,7 @@ export async function GET(request: Request) {
         entries: formattedEntries,
         page,
         pageSize,
-        hasMore: fetchAll ? false : (entries?.length || 0) === pageSize,
-        totalFetched: entries?.length || 0,
+        hasMore: (entries?.length || 0) === pageSize,
       })
     }
   } catch (error: any) {
@@ -162,29 +155,13 @@ export async function POST(request: Request) {
   try {
     const { userId: clerkUserId } = await auth()
     if (!clerkUserId) {
-      console.log('[entries POST] No clerkUserId - unauthorized')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('[entries POST] Creating entry for clerk user:', clerkUserId)
-    
-    let userId: string | null = null
-    try {
-      userId = await getPrismaUserIdFromClerk(clerkUserId)
-    } catch (syncError: any) {
-      console.error('[entries POST] User sync error:', syncError?.message || syncError)
-      return NextResponse.json({ 
-        error: 'Failed to sync user account. Please try again.',
-        details: syncError?.message 
-      }, { status: 500 })
-    }
-    
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
-      console.log('[entries POST] No userId found after sync for:', clerkUserId)
-      return NextResponse.json({ error: 'User not found in database. Please refresh and try again.' }, { status: 404 })
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
-    
-    console.log('[entries POST] Using database userId:', userId)
 
     const body = await request.json()
     const {
@@ -234,14 +211,11 @@ export async function POST(request: Request) {
       )
     }
 
-    // Create entry with generated ID (Supabase REST API doesn't auto-generate like Prisma)
-    const entryId = `entry_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-    console.log('[entries POST] Creating entry for date:', dateStr, 'user:', userId, 'id:', entryId)
-    
+    // Create entry
     const { data: entry, error: createError } = await supabase
       .from('entries')
       .insert({
-        id: entryId,
+        id: generateId(),
         userId,
         date: targetDate.toISOString(),
         songTitle,
@@ -261,15 +235,7 @@ export async function POST(request: Request) {
       .select('*')
       .single()
 
-    if (createError) {
-      console.error('[entries POST] Create entry error:', createError)
-      return NextResponse.json({ 
-        error: 'Failed to create entry',
-        details: createError.message 
-      }, { status: 500 })
-    }
-    
-    console.log('[entries POST] Entry created successfully:', entry.id)
+    if (createError) throw createError
 
     // Match people to users and create person references
     if (peopleNames && peopleNames.length > 0) {
@@ -288,7 +254,6 @@ export async function POST(request: Request) {
               user.email?.toLowerCase().split('@')[0] === name.toLowerCase()
           )
           return {
-            id: `pref_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
             entryId: entry.id,
             name,
             userId: matchedUser?.id || null,

@@ -39,7 +39,7 @@ export async function GET() {
     // Get friend user info
     const { data: friends } = await supabase
       .from('users')
-      .select('id, email, name, username, image')
+      .select('id, email, name, image')
       .in('id', friendIds)
 
     return NextResponse.json({ friends: friends || [] })

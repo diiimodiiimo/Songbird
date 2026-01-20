@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import ThemeBird from './ThemeBird'
 
 interface LeaderboardData {
   topArtists: Array<{ artist: string; count: number }>
@@ -11,6 +12,20 @@ interface LeaderboardData {
     totalEntries: number
     timeFilter: string
   }
+}
+
+interface GlobalSOTD {
+  songTitle: string
+  artist: string
+  albumTitle: string
+  albumArt: string | null
+  trackId: string
+  count: number
+  date: string
+  firstLoggedBy: {
+    username: string | null
+    name: string | null
+  } | null
 }
 
 interface ArtistImageCache {
@@ -23,6 +38,9 @@ export default function LeaderboardTab() {
   const [timeFilter, setTimeFilter] = useState<'all' | 'year' | 'month' | 'week'>('all')
   const [viewType, setViewType] = useState<'artists' | 'songs'>('artists')
   const [artistImages, setArtistImages] = useState<ArtistImageCache>({})
+  const [globalSOTD, setGlobalSOTD] = useState<GlobalSOTD | null>(null)
+  const [loadingSOTD, setLoadingSOTD] = useState(true)
+  const [activeTab, setActiveTab] = useState<'today' | 'leaderboard'>('today')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -42,6 +60,26 @@ export default function LeaderboardTab() {
 
     fetchData()
   }, [timeFilter])
+
+  // Fetch Global Song of the Day
+  useEffect(() => {
+    const fetchGlobalSOTD = async () => {
+      setLoadingSOTD(true)
+      try {
+        const response = await fetch('/api/global-sotd')
+        if (response.ok) {
+          const result = await response.json()
+          setGlobalSOTD(result.globalSOTD)
+        }
+      } catch (error) {
+        console.error('Error fetching global SOTD:', error)
+      } finally {
+        setLoadingSOTD(false)
+      }
+    }
+
+    fetchGlobalSOTD()
+  }, [])
 
   useEffect(() => {
     // Fetch artist images for top artists
@@ -68,22 +106,177 @@ export default function LeaderboardTab() {
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-text/60">Loading global leaderboard...</div>
+      <div className="h-full flex flex-col items-center justify-center py-16">
+        <div className="mb-4">
+          <ThemeBird size={72} state="proud" className="animate-bounce" />
+        </div>
+        <p className="text-text/60">Tallying the charts...</p>
+        <p className="text-text/40 text-sm mt-1">🏆</p>
       </div>
     )
   }
 
   if (!data) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-text/60">Failed to load leaderboard</div>
+      <div className="h-full flex flex-col items-center justify-center py-16">
+        <div className="mb-4">
+          <ThemeBird size={72} state="curious" />
+        </div>
+        <p className="text-text/60">Failed to load leaderboard</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-accent/20 text-accent rounded-lg text-sm font-medium hover:bg-accent/30 transition-colors"
+        >
+          Try Again
+        </button>
       </div>
     )
   }
 
+  // Format date nicely
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr + 'T12:00:00')
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+  }
+
   return (
     <div className="h-full overflow-y-auto">
+      {/* Tab Switcher */}
+      <div className="sticky top-0 bg-bg z-10 px-4 py-3 border-b border-surface">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('today')}
+            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-colors ${
+              activeTab === 'today'
+                ? 'bg-accent text-bg'
+                : 'bg-surface text-text/70 hover:text-text'
+            }`}
+          >
+            🌍 Today
+          </button>
+          <button
+            onClick={() => setActiveTab('leaderboard')}
+            className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-colors ${
+              activeTab === 'leaderboard'
+                ? 'bg-accent text-bg'
+                : 'bg-surface text-text/70 hover:text-text'
+            }`}
+          >
+            🏆 Leaderboard
+          </button>
+        </div>
+      </div>
+
+      {/* Today Tab - Global Song of the Day */}
+      {activeTab === 'today' && (
+        <div className="p-4">
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-bold text-text mb-1">Global Song of the Day</h2>
+            <p className="text-text/60 text-sm">The most logged song across all SongBird users</p>
+          </div>
+
+          {loadingSOTD ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <ThemeBird size={72} state="curious" className="animate-pulse" />
+              <p className="text-text/60 mt-4">Finding yesterday's top song...</p>
+            </div>
+          ) : globalSOTD ? (
+            <div className="bg-surface rounded-2xl p-6 mb-6">
+              <div className="text-center mb-4">
+                <div className="inline-block px-3 py-1 bg-accent/20 text-accent rounded-full text-xs font-medium mb-3">
+                  {formatDate(globalSOTD.date)}
+                </div>
+              </div>
+
+              {/* Album Art - Large */}
+              <div className="flex justify-center mb-6">
+                {globalSOTD.albumArt ? (
+                  <div className="relative">
+                    <Image
+                      src={globalSOTD.albumArt}
+                      alt={globalSOTD.albumTitle}
+                      width={200}
+                      height={200}
+                      className="rounded-xl shadow-2xl"
+                    />
+                    <div className="absolute -top-3 -right-3 w-12 h-12 bg-accent rounded-full flex items-center justify-center text-2xl shadow-lg">
+                      👑
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-48 h-48 bg-bg rounded-xl flex items-center justify-center">
+                    <span className="text-6xl">🎵</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Song Info */}
+              <div className="text-center mb-4">
+                <h3 className="text-2xl font-bold text-text mb-1">{globalSOTD.songTitle}</h3>
+                <p className="text-text/70 text-lg">{globalSOTD.artist}</p>
+              </div>
+
+              {/* Stats */}
+              <div className="flex justify-center gap-6 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-accent">{globalSOTD.count}</div>
+                  <div className="text-xs text-text/50">
+                    {globalSOTD.count === 1 ? 'person logged' : 'people logged'}
+                  </div>
+                </div>
+              </div>
+
+              {/* First logged by */}
+              {globalSOTD.firstLoggedBy && (
+                <div className="mt-4 pt-4 border-t border-text/10 text-center">
+                  <p className="text-xs text-text/50">
+                    First logged by{' '}
+                    <span className="text-accent font-medium">
+                      @{globalSOTD.firstLoggedBy.username || globalSOTD.firstLoggedBy.name || 'anonymous'}
+                    </span>
+                  </p>
+                </div>
+              )}
+
+              {/* Spotify Link */}
+              {globalSOTD.trackId && (
+                <div className="mt-4 text-center">
+                  <a
+                    href={`https://open.spotify.com/track/${globalSOTD.trackId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#1DB954]/20 text-[#1DB954] rounded-lg text-sm font-medium hover:bg-[#1DB954]/30 transition-colors"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                    </svg>
+                    Listen on Spotify
+                  </a>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-surface rounded-2xl p-8 text-center">
+              <ThemeBird size={80} state="curious" />
+              <h3 className="text-lg font-semibold text-text mt-4 mb-2">No Global SOTD Yet</h3>
+              <p className="text-text/60 text-sm">
+                Check back tomorrow! We need entries from yesterday to find the top song.
+              </p>
+            </div>
+          )}
+
+          {/* Info Card */}
+          <div className="bg-surface/50 rounded-xl p-4 text-center">
+            <p className="text-text/50 text-xs">
+              🌍 The Global Song of the Day is the song that was logged by the most SongBird users yesterday.
+              When there's a tie, the song that was logged first wins!
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Leaderboard Tab */}
+      {activeTab === 'leaderboard' && (
       <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="text-center">
@@ -401,6 +594,7 @@ export default function LeaderboardTab() {
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }

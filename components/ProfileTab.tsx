@@ -5,6 +5,12 @@ import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
+import ThemeSelector from './ThemeSelector'
+import ThemeBird, { ThemeBirdDisplay } from './ThemeBird'
+import YourBirds from './YourBirds'
+import InviteFriendsCTA from './InviteFriendsCTA'
+import { trackTabView, trackProfileViewed } from '@/lib/analytics-client'
+import { useTheme, themes, type ThemeId } from '@/lib/theme'
 
 interface Friend {
   id: string
@@ -34,13 +40,6 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
   const [showSettings, setShowSettings] = useState(false)
   const [showAddFriendModal, setShowAddFriendModal] = useState(false)
   const [friendUsernameInput, setFriendUsernameInput] = useState('')
-  const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
-  const [pendingRequests, setPendingRequests] = useState<Array<{
-    id: string
-    sender: { id: string; name: string | null; username: string | null; email: string; image: string | null }
-  }>>([])
-  const [handlingRequest, setHandlingRequest] = useState(false)
-  const [currentDbUserId, setCurrentDbUserId] = useState<string | null>(null)
   const [theatricsEnabled, setTheatricsEnabled] = useState(() => {
     // Load from localStorage
     if (typeof window !== 'undefined') {
@@ -48,6 +47,30 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
     }
     return false
   })
+  const [showVibesSection, setShowVibesSection] = useState(false)
+  const [vibedSongs, setVibedSongs] = useState<Array<{
+    id: string
+    entry: {
+      id: string
+      songTitle: string
+      artist: string
+      albumTitle: string
+      albumArt: string
+      date: string
+      trackId: string
+      user: {
+        id: string
+        username: string | null
+        name: string | null
+        email: string
+        image: string | null
+      }
+    }
+  }>>([])
+  const [loadingVibes, setLoadingVibes] = useState(false)
+  const [showBirdsSection, setShowBirdsSection] = useState(false)
+  const [unlockedBirds, setUnlockedBirds] = useState<Array<{ birdId: string; isUnlocked: boolean }>>([])
+  const { setTheme } = useTheme()
 
   useEffect(() => {
     // Save to localStorage whenever it changes
@@ -61,71 +84,42 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
       fetchProfile()
       fetchFriends()
       fetchEntryCount()
-      fetchPendingRequests()
+      fetchVibedSongs()
+      fetchBirdStatuses()
+      trackTabView('profile')
+      trackProfileViewed(true)
     }
   }, [isLoaded, user])
 
-  // Listen for event to open friends section (from notification clicks)
-  useEffect(() => {
-    const handleOpenFriends = () => {
-      setShowFriendsSection(true)
-    }
-    window.addEventListener('openFriendsSection', handleOpenFriends)
-    return () => window.removeEventListener('openFriendsSection', handleOpenFriends)
-  }, [])
-
-  const fetchPendingRequests = async () => {
+  const fetchBirdStatuses = async () => {
     try {
-      // Also fetch the profile to get the database user ID
-      let dbUserId = currentDbUserId
-      if (!dbUserId) {
-        const profileRes = await fetch('/api/profile')
-        if (profileRes.ok) {
-          const profileData = await profileRes.json()
-          dbUserId = profileData.user?.id || null
-          setCurrentDbUserId(dbUserId)
-        }
-      }
-
-      const res = await fetch('/api/friends/requests?type=all')
-      const data = await res.json()
-      if (res.ok && data.requests) {
-        // Filter for pending requests where user is the receiver
-        const received = data.requests.filter((r: any) => 
-          r.status === 'pending' && r.receiverId === dbUserId
-        )
-        setPendingRequestsCount(received.length)
-        setPendingRequests(received)
+      const res = await fetch('/api/birds/status')
+      if (res.ok) {
+        const data = await res.json()
+        setUnlockedBirds(data.birds || [])
       }
     } catch (error) {
-      console.error('Error fetching pending requests:', error)
+      console.error('Failed to fetch bird statuses:', error)
     }
   }
 
-  const handleFriendRequest = async (requestId: string, action: 'accept' | 'decline') => {
-    setHandlingRequest(true)
-    try {
-      const res = await fetch(`/api/friends/requests/${requestId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      })
+  const handleSelectBird = async (birdId: ThemeId) => {
+    await setTheme(birdId)
+  }
 
+  const fetchVibedSongs = async () => {
+    if (!user || !isLoaded) return
+    setLoadingVibes(true)
+    try {
+      const res = await fetch('/api/vibes')
       if (res.ok) {
-        setMessage({ 
-          type: 'success', 
-          text: action === 'accept' ? 'Friend request accepted!' : 'Friend request declined' 
-        })
-        fetchFriends()
-        fetchPendingRequests()
-      } else {
         const data = await res.json()
-        setMessage({ type: 'error', text: data.error || 'Failed to update friend request' })
+        setVibedSongs(data.vibes || [])
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update friend request' })
+      console.error('Failed to fetch vibed songs:', error)
     } finally {
-      setHandlingRequest(false)
+      setLoadingVibes(false)
     }
   }
 
@@ -215,7 +209,12 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
       )}
 
       {loadingProfile ? (
-        <div className="text-center py-16 text-text/60">Loading profile...</div>
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="mb-4">
+            <ThemeBird size={72} state="curious" className="animate-pulse" />
+          </div>
+          <p className="text-text/60">Getting ready...</p>
+        </div>
       ) : (
         <>
           <div className="flex justify-end">
@@ -243,9 +242,40 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
           </div>
 
           {/* Profile View */}
-          <section className="bg-surface rounded-xl p-8 space-y-6">
+          <section className="bg-surface rounded-xl p-8 space-y-6 relative overflow-hidden">
+            {/* Background: Unlocked birds (subtle) */}
+            {unlockedBirds.filter(b => b.isUnlocked).length > 1 && (
+              <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-10">
+                <div className="flex flex-wrap justify-center items-center gap-4 p-4">
+                  {unlockedBirds
+                    .filter(b => b.isUnlocked)
+                    .map((bird, index) => {
+                      const theme = themes.find(t => t.id === bird.birdId)
+                      if (!theme) return null
+                      return (
+                        <div 
+                          key={bird.birdId}
+                          className="w-16 h-16 flex-shrink-0"
+                          style={{
+                            transform: `rotate(${(index % 2 === 0 ? 1 : -1) * (5 + index * 2)}deg)`,
+                          }}
+                        >
+                          <Image
+                            src={theme.birdLogo}
+                            alt={theme.name}
+                            width={64}
+                            height={64}
+                            className="object-contain"
+                          />
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
+            
             {/* Avatar */}
-            <div className="flex flex-col items-center gap-4">
+            <div className="flex flex-col items-center gap-4 relative z-10">
               {profileImage ? (
                 <Image
                   src={profileImage}
@@ -262,6 +292,11 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
               )}
             </div>
 
+            {/* Your Songbird */}
+            <div className="flex justify-center -mt-2 mb-2">
+              <ThemeBirdDisplay size={80} showName interactive />
+            </div>
+
             {/* Username */}
             <div className="text-center">
               <h2 className="text-2xl font-bold mb-1">{username || 'Anonymous'}</h2>
@@ -275,30 +310,85 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
               </div>
             )}
 
-            {/* Stats Row - entries, friends */}
-            <div className="flex justify-center gap-8 py-4 border-y border-surface">
+            {/* Stats Row - entries, friends, vibes */}
+            <div className="flex justify-center gap-6 sm:gap-8 py-4 border-y border-surface">
               <div className="text-center">
-                <div className="text-2xl font-bold text-accent">{entryCount}</div>
-                <div className="text-sm text-text/60">Entries</div>
+                <div className="text-xl sm:text-2xl font-bold text-accent">{entryCount}</div>
+                <div className="text-xs sm:text-sm text-text/60">Entries</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-accent">{friends.length}</div>
-                <div className="text-sm text-text/60">Friends</div>
+                <div className="text-xl sm:text-2xl font-bold text-accent">{friends.length}</div>
+                <div className="text-xs sm:text-sm text-text/60">Friends</div>
               </div>
+              <button 
+                onClick={() => setShowVibesSection(!showVibesSection)}
+                className="text-center hover:opacity-80 transition-opacity"
+              >
+                <div className="text-xl sm:text-2xl font-bold text-pink-400">{vibedSongs.length}</div>
+                <div className="text-xs sm:text-sm text-text/60">Vibes</div>
+              </button>
             </div>
 
-            {/* Buttons: View Friends, Add Friend */}
-            <div className="flex gap-3 justify-center">
+            {/* Vibed Songs Section */}
+            {showVibesSection && (
+              <div className="bg-bg rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-3 text-pink-400 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
+                  </svg>
+                  Songs You Vibed
+                </h3>
+                {loadingVibes ? (
+                  <p className="text-text/60 text-sm text-center py-4">Loading...</p>
+                ) : vibedSongs.length === 0 ? (
+                  <p className="text-text/60 text-sm text-center py-4">
+                    No vibed songs yet. Visit the Feed to vibe to your friends' songs!
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {vibedSongs.map((vibe) => (
+                      <a
+                        key={vibe.id}
+                        href={`https://open.spotify.com/track/${vibe.entry.trackId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface/50 transition-colors group"
+                      >
+                        {vibe.entry.albumArt && (
+                          <Image
+                            src={vibe.entry.albumArt}
+                            alt={vibe.entry.songTitle}
+                            width={48}
+                            height={48}
+                            className="rounded"
+                            style={{ aspectRatio: '1/1', objectFit: 'cover' }}
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate group-hover:text-accent transition-colors">
+                            {vibe.entry.songTitle}
+                          </div>
+                          <div className="text-xs text-text/60 truncate">
+                            {vibe.entry.artist} • shared by {vibe.entry.user.username || vibe.entry.user.name || vibe.entry.user.email.split('@')[0]}
+                          </div>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#1DB954] opacity-0 group-hover:opacity-100 transition-opacity">
+                          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                        </svg>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Buttons: View Friends, Add Friend, Invite */}
+            <div className="flex flex-wrap gap-3 justify-center">
               <button
                 onClick={() => setShowFriendsSection(!showFriendsSection)}
-                className="relative px-4 py-2 bg-accent/10 border border-accent/30 rounded-lg text-accent font-medium hover:bg-accent/20 transition-colors"
+                className="px-4 py-2 bg-accent/10 border border-accent/30 rounded-lg text-accent font-medium hover:bg-accent/20 transition-colors"
               >
                 View Friends
-                {pendingRequestsCount > 0 && (
-                  <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full animate-pulse">
-                    {pendingRequestsCount} pending
-                  </span>
-                )}
               </button>
               <button
                 onClick={() => setShowAddFriendModal(true)}
@@ -306,25 +396,57 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
               >
                 Add Friend
               </button>
+              <button
+                onClick={async () => {
+                  try {
+                    // Get or create invite code
+                    const res = await fetch('/api/invites', { method: 'POST' })
+                    if (res.ok) {
+                      const data = await res.json()
+                      const url = `${window.location.origin}/join/${data.code}`
+                      
+                      if (navigator.share) {
+                        await navigator.share({
+                          title: 'Join me on SongBird',
+                          text: 'I\'m logging my daily songs on SongBird. Join me!',
+                          url,
+                        })
+                      } else {
+                        await navigator.clipboard.writeText(url)
+                        setMessage({ type: 'success', text: 'Invite link copied!' })
+                        setTimeout(() => setMessage(null), 3000)
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Error sharing invite:', err)
+                  }
+                }}
+                className="px-4 py-2 bg-green-600/20 border border-green-500/30 rounded-lg text-green-400 font-medium hover:bg-green-600/30 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                Invite Friends
+              </button>
             </div>
 
             {/* Add Friend Modal */}
             {showAddFriendModal && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                 <div className="bg-surface rounded-xl p-6 max-w-md w-full">
-                  <h3 className="text-xl font-bold mb-4">Find a Friend</h3>
+                  <h3 className="text-xl font-bold mb-4">Add Friend</h3>
                   <p className="text-text/70 text-sm mb-4">
-                    Search by username, email, or name to view their profile
+                    Enter a username to view their profile
                   </p>
                   <div className="flex gap-2 mb-4">
                     <input
                       type="text"
-                      placeholder="Username, email, or name"
+                      placeholder="Enter username (e.g., username)"
                       value={friendUsernameInput}
                       onChange={(e) => setFriendUsernameInput(e.target.value.replace('@', ''))}
                       onKeyPress={(e) => {
                         if (e.key === 'Enter' && friendUsernameInput.trim()) {
-                          window.location.href = `/user/${encodeURIComponent(friendUsernameInput.trim())}`
+                          window.location.href = `/user/${friendUsernameInput.trim()}`
                         }
                       }}
                       className="flex-1 px-4 py-2 bg-bg border border-text/20 rounded-lg text-text placeholder:text-text/40"
@@ -335,7 +457,7 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
                     <button
                       onClick={() => {
                         if (friendUsernameInput.trim()) {
-                          window.location.href = `/user/${encodeURIComponent(friendUsernameInput.trim())}`
+                          window.location.href = `/user/${friendUsernameInput.trim()}`
                         }
                       }}
                       disabled={!friendUsernameInput.trim()}
@@ -388,114 +510,51 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
 
             {/* Friends List (shown when View Friends clicked) */}
             {showFriendsSection && (
-              <div className="space-y-6">
-                {/* Pending Friend Requests */}
-                {pendingRequests.length > 0 && (
-                  <div className="bg-accent/10 border border-accent/30 rounded-xl p-4">
-                    <h3 className="text-lg font-semibold mb-3 text-accent flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-accent text-bg flex items-center justify-center text-xs font-bold">
-                        {pendingRequests.length}
-                      </span>
-                      Friend Requests
-                    </h3>
-                    <div className="space-y-3">
-                      {pendingRequests.map((request) => (
-                        <div
-                          key={request.id}
-                          className="bg-surface rounded-lg p-4 flex items-center justify-between"
-                        >
-                          <div className="flex items-center gap-3">
-                            {request.sender?.image ? (
-                              <Image
-                                src={request.sender.image}
-                                alt={request.sender.name || 'User'}
-                                width={44}
-                                height={44}
-                                className="rounded-full"
-                              />
-                            ) : (
-                              <div className="w-11 h-11 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold">
-                                {(request.sender?.name || request.sender?.email || '?').charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            <div>
-                              <div className="font-semibold">
-                                {request.sender?.name || request.sender?.email?.split('@')[0]}
-                              </div>
-                              <div className="text-sm text-text/50">
-                                @{request.sender?.username || request.sender?.email?.split('@')[0]}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleFriendRequest(request.id, 'accept')}
-                              disabled={handlingRequest}
-                              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
-                            >
-                              ✓ Accept
-                            </button>
-                            <button
-                              onClick={() => handleFriendRequest(request.id, 'decline')}
-                              disabled={handlingRequest}
-                              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-text/80">Friends</h3>
+                {friends.length === 0 ? (
+                  <div className="text-center py-8 text-text/60">
+                    <p>No friends yet.</p>
+                    <p className="text-sm mt-2">Use "Add Friend" to find and connect with others!</p>
                   </div>
-                )}
-
-                {/* Friends List */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-3 text-text/80">Friends ({friends.length})</h3>
-                  {friends.length === 0 ? (
-                    <div className="text-center py-8 text-text/60">
-                      <p>No friends yet.</p>
-                      <p className="text-sm mt-2">Use "Add Friend" to find and connect with others!</p>
-                    </div>
-                  ) : (
-                    <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
-                      {friends.map((friend) => (
-                        <Link
-                          key={friend.id}
-                          href={`/user/${friend.username || friend.email}`}
-                          className="bg-bg rounded-lg p-3 flex items-center gap-3 hover:bg-accent/5 border border-transparent hover:border-accent/30 transition-all group"
-                        >
-                          {friend.image ? (
-                            <Image
-                              src={friend.image}
-                              alt={friend.name || 'Friend'}
-                              width={48}
-                              height={48}
-                              className="rounded-full object-cover flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-lg flex-shrink-0">
-                              {(friend.name || friend.email)[0].toUpperCase()}
+                ) : (
+                  <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
+                    {friends.map((friend) => (
+                      <Link
+                        key={friend.id}
+                        href={`/user/${friend.username || friend.email}`}
+                        className="bg-bg rounded-lg p-3 flex items-center gap-3 hover:bg-accent/5 border border-transparent hover:border-accent/30 transition-all group"
+                      >
+                        {friend.image ? (
+                          <Image
+                            src={friend.image}
+                            alt={friend.name || 'Friend'}
+                            width={48}
+                            height={48}
+                            className="rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-lg flex-shrink-0">
+                            {(friend.name || friend.email)[0].toUpperCase()}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold truncate group-hover:text-accent transition-colors text-sm">
+                            {friend.name || 'Friend'}
+                          </div>
+                          {friend.username && (
+                            <div className="text-xs text-text/60 truncate">
+                              @{friend.username}
                             </div>
                           )}
-                          <div className="flex-1 min-w-0">
-                            <div className="font-semibold truncate group-hover:text-accent transition-colors text-sm">
-                              {friend.name || 'Friend'}
-                            </div>
-                            {friend.username && (
-                              <div className="text-xs text-text/60 truncate">
-                                @{friend.username}
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-accent opacity-0 group-hover:opacity-100 transition-opacity">
-                            →
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                        </div>
+                        <div className="text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+                          →
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -523,7 +582,50 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
         </button>
         
         {showSettings && (
-          <div className="px-6 pb-6 space-y-4">
+          <div className="px-6 pb-6 space-y-6">
+            {/* Your Birds Section */}
+            <div>
+              <button
+                onClick={() => setShowBirdsSection(!showBirdsSection)}
+                className="w-full flex items-center justify-between mb-3"
+              >
+                <label className="text-sm font-medium text-text/80">
+                  <span className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-lg">🐦</span>
+                    Your Flock
+                  </span>
+                </label>
+                <span className="text-text/50">{showBirdsSection ? '−' : '+'}</span>
+              </button>
+              
+              {showBirdsSection ? (
+                <YourBirds onSelectBird={handleSelectBird} compact />
+              ) : (
+                <p className="text-xs text-text/60">Unlock birds through streaks and milestones. Tap to expand.</p>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-surface/50" />
+
+            {/* Theme Selector */}
+            <div>
+              <label className="block mb-3 text-sm font-medium text-text/80">
+                <span className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="5"/>
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                  </svg>
+                  Theme
+                </span>
+              </label>
+              <ThemeSelector compact />
+              <p className="text-xs text-text/60 mt-2">Choose a songbird theme to personalize your experience</p>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-surface/50" />
+
             {/* Email (Read-only) */}
             <div>
               <label className="block mb-2 text-sm font-medium text-text/80">Email</label>
@@ -535,6 +637,26 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
               />
               <p className="text-xs text-text/60 mt-1">Email cannot be changed</p>
             </div>
+
+            {/* Tutorial / How it Works */}
+            <div>
+              <label className="block mb-2 text-sm font-medium text-text/80">
+                <span className="flex items-center gap-2">
+                  <span className="text-lg">📖</span>
+                  Tutorial
+                </span>
+              </label>
+              <button
+                onClick={() => window.location.href = '/welcome?tutorial=true'}
+                className="w-full px-4 py-3 bg-accent/10 border border-accent/30 text-accent font-medium rounded-lg hover:bg-accent/20 transition-colors"
+              >
+                View How SongBird Works
+              </button>
+              <p className="text-xs text-text/60 mt-1">Watch the intro again without changing your profile</p>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-surface/50" />
 
             {/* Sign Out */}
             <button

@@ -44,16 +44,37 @@ export async function GET(request: Request) {
 
     const supabase = getSupabase()
 
-    // Get entries for the year
-    const { data: entries, error } = await supabase
-      .from('entries')
-      .select('id, date, songTitle, artist, albumTitle, albumArt, durationMs, explicit, popularity, releaseDate, trackId, uri, notes')
-      .eq('userId', userId)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: true })
+    // Get ALL entries for the year with pagination
+    const allEntries: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let hasMore = true
 
-    if (error) throw error
+    while (hasMore) {
+      const { data: pageEntries, error: pageError } = await supabase
+        .from('entries')
+        .select('id, date, songTitle, artist, albumTitle, albumArt, durationMs, explicit, popularity, releaseDate, trackId, uri, notes')
+        .eq('userId', userId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true })
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+
+      if (pageError) throw pageError
+
+      if (pageEntries && pageEntries.length > 0) {
+        allEntries.push(...pageEntries)
+        hasMore = pageEntries.length === pageSize
+        page++
+      } else {
+        hasMore = false
+      }
+
+      // Safety limit
+      if (page >= 10) break
+    }
+
+    const entries = allEntries
 
     if (!entries || entries.length === 0) {
       // Check available years
@@ -182,7 +203,7 @@ export async function GET(request: Request) {
     // Top people
     const peopleCounts: Record<string, number> = {}
     entriesWithPeople.forEach((entry) => {
-      entry.people.forEach((person) => {
+      entry.people.forEach((person: { name: string; userId?: string | null }) => {
         peopleCounts[person.name] = (peopleCounts[person.name] || 0) + 1
       })
     })
@@ -235,7 +256,7 @@ export async function GET(request: Request) {
         artistKeywords[entry.artist][word] = (artistKeywords[entry.artist][word] || 0) + 1
       })
 
-      entry.people.forEach((person) => {
+      entry.people.forEach((person: { name: string }) => {
         if (!personKeywords[person.name]) personKeywords[person.name] = {}
         words.forEach(word => {
           personKeywords[person.name][word] = (personKeywords[person.name][word] || 0) + 1

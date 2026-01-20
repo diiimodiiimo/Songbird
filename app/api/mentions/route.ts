@@ -4,6 +4,7 @@ import { getSupabase } from '@/lib/supabase'
 import { areFriends } from '@/lib/friends'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { sendPushToUser } from '@/lib/sendPushToUser'
 
 const mentionSchema = z.object({
   entryId: z.string(),
@@ -67,12 +68,10 @@ export async function POST(request: Request) {
       )
     }
 
-    // Create the mention with generated ID
-    const mentionId = `mention_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    // Create the mention
     const { data: mention, error } = await supabase
       .from('mentions')
       .insert({
-        id: mentionId,
         entryId,
         userId: mentionedUserId,
         createdAt: new Date().toISOString(),
@@ -89,16 +88,34 @@ export async function POST(request: Request) {
       .eq('id', mentionedUserId)
       .single()
 
-    // Create notification with generated ID
-    const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    // Create notification
     await supabase.from('notifications').insert({
-      id: notifId,
       userId: mentionedUserId,
       type: 'mention',
       relatedId: entryId,
       read: false,
       createdAt: new Date().toISOString(),
     })
+
+    // Get current user and entry info for push notification
+    const { data: currentUserInfo } = await supabase
+      .from('users')
+      .select('name, username')
+      .eq('id', currentUserId)
+      .single()
+
+    const { data: entryInfo } = await supabase
+      .from('entries')
+      .select('songTitle')
+      .eq('id', entryId)
+      .single()
+
+    // Send push notification (async, don't wait)
+    sendPushToUser(mentionedUserId, 'mention', {
+      userName: currentUserInfo?.name || currentUserInfo?.username || 'Someone',
+      songTitle: entryInfo?.songTitle,
+      entryId
+    }).catch(err => console.error('[mentions] Push error:', err))
 
     return NextResponse.json({ mention: { ...mention, user } }, { status: 201 })
   } catch (error: any) {

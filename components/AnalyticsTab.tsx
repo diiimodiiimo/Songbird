@@ -5,6 +5,7 @@ import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
 import Link from 'next/link'
 import { getSpotifyArtistUrl } from '@/lib/spotify'
+import ThemeBird from './ThemeBird'
 
 interface AnalyticsData {
   topArtists: Array<{ artist: string; count: number }>
@@ -195,32 +196,38 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
       </div>
 
       {loading ? (
-        <div className="text-center py-16 text-text/60">Gathering insights...</div>
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="mb-4">
+            <ThemeBird size={72} state="curious" className="animate-pulse" />
+          </div>
+          <p className="text-text/60">Crunching your music data...</p>
+          <p className="text-text/40 text-sm mt-1">Finding patterns in your listening</p>
+        </div>
       ) : analytics ? (
         <div className="space-y-12">
           {/* Artist Search - Clean Search UI - MOVED TO TOP */}
-          <section>
-            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <span>🔍</span>
-              Search by Artist
-            </h3>
-            <p className="text-text/60 text-sm mb-4">Find all the days a specific artist soundtracked your life</p>
-            <div className="bg-surface rounded-xl p-6">
-              <div className="flex gap-3 mb-6">
+          <section className="bg-gradient-to-r from-accent/10 via-accent/5 to-transparent rounded-2xl p-1">
+            <div className="bg-surface rounded-xl p-4 sm:p-6">
+              <h3 className="text-xl sm:text-2xl font-bold mb-2 flex items-center gap-2 text-accent">
+                <span className="text-2xl">🔍</span>
+                Search by Artist
+              </h3>
+              <p className="text-text/60 text-sm mb-4">Find all the days a specific artist soundtracked your life</p>
+              <div className="flex flex-col sm:flex-row gap-3 mb-6">
                 <input
                   type="text"
                   value={artistSearchQuery}
                   onChange={(e) => setArtistSearchQuery(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && searchArtist()}
-                  placeholder="Enter artist name..."
-                  className="flex-1 bg-bg rounded-lg px-4 py-3 text-text placeholder:text-text/40 border border-transparent focus:border-accent outline-none transition-colors"
+                  placeholder="Type an artist name..."
+                  className="flex-1 bg-bg rounded-lg px-4 py-3 text-text placeholder:text-text/40 border-2 border-accent/30 focus:border-accent outline-none transition-colors text-base"
                 />
                 <button
                   onClick={searchArtist}
                   disabled={artistSearchLoading}
-                  className="bg-accent text-bg px-6 py-3 rounded-lg font-medium disabled:opacity-50 hover:bg-accent/90 transition-colors"
+                  className="bg-accent text-bg px-6 py-3 rounded-lg font-bold disabled:opacity-50 hover:bg-accent/90 transition-colors shadow-lg hover:shadow-accent/20 text-base"
                 >
-                  {artistSearchLoading ? 'Searching...' : 'Search'}
+                  {artistSearchLoading ? 'Searching...' : '🔍 Search'}
                 </button>
               </div>
 
@@ -674,9 +681,14 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
           )}
         </div>
       ) : (
-        <div className="text-center py-16">
-          <div className="text-6xl mb-4">📊</div>
-          <p className="text-text/60">No data available yet</p>
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="mb-4">
+            <ThemeBird size={80} />
+          </div>
+          <p className="text-text/60 text-lg mb-2">No insights yet</p>
+          <p className="text-text/40 text-sm text-center max-w-xs">
+            Start logging your songs of the day to discover patterns in your music taste!
+          </p>
         </div>
       )}
     </div>

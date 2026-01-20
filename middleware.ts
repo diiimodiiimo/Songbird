@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server'
 
 const isPublicRoute = createRouteMatcher([
   '/home(.*)',
-  '/welcome(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/join/(.*)',
   '/api/webhooks(.*)',
+  '/api/invites/validate(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req) => {
@@ -20,11 +21,11 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(homeUrl)
   }
   
-  // Redirect authenticated users from /home to dashboard
-  if (userId && req.nextUrl.pathname === '/home') {
-    const dashboardUrl = new URL('/', req.url)
-    return NextResponse.redirect(dashboardUrl)
-  }
+  // Don't auto-redirect from /home - let user choose to sign in/out
+  // if (userId && req.nextUrl.pathname === '/home') {
+  //   const dashboardUrl = new URL('/', req.url)
+  //   return NextResponse.redirect(dashboardUrl)
+  // }
 })
 
 export const config = {

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, Crimson_Text } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
@@ -11,9 +11,26 @@ const crimsonText = Crimson_Text({
 
 const inter = Inter({ subsets: ['latin'] })
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: "#e94560",
+}
+
 export const metadata: Metadata = {
   title: "SongBird",
   description: "Your personal music journal and social platform",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/SongBirdlogo.png",
+    apple: "/SongBirdlogo.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "SongBird",
+  },
 }
 
 export default function RootLayout({

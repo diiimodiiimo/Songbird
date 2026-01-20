@@ -5,8 +5,20 @@ import { supabase, getSupabase } from '@/lib/supabase'
 /**
  * Debug endpoint to test database connection and auth
  * Visit /api/debug to see connection status
+ * 
+ * SECURITY: Disabled in production unless DEBUG_SECRET is provided
  */
-export async function GET() {
+export async function GET(request: Request) {
+  // Block access in production unless DEBUG_SECRET is provided
+  if (process.env.NODE_ENV === 'production') {
+    const authHeader = request.headers.get('authorization')
+    const debugSecret = process.env.DEBUG_SECRET
+    
+    if (!debugSecret || authHeader !== `Bearer ${debugSecret}`) {
+      return NextResponse.json({ error: 'Debug endpoint disabled in production' }, { status: 403 })
+    }
+  }
+
   const startTime = Date.now()
   const results: Record<string, any> = {
     timestamp: new Date().toISOString(),

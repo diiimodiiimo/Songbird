@@ -8,11 +8,11 @@ import AddEntryTab from './AddEntryTab'
 import AnalyticsTab from './AnalyticsTab'
 import MemoryTab from './MemoryTab'
 import FeedTab from './FeedTab'
+import AviaryTab from './AviaryTab'
 import ProfileTab from './ProfileTab'
 import WrappedTab from './WrappedTab'
 import LeaderboardTab from './LeaderboardTab'
 import Navigation from './Navigation'
-import WelcomeModal from './WelcomeModal'
 
 // Custom SongBird-style icon components (temporary SVG placeholders)
 const TodayIcon = ({ active }: { active: boolean }) => (
@@ -51,79 +51,44 @@ const ProfileIcon = ({ active }: { active: boolean }) => (
   </svg>
 )
 
+const AviaryIcon = ({ active }: { active: boolean }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Bird body */}
+    <ellipse cx="12" cy="13" rx="6" ry="5" stroke="currentColor" strokeWidth="2" fill={active ? "currentColor" : "none"} />
+    {/* Bird head */}
+    <circle cx="16" cy="9" r="3" stroke="currentColor" strokeWidth="2" fill={active ? "currentColor" : "none"} />
+    {/* Beak */}
+    <path d="M19 9L21 8.5L19 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    {/* Tail */}
+    <path d="M6 13L3 11M6 14L3 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+)
+
 export default function Dashboard() {
   const { user, isLoaded } = useUser()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState('today')
   const [insightsSubTab, setInsightsSubTab] = useState<'analytics' | 'wrapped' | 'leaderboard'>('analytics')
-  const [showWelcome, setShowWelcome] = useState(false)
-  const [suggestedUsername, setSuggestedUsername] = useState('')
 
-  // Check if username is set on first load (non-blocking)
-  useEffect(() => {
-    if (isLoaded && user) {
-      // Check username in background after a short delay
-      const timer = setTimeout(async () => {
-        try {
-          const res = await fetch('/api/profile')
-          if (res.ok) {
-            const data = await res.json()
-            if (!data.user?.username) {
-              // Generate suggested username from email or name
-              const email = user.emailAddresses?.[0]?.emailAddress || ''
-              const name = user.firstName || ''
-              setSuggestedUsername(
-                name.toLowerCase().replace(/[^a-z0-9_]/g, '') || 
-                email.split('@')[0].replace(/[^a-z0-9_]/g, '') || 
-                ''
-              )
-              setShowWelcome(true)
-            }
-          }
-        } catch (error) {
-          console.error('Error checking username:', error)
-        }
-      }, 500)
-      
-      return () => clearTimeout(timer)
-    }
-  }, [isLoaded, user])
-
-  // Handle URL params for navigation (e.g., from notification clicks)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const tab = params.get('tab')
-      const showFriends = params.get('showFriends')
-      
-      if (tab === 'profile') {
-        setActiveTab('profile')
-        if (showFriends === 'true') {
-          // Dispatch event to open friends section in ProfileTab
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('openFriendsSection'))
-          }, 100)
-        }
-        // Clean up URL
-        window.history.replaceState({}, '', '/')
-      }
-    }
-  }, [])
+  // Username setup is now handled by onboarding flow
 
   useEffect(() => {
     const handleNavigateToWrapped = () => {
-      setActiveTab('insights')
-      setInsightsSubTab('wrapped')
+      // Only allow wrapped for admin user
+      if (user?.emailAddresses?.[0]?.emailAddress === 'dimotesi44@gmail.com') {
+        setActiveTab('insights')
+        setInsightsSubTab('wrapped')
+      } else {
+        setActiveTab('insights')
+        setInsightsSubTab('analytics')
+      }
     }
     const handleNavigateToMemory = (e: any) => {
       setActiveTab('history')
       // Could pass date if needed
     }
     const handleNavigateToFriends = () => {
-      setActiveTab('profile')
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('openFriendsSection'))
-      }, 100)
+      setActiveTab('feed')
     }
     window.addEventListener('navigateToWrapped', handleNavigateToWrapped)
     window.addEventListener('navigateToMemory', handleNavigateToMemory)
@@ -133,22 +98,24 @@ export default function Dashboard() {
       window.removeEventListener('navigateToMemory', handleNavigateToMemory)
       window.removeEventListener('navigateToFriends', handleNavigateToFriends)
     }
-  }, [])
+  }, [user])
 
-  // Main tabs - LOCKED ORDER: Today | Memory | Feed | Insights | Profile
+  // Main tabs - LOCKED ORDER: Today | Memory | Feed | Aviary | Insights | Profile
   const mainTabs = [
     { id: 'today', label: 'Today', icon: TodayIcon },
     { id: 'history', label: 'Memory', icon: MemoryIcon },
     { id: 'feed', label: 'Feed', icon: FeedIcon },
+    { id: 'aviary', label: 'Aviary', icon: AviaryIcon },
     { id: 'insights', label: 'Insights', icon: InsightsIcon },
     { id: 'profile', label: 'Profile', icon: ProfileIcon },
   ]
 
-  // All tabs for desktop sidebar
+  // All tabs for desktop sidebar (uses theme bird for Today tab)
   const allTabs = [
-    { id: 'today', label: 'Today', emoji: '🐦', icon: '/SongBirdlogo.png' },
+    { id: 'today', label: 'Today', emoji: '🐦', useBird: true },
     { id: 'history', label: 'Memory', emoji: '📖' },
     { id: 'feed', label: 'Feed', emoji: '🎵' },
+    { id: 'aviary', label: 'Aviary', emoji: '🪺' },
     { id: 'insights', label: 'Insights', emoji: '📊' },
     { id: 'wrapped', label: 'Wrapped', emoji: '🎁' },
     { id: 'leaderboard', label: 'Leaderboard', emoji: '🏆' },
@@ -165,6 +132,7 @@ export default function Dashboard() {
       case 'today': return <AddEntryTab />
       case 'history': return <MemoryTab />
       case 'feed': return <FeedTab />
+      case 'aviary': return <AviaryTab />
       case 'profile': return <ProfileTab />
       case 'wrapped': return <WrappedTab />
       case 'leaderboard': return <LeaderboardTab />
@@ -191,16 +159,19 @@ export default function Dashboard() {
               >
                 📊 Analytics
               </button>
-              <button
-                onClick={() => setInsightsSubTab('wrapped')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  insightsSubTab === 'wrapped'
-                    ? 'bg-primary text-white'
-                    : 'bg-card text-text-muted hover:text-white'
-                }`}
-              >
-                🎁 Wrapped
-              </button>
+              {/* Wrapped only visible to dimotesi44@gmail.com */}
+              {user?.emailAddresses?.[0]?.emailAddress === 'dimotesi44@gmail.com' && (
+                <button
+                  onClick={() => setInsightsSubTab('wrapped')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    insightsSubTab === 'wrapped'
+                      ? 'bg-primary text-white'
+                      : 'bg-card text-text-muted hover:text-white'
+                  }`}
+                >
+                  🎁 Wrapped
+                </button>
+              )}
               <button
                 onClick={() => setInsightsSubTab('leaderboard')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -245,13 +216,6 @@ export default function Dashboard() {
           })}
         </div>
       </div>
-
-      {/* Welcome Modal for new users */}
-      <WelcomeModal 
-        isOpen={showWelcome} 
-        onClose={() => setShowWelcome(false)}
-        suggestedUsername={suggestedUsername}
-      />
     </div>
   )
 }

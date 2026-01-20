@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { sendPushToUser } from '@/lib/sendPushToUser'
 
 const friendRequestSchema = z.object({
   receiverUsername: z.string().min(1).max(50),
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
     // Fetch user info
     const { data: users } = await supabase
       .from('users')
-      .select('id, email, name, username, image')
+      .select('id, email, name, image')
       .in('id', Array.from(userIds))
 
     const userMap = new Map((users || []).map(u => [u.id, u]))
@@ -78,63 +79,32 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { userId: clerkUserId } = await auth()
-    console.log('[friend-request] Starting request, clerkUserId:', clerkUserId)
-    
     if (!clerkUserId) {
-      console.log('[friend-request] No clerkUserId - unauthorized')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
-    console.log('[friend-request] Database userId:', userId)
-    
     if (!userId) {
-      console.log('[friend-request] User not found in database')
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const body = await request.json()
-    console.log('[friend-request] Request body:', body)
     const { receiverUsername } = friendRequestSchema.parse(body)
-    console.log('[friend-request] Looking for receiver:', receiverUsername)
 
     const supabase = getSupabase()
 
-    // Find the receiver user by username, email, or name
-    // First try exact username match
-    let { data: receiver } = await supabase
+    // Find the receiver user by username
+    const { data: receiver } = await supabase
       .from('users')
-      .select('id, email, name, username, image')
+      .select('id, email, name, image')
       .eq('username', receiverUsername)
-      .maybeSingle()
-
-    // If not found by username, try email (without @domain if provided)
-    if (!receiver) {
-      const searchTerm = receiverUsername.toLowerCase()
-      const { data: allUsers } = await supabase
-        .from('users')
-        .select('id, email, name, username, image')
-      
-      // Find by email prefix, full email, or name
-      receiver = (allUsers || []).find(u => 
-        u.email?.toLowerCase() === searchTerm ||
-        u.email?.toLowerCase().split('@')[0] === searchTerm ||
-        u.name?.toLowerCase() === searchTerm
-      ) || null
-    }
+      .single()
 
     if (!receiver) {
-      console.log('[friend-request] Receiver not found for:', receiverUsername)
-      return NextResponse.json({ 
-        error: 'User not found', 
-        hint: 'Try searching by their email or full name' 
-      }, { status: 404 })
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
-
-    console.log('[friend-request] Found receiver:', receiver.id, receiver.username || receiver.email)
 
     if (receiver.id === userId) {
-      console.log('[friend-request] Trying to add self as friend')
       return NextResponse.json(
         { error: 'Cannot send friend request to yourself' },
         { status: 400 }
@@ -142,19 +112,13 @@ export async function POST(request: Request) {
     }
 
     // Check if a request already exists
-    console.log('[friend-request] Checking for existing request between', userId, 'and', receiver.id)
-    const { data: existingRequest, error: existingError } = await supabase
+    const { data: existingRequest } = await supabase
       .from('friend_requests')
       .select('id, status')
       .or(`and(senderId.eq.${userId},receiverId.eq.${receiver.id}),and(senderId.eq.${receiver.id},receiverId.eq.${userId})`)
       .maybeSingle()
 
-    if (existingError) {
-      console.error('[friend-request] Error checking existing:', existingError)
-    }
-
     if (existingRequest) {
-      console.log('[friend-request] Existing request found:', existingRequest)
       if (existingRequest.status === 'pending') {
         return NextResponse.json({ error: 'Friend request already exists' }, { status: 400 })
       }
@@ -163,14 +127,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create the friend request with generated ID
-    const requestId = `fr_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-    console.log('[friend-request] Creating new request from', userId, 'to', receiver.id, 'with id:', requestId)
-    
+    // Create the friend request
     const { data: friendRequest, error } = await supabase
       .from('friend_requests')
       .insert({
-        id: requestId,
         senderId: userId,
         receiverId: receiver.id,
         status: 'pending',
@@ -180,24 +140,29 @@ export async function POST(request: Request) {
       .select('id, senderId, receiverId, status, createdAt')
       .single()
 
-    if (error) {
-      console.error('[friend-request] Insert error:', error)
-      throw error
-    }
-    
-    console.log('[friend-request] Successfully created:', friendRequest)
+    if (error) throw error
 
-    // Create notification for the receiver about the friend request
-    const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    // Create notification for the receiver
     await supabase.from('notifications').insert({
-      id: notifId,
       userId: receiver.id,
       type: 'friend_request',
       relatedId: friendRequest.id,
       read: false,
       createdAt: new Date().toISOString(),
     })
-    console.log('[friend-request] Notification created for receiver')
+
+    // Get sender info for push notification
+    const { data: sender } = await supabase
+      .from('users')
+      .select('name, username')
+      .eq('id', userId)
+      .single()
+
+    // Send push notification (async, don't wait)
+    sendPushToUser(receiver.id, 'friend_request', {
+      userName: sender?.name || sender?.username || 'Someone',
+      requestId: friendRequest.id
+    }).catch(err => console.error('[friends/requests] Push error:', err))
 
     return NextResponse.json({
       friendRequest: {

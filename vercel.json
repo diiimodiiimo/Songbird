@@ -1,8 +1,21 @@
 {
-  "buildCommand": "next build",
+  "buildCommand": "prisma generate && next build",
   "installCommand": "npm install --legacy-peer-deps",
   "framework": "nextjs",
-  "regions": ["iad1"]
+  "regions": ["iad1"],
+  "env": {
+    "PRISMA_GENERATE_DATAPROXY": "false"
+  },
+  "crons": [
+    {
+      "path": "/api/push/reminder",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/push/reminder",
+      "schedule": "0 21 * * *"
+    }
+  ]
 }
 
 

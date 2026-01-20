@@ -59,25 +59,6 @@ export async function GET(request: Request) {
               .single()
             relatedData = { ...entry, user }
           }
-        } else if (notification.type === 'friend_request' && notification.relatedId) {
-          // For incoming friend requests - show who sent it
-          const { data: friendRequest } = await supabase
-            .from('friend_requests')
-            .select('id, senderId, receiverId, status')
-            .eq('id', notification.relatedId)
-            .single()
-
-          if (friendRequest) {
-            const { data: sender } = await supabase
-              .from('users')
-              .select('id, email, name, image, username')
-              .eq('id', friendRequest.senderId)
-              .single()
-            relatedData = {
-              ...friendRequest,
-              sender,
-            }
-          }
         } else if (notification.type === 'friend_request_accepted' && notification.relatedId) {
           const { data: friendRequest } = await supabase
             .from('friend_requests')
@@ -95,6 +76,48 @@ export async function GET(request: Request) {
               sender: senderRes.data,
               receiver: receiverRes.data,
             }
+          }
+        } else if (notification.type === 'vibe' && notification.relatedId) {
+          // relatedId is the entryId for vibe notifications
+          const { data: entry } = await supabase
+            .from('entries')
+            .select('id, songTitle, artist, date')
+            .eq('id', notification.relatedId)
+            .single()
+          
+          if (entry) {
+            relatedData = entry
+          }
+        } else if (notification.type === 'comment' && notification.relatedId) {
+          // relatedId is the commentId for comment notifications
+          const { data: comment } = await supabase
+            .from('comments')
+            .select('id, content, userId, entryId')
+            .eq('id', notification.relatedId)
+            .single()
+          
+          if (comment) {
+            const { data: user } = await supabase
+              .from('users')
+              .select('id, email, name, image')
+              .eq('id', comment.userId)
+              .single()
+            relatedData = { ...comment, user }
+          }
+        } else if (notification.type === 'friend_request' && notification.relatedId) {
+          const { data: friendRequest } = await supabase
+            .from('friend_requests')
+            .select('id, senderId, receiverId, status')
+            .eq('id', notification.relatedId)
+            .single()
+
+          if (friendRequest) {
+            const { data: sender } = await supabase
+              .from('users')
+              .select('id, email, name, image')
+              .eq('id', friendRequest.senderId)
+              .single()
+            relatedData = { ...friendRequest, sender }
           }
         }
 

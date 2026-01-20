@@ -2,8 +2,8 @@
 
 import { useUser, SignOutButton } from '@clerk/nextjs'
 import Link from 'next/link'
-import Image from 'next/image'
 import Notifications from './Notifications'
+import { ThemeBirdLogo } from './ThemeBird'
 
 export default function Navigation() {
   const { user, isLoaded } = useUser()
@@ -11,9 +11,8 @@ export default function Navigation() {
   return (
     <nav className="bg-card border-b border-white/10 px-4 py-3">
       <div className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-xl font-bold text-white flex items-center gap-2">
-          <Image src="/SongBirdlogo.png" alt="SongBird" width={32} height={32} className="object-contain" />
-          SongBird
+        <Link href="/" className="flex items-center">
+          <ThemeBirdLogo size={32} textSize="lg" interactive showTooltip />
         </Link>
         <div className="flex items-center gap-4">
           {isLoaded && user && (

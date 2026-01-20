@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
 import Link from 'next/link'
+import ThemeBird, { ThemeBirdLogo } from '@/components/ThemeBird'
 
 interface PublicProfile {
   username: string
@@ -38,9 +39,6 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true)
   const [sendingRequest, setSendingRequest] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [showFriendsModal, setShowFriendsModal] = useState(false)
-  const [friends, setFriends] = useState<Array<{ id: string; username: string | null; name: string | null; image: string | null }>>([])
-  const [loadingFriends, setLoadingFriends] = useState(false)
 
   useEffect(() => {
     fetchPublicProfile()
@@ -48,28 +46,6 @@ export default function UserProfilePage() {
       fetchFriendshipStatus()
     }
   }, [username, isLoaded, currentUser])
-
-  useEffect(() => {
-    if (showFriendsModal && profile) {
-      fetchFriends()
-    }
-  }, [showFriendsModal, profile])
-
-  const fetchFriends = async () => {
-    if (!profile) return
-    setLoadingFriends(true)
-    try {
-      const res = await fetch(`/api/users/${username}/friends`)
-      if (res.ok) {
-        const data = await res.json()
-        setFriends(data.friends || [])
-      }
-    } catch (error) {
-      console.error('Error fetching friends:', error)
-    } finally {
-      setLoadingFriends(false)
-    }
-  }
 
   const fetchPublicProfile = async () => {
     try {
@@ -104,17 +80,15 @@ export default function UserProfilePage() {
     setMessage(null)
 
     try {
-      // Use username if available, otherwise fall back to email
-      const identifier = profile.username || profile.email
       const res = await fetch('/api/friends/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receiverUsername: identifier }),
+        body: JSON.stringify({ receiverUsername: profile.username }),
       })
 
       const data = await res.json()
       if (res.ok) {
-        setMessage({ type: 'success', text: `Friend request sent to ${profile.name || profile.username}!` })
+        setMessage({ type: 'success', text: `Friend request sent to @${profile.username}!` })
         fetchFriendshipStatus()
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to send friend request' })
@@ -138,7 +112,9 @@ export default function UserProfilePage() {
     return (
       <div className="min-h-screen bg-bg text-text flex items-center justify-center">
         <div className="text-center">
-          <Image src="/SongBirdlogo.png" alt="SongBird" width={64} height={64} className="object-contain mx-auto mb-4" />
+          <div className="mx-auto mb-4 flex justify-center">
+            <ThemeBird size={64} />
+          </div>
           <div className="text-xl mb-2">User not found</div>
           <Link href="/" className="text-accent hover:underline">
             Go back home
@@ -174,9 +150,8 @@ export default function UserProfilePage() {
                 <path d="M19 12H5" />
               </svg>
             </button>
-            <Link href="/" className="text-lg sm:text-xl font-bold text-primary flex items-center gap-2">
-              <Image src="/SongBirdlogo.png" alt="SongBird" width={24} height={24} className="object-contain" />
-              SongBird
+            <Link href="/" className="flex items-center">
+              <ThemeBirdLogo size={24} textSize="md" />
             </Link>
           </div>
         </div>
@@ -214,15 +189,16 @@ export default function UserProfilePage() {
           <div className="flex justify-center gap-8 mb-6 pb-6 border-b border-bg">
             <div className="text-center">
               <div className="text-2xl font-bold">{profile.stats.totalEntries}</div>
-              <div className="text-sm text-text/60">Entries</div>
+              <div className="text-sm text-text/60">Songs</div>
             </div>
-            <button 
-              onClick={() => setShowFriendsModal(true)}
-              className="text-center hover:bg-accent/10 px-4 py-2 -my-2 rounded-lg transition-colors"
-            >
+            <div className="text-center">
               <div className="text-2xl font-bold">{profile.stats.friendsCount}</div>
               <div className="text-sm text-text/60">Friends</div>
-            </button>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold">{profile.favoriteArtists.length}</div>
+              <div className="text-sm text-text/60">Fav Artists</div>
+            </div>
           </div>
 
           {/* Bio */}
@@ -231,80 +207,6 @@ export default function UserProfilePage() {
               <p className="text-text/90">{profile.bio}</p>
             </div>
           )}
-
-          {/* Friend Action Button - Inside Card */}
-          {message && (
-            <div
-              className={`mb-4 p-3 rounded-lg text-sm ${
-                message.type === 'success'
-                  ? 'bg-green-900/30 text-green-300 border border-green-500/50'
-                  : 'bg-red-900/30 text-red-300 border border-red-500/50'
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
-
-          {/* ADD FRIEND BUTTON - ALWAYS VISIBLE */}
-          <div className="mb-6 mt-6">
-            {!currentUser ? (
-              // Not logged in - show sign in prompt
-              <Link
-                href="/home"
-                className="block w-full px-6 py-4 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 transition-colors text-center text-lg shadow-lg"
-              >
-                👤 Sign in to Add Friend
-              </Link>
-            ) : friendshipStatus?.isOwnProfile ? (
-              // This is the user's own profile - show edit button
-              <Link
-                href="/profile/edit"
-                className="block w-full px-6 py-4 bg-gray-600 text-white font-bold rounded-xl hover:bg-gray-700 transition-colors text-center text-lg"
-              >
-                ✏️ Edit Your Profile
-              </Link>
-            ) : friendshipStatus?.isFriend ? (
-              // Already friends
-              <div className="w-full px-6 py-4 bg-green-500 text-white font-bold rounded-xl text-center text-lg">
-                ✅ Already Friends!
-              </div>
-            ) : friendshipStatus?.hasPendingRequest && friendshipStatus.requestDirection === 'sent' ? (
-              // Request already sent
-              <div className="w-full px-6 py-4 bg-yellow-500 text-black font-bold rounded-xl text-center text-lg">
-                ⏳ Friend Request Sent
-              </div>
-            ) : friendshipStatus?.hasPendingRequest && friendshipStatus.requestDirection === 'received' ? (
-              // They sent us a request
-              <Link
-                href="/"
-                className="block w-full px-6 py-4 bg-purple-500 text-white font-bold rounded-xl hover:bg-purple-600 transition-colors text-center text-lg shadow-lg"
-              >
-                🎉 Accept Their Friend Request!
-              </Link>
-            ) : (
-              // Can add friend OR still loading - show the button anyway!
-              <button
-                onClick={sendFriendRequest}
-                disabled={sendingRequest}
-                className="w-full px-6 py-4 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 transition-colors disabled:bg-blue-300 disabled:cursor-wait text-center text-lg shadow-lg flex items-center justify-center gap-3"
-              >
-                {sendingRequest ? (
-                  <>
-                    <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                    </svg>
-                    Sending Request...
-                  </>
-                ) : (
-                  <>
-                    <span className="text-2xl">➕</span>
-                    Add Friend
-                  </>
-                )}
-              </button>
-            )}
-          </div>
 
           {/* Favorite Artists */}
           {profile.favoriteArtists.length > 0 && (
@@ -341,62 +243,52 @@ export default function UserProfilePage() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Friends Modal */}
-      {showFriendsModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl w-full max-w-md max-h-[80vh] overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-bg">
-              <h3 className="text-lg font-bold">{profile.name || profile.username}'s Friends</h3>
-              <button
-                onClick={() => setShowFriendsModal(false)}
-                className="p-2 hover:bg-bg rounded-lg transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="overflow-y-auto max-h-96 p-4">
-              {loadingFriends ? (
-                <div className="text-center py-8 text-text/60">Loading friends...</div>
-              ) : friends.length === 0 ? (
-                <div className="text-center py-8 text-text/60">No friends yet</div>
-              ) : (
-                <div className="space-y-3">
-                  {friends.map((friend) => (
-                    <Link
-                      key={friend.id}
-                      href={`/user/${friend.username || friend.id}`}
-                      onClick={() => setShowFriendsModal(false)}
-                      className="flex items-center gap-3 p-3 bg-bg rounded-lg hover:bg-accent/10 transition-colors"
-                    >
-                      {friend.image ? (
-                        <Image
-                          src={friend.image}
-                          alt={friend.name || 'User'}
-                          width={40}
-                          height={40}
-                          className="rounded-full"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold">
-                          {(friend.name || friend.username || '?').charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div>
-                        <div className="font-semibold">{friend.name || friend.username}</div>
-                        {friend.username && (
-                          <div className="text-sm text-text/60">@{friend.username}</div>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
+        {/* Friend Action Button */}
+        {message && (
+          <div
+            className={`mb-4 p-3 rounded-lg text-sm ${
+              message.type === 'success'
+                ? 'bg-green-900/30 text-green-300 border border-green-500/50'
+                : 'bg-red-900/30 text-red-300 border border-red-500/50'
+            }`}
+          >
+            {message.text}
           </div>
-        </div>
-      )}
+        )}
+
+        {friendshipStatus && !friendshipStatus.isOwnProfile && (
+          <div className="space-y-3">
+            {friendshipStatus.isFriend ? (
+              <div className="w-full px-6 py-3 bg-accent/20 border border-accent/30 text-accent font-medium rounded-lg text-center">
+                ✓ Friends
+              </div>
+            ) : friendshipStatus.hasPendingRequest && friendshipStatus.requestDirection === 'sent' ? (
+              <div className="w-full px-6 py-3 bg-surface border border-text/20 text-text/60 font-medium rounded-lg text-center">
+                Friend Request Sent
+              </div>
+            ) : friendshipStatus.hasPendingRequest && friendshipStatus.requestDirection === 'received' ? (
+              <div className="space-y-2">
+                <p className="text-sm text-text/70 text-center">You have a pending friend request from this user</p>
+                <Link
+                  href="/"
+                  className="block w-full px-6 py-3 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors text-center"
+                >
+                  View Requests
+                </Link>
+              </div>
+            ) : (
+              <button
+                onClick={sendFriendRequest}
+                disabled={sendingRequest}
+                className="w-full px-6 py-3 bg-accent text-bg font-medium rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sendingRequest ? 'Sending...' : 'Add Friend'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

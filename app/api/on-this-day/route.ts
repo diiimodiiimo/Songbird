@@ -29,49 +29,39 @@ export async function GET(request: Request) {
 
     const supabase = getSupabase()
 
-    // Fetch ALL entries using pagination to avoid any limits
-    let allEntries: any[] = []
+    // Fetch ALL entries with pagination - NO YEAR LIMIT, access entire history
+    const allEntries: any[] = []
     let page = 0
     const pageSize = 1000
     let hasMore = true
 
     while (hasMore) {
-      const { data: pageData, error: pageError } = await supabase
+      const { data: pageEntries, error: pageError } = await supabase
         .from('entries')
-        .select('id, date, songTitle, artist, albumArt, notes')
+        .select('id, date, songTitle, artist, albumArt, notes, durationMs, explicit, popularity, releaseDate')
         .eq('userId', userId)
         .order('date', { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1)
 
       if (pageError) throw pageError
 
-      if (pageData && pageData.length > 0) {
-        allEntries = [...allEntries, ...pageData]
+      if (pageEntries && pageEntries.length > 0) {
+        allEntries.push(...pageEntries)
+        hasMore = pageEntries.length === pageSize
         page++
-        hasMore = pageData.length === pageSize
       } else {
         hasMore = false
       }
+
+      // Safety limit: max 20 pages (20,000 entries) - ENTIRE HISTORY
+      if (page >= 20) break
     }
 
-    console.log('[on-this-day] Total entries for user:', allEntries.length)
-
-    // Filter entries where month/day matches - include ALL years
-    // Use string parsing to avoid timezone issues
-    const entries = (allEntries || []).filter((entry) => {
-      const dateStr = typeof entry.date === 'string' ? entry.date.split('T')[0] : new Date(entry.date).toISOString().split('T')[0]
-      const [, entryMonthStr, entryDayStr] = dateStr.split('-')
-      const entryMonth = parseInt(entryMonthStr)
-      const entryDay = parseInt(entryDayStr)
-      
-      const matches = entryMonth === monthNum && entryDay === dayNum
-      if (matches) {
-        console.log('[on-this-day] Found matching entry:', dateStr, entry.songTitle)
-      }
-      return matches
+    // Filter entries where month/day matches - searches ENTIRE history
+    const entries = allEntries.filter((entry) => {
+      const entryDate = new Date(entry.date)
+      return entryDate.getMonth() + 1 === monthNum && entryDate.getDate() === dayNum
     })
-
-    console.log('[on-this-day] Matching entries for', monthNum, '/', dayNum, ':', entries.length)
 
     // Get person references
     const entryIds = entries.map(e => e.id)
@@ -100,7 +90,13 @@ export async function GET(request: Request) {
       notesPreview: entry.notes
         ? entry.notes.substring(0, 160) + (entry.notes.length > 160 ? '...' : '')
         : null,
+      notes: entry.notes || null,
       people: personRefsByEntry.get(entry.id) || [],
+      // Additional metadata for AI insights
+      durationMs: entry.durationMs || null,
+      explicit: entry.explicit || false,
+      popularity: entry.popularity || null,
+      releaseDate: entry.releaseDate || null,
     }))
 
     return NextResponse.json({ entries: formattedEntries })

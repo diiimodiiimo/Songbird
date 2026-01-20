@@ -18,6 +18,698 @@ async function getAccessToken() {
   }
 }
 
+// ============================================================================
+// EXPANDED THEME DETECTION LIBRARY
+// ============================================================================
+
+const themeKeywords: { [key: string]: string[] } = {
+  // Emotional themes
+  love: ['love', 'heart', 'kiss', 'romance', 'darling', 'baby', 'sweet', 'lover', 'beloved', 'adore', 'desire', 'passion', 'devotion', 'soulmate', 'forever', 'together'],
+  heartbreak: ['cry', 'tears', 'sad', 'lonely', 'hurt', 'pain', 'broken', 'goodbye', 'miss', 'lost', 'gone', 'leave', 'left', 'apart', 'over', 'end', 'regret', 'sorry'],
+  joy: ['happy', 'joy', 'smile', 'laugh', 'fun', 'celebrate', 'alive', 'free', 'wonderful', 'amazing', 'perfect', 'beautiful', 'blessed', 'grateful', 'sunshine'],
+  anger: ['hate', 'angry', 'mad', 'fight', 'rage', 'fire', 'burn', 'destroy', 'war', 'enemy', 'revenge', 'bitter'],
+  longing: ['wish', 'dream', 'hope', 'wait', 'someday', 'maybe', 'wondering', 'searching', 'looking', 'find', 'need', 'want'],
+  reflection: ['think', 'wonder', 'remember', 'memory', 'past', 'time', 'yesterday', 'years', 'ago', 'looking back', 'used to', 'once'],
+  
+  // Energy/mood themes
+  energetic: ['fire', 'energy', 'power', 'strong', 'wild', 'intense', 'electric', 'thunder', 'lightning', 'explode', 'rush', 'adrenaline'],
+  chill: ['calm', 'peace', 'quiet', 'soft', 'gentle', 'smooth', 'easy', 'relax', 'slow', 'mellow', 'cool', 'breeze', 'drift'],
+  party: ['party', 'dance', 'club', 'night', 'celebration', 'friday', 'saturday', 'weekend', 'drink', 'cheers', 'toast', 'vibe'],
+  melancholy: ['rain', 'grey', 'blue', 'shadow', 'dark', 'cold', 'winter', 'alone', 'empty', 'hollow', 'fading'],
+  
+  // Life themes
+  growth: ['rise', 'grow', 'change', 'new', 'begin', 'start', 'born', 'rebirth', 'transform', 'evolve', 'become', 'learn'],
+  freedom: ['free', 'fly', 'escape', 'run', 'away', 'road', 'travel', 'journey', 'adventure', 'wild', 'open', 'horizon'],
+  home: ['home', 'house', 'place', 'belong', 'family', 'safe', 'comfort', 'warm', 'return', 'back', 'roots', 'where'],
+  youth: ['young', 'kid', 'child', 'teenage', 'school', 'summer', 'innocent', 'first', 'forever young', 'memories'],
+  
+  // Nature/setting themes
+  night: ['night', 'moon', 'stars', 'midnight', 'dark', 'twilight', 'evening', 'late', 'dreams', 'sleep'],
+  morning: ['morning', 'dawn', 'sunrise', 'wake', 'coffee', 'new day', 'early', 'fresh', 'bright'],
+  summer: ['summer', 'sun', 'beach', 'heat', 'hot', 'vacation', 'july', 'august', 'pool', 'tan'],
+  rain: ['rain', 'storm', 'thunder', 'umbrella', 'wet', 'pour', 'drops', 'clouds', 'grey'],
+  
+  // Activity themes
+  driving: ['drive', 'road', 'car', 'highway', 'cruise', 'ride', 'wheels', 'fast', 'speed', 'miles'],
+  dancing: ['dance', 'move', 'groove', 'step', 'rhythm', 'beat', 'sway', 'spin', 'floor'],
+  dreaming: ['dream', 'sleep', 'fantasy', 'imagine', 'wish', 'clouds', 'float', 'wonder'],
+  
+  // Relationship themes
+  friendship: ['friend', 'together', 'us', 'we', 'crew', 'squad', 'homies', 'brothers', 'sisters', 'ride or die'],
+  devotion: ['always', 'forever', 'never', 'promise', 'vow', 'loyal', 'faithful', 'til', 'death'],
+  seduction: ['body', 'touch', 'feel', 'skin', 'close', 'whisper', 'secret', 'tension', 'attraction'],
+}
+
+// Decade-specific vocabulary for release date analysis
+const decadeVibes: { [key: string]: { adjectives: string[], descriptors: string[] } } = {
+  '1960s': { adjectives: ['classic', 'timeless', 'foundational', 'revolutionary'], descriptors: ['golden era', 'the roots', 'where it all began'] },
+  '1970s': { adjectives: ['groovy', 'funky', 'soulful', 'psychedelic'], descriptors: ['disco era', 'rock revolution', 'analog warmth'] },
+  '1980s': { adjectives: ['synth-driven', 'neon', 'iconic', 'new wave'], descriptors: ['synthesizer dreams', '80s magic', 'retro-futurism'] },
+  '1990s': { adjectives: ['raw', 'authentic', 'grunge-era', 'alternative'], descriptors: ['90s nostalgia', 'golden age', 'peak era'] },
+  '2000s': { adjectives: ['millennial', 'Y2K', 'digital-age', 'transformative'], descriptors: ['early internet era', 'the 2000s wave', 'throwback'] },
+  '2010s': { adjectives: ['streaming-era', 'genre-blending', 'viral', 'modern'], descriptors: ['the 2010s renaissance', 'recent classics', 'modern staples'] },
+  '2020s': { adjectives: ['fresh', 'cutting-edge', 'contemporary', 'zeitgeist'], descriptors: ['right now', 'the moment', 'current wave'] },
+}
+
+// Popularity descriptors
+const popularityDescriptors = {
+  underground: ['deep cut', 'hidden gem', 'underground treasure', 'obscure find', 'cult favorite', 'well-kept secret'],
+  indie: ['indie favorite', 'alternative pick', 'under-the-radar', 'critics\' choice', 'tastemaker selection'],
+  midrange: ['solid choice', 'quality pick', 'fan favorite', 'respected track', 'proven favorite'],
+  mainstream: ['chart-topper', 'crowd-pleaser', 'radio hit', 'mainstream favorite', 'certified banger'],
+  mega: ['mega hit', 'cultural phenomenon', 'legendary track', 'iconic anthem', 'undeniable classic'],
+}
+
+// Season type and phrases
+type Season = 'winter' | 'spring' | 'summer' | 'fall'
+
+const seasonalPhrases: Record<Season, string[]> = {
+  winter: ['winter wonderland vibes', 'cold weather comfort', 'cozy season soundtrack', 'hibernation mode', 'frost-kissed melodies'],
+  spring: ['spring renewal energy', 'fresh beginnings', 'bloom season beats', 'thawing out', 'rebirth vibes'],
+  summer: ['summer heat soundtrack', 'sun-soaked sounds', 'endless summer vibes', 'beach day beats', 'hot weather anthems'],
+  fall: ['autumn ambiance', 'cozy fall vibes', 'harvest season sounds', 'golden hour melodies', 'sweater weather tunes'],
+}
+
+// Opening hooks - personalized variations
+const openingHooks = [
+  (topArtist: string, topSong: string) => `Let's decode this ${topArtist} moment.`,
+  (topArtist: string, topSong: string) => `"${topSong}" set the tone.`,
+  (topArtist: string, topSong: string) => `The music chose you today, and it sounds like ${topArtist}.`,
+  (topArtist: string, topSong: string) => `If "${topSong}" were a movie scene...`,
+  (topArtist: string, topSong: string) => `Starting with ${topArtist}?`,
+  (topArtist: string, topSong: string) => `"${topSong}" says a lot.`,
+  (topArtist: string, topSong: string) => `${topArtist} was calling your name.`,
+  (topArtist: string, topSong: string) => `You reached for "${topSong}" today.`,
+  (topArtist: string, topSong: string) => `${topArtist} energy detected.`,
+  (topArtist: string, topSong: string) => `Let's talk about "${topSong}."`,
+]
+
+// Closing phrases - varied and personal
+const closingPhrases = [
+  (topArtist: string) => `That's the vibe, preserved in time.`,
+  (topArtist: string) => `Future you will thank present you for logging this.`,
+  (topArtist: string) => `Another chapter in your sonic autobiography.`,
+  (topArtist: string) => `This is what it sounded like to be you.`,
+  (topArtist: string) => `${topArtist} approved.`,
+  (topArtist: string) => `Logged and remembered.`,
+  (topArtist: string) => `The soundtrack to this moment.`,
+  (topArtist: string) => `Your taste speaks for itself.`,
+  (topArtist: string) => `Music and memory, intertwined.`,
+  (topArtist: string) => `A snapshot of your ears.`,
+  (topArtist: string) => `The playlist tells the story.`,
+  (topArtist: string) => `Sealed in the archive.`,
+]
+
+// ============================================================================
+// ANALYSIS HELPER FUNCTIONS
+// ============================================================================
+
+function getDecade(releaseDate: string): string {
+  if (!releaseDate) return 'unknown'
+  const year = parseInt(releaseDate.substring(0, 4))
+  if (year < 1960) return '1950s'
+  if (year < 1970) return '1960s'
+  if (year < 1980) return '1970s'
+  if (year < 1990) return '1980s'
+  if (year < 2000) return '1990s'
+  if (year < 2010) return '2000s'
+  if (year < 2020) return '2010s'
+  return '2020s'
+}
+
+function getSeason(date: string): Season {
+  const month = parseInt(date.substring(5, 7))
+  if (month >= 3 && month <= 5) return 'spring'
+  if (month >= 6 && month <= 8) return 'summer'
+  if (month >= 9 && month <= 11) return 'fall'
+  return 'winter'
+}
+
+function getPopularityTier(popularity: number): string {
+  if (popularity < 20) return 'underground'
+  if (popularity < 40) return 'indie'
+  if (popularity < 60) return 'midrange'
+  if (popularity < 80) return 'mainstream'
+  return 'mega'
+}
+
+function getDurationTier(durationMs: number): string {
+  const minutes = durationMs / 60000
+  if (minutes < 2.5) return 'short'
+  if (minutes < 4.5) return 'standard'
+  if (minutes < 7) return 'long'
+  return 'epic'
+}
+
+function detectThemes(text: string): string[] {
+  const lowercaseText = text.toLowerCase()
+  const detected: string[] = []
+  
+  for (const [theme, keywords] of Object.entries(themeKeywords)) {
+    if (keywords.some(keyword => lowercaseText.includes(keyword))) {
+      detected.push(theme)
+    }
+  }
+  
+  return detected
+}
+
+function analyzeNotesSentiment(notes: string[]): { tone: string; keywords: string[] } {
+  const allNotes = notes.filter(n => n).join(' ').toLowerCase()
+  
+  const positiveWords = ['amazing', 'love', 'best', 'great', 'perfect', 'incredible', 'wonderful', 'beautiful', 'happy', 'excited', 'grateful', 'blessed']
+  const negativeWords = ['sad', 'miss', 'hard', 'difficult', 'tough', 'struggling', 'lost', 'lonely', 'anxious', 'stressed', 'worried']
+  const nostalgicWords = ['remember', 'reminded', 'throwback', 'memories', 'nostalgia', 'used to', 'back when', 'childhood', 'high school', 'college']
+  const socialWords = ['friends', 'family', 'with', 'together', 'party', 'hangout', 'road trip', 'vacation', 'wedding', 'birthday']
+  
+  let positive = 0, negative = 0, nostalgic = 0, social = 0
+  const foundKeywords: string[] = []
+  
+  positiveWords.forEach(w => { if (allNotes.includes(w)) { positive++; foundKeywords.push(w) } })
+  negativeWords.forEach(w => { if (allNotes.includes(w)) { negative++; foundKeywords.push(w) } })
+  nostalgicWords.forEach(w => { if (allNotes.includes(w)) { nostalgic++; foundKeywords.push(w) } })
+  socialWords.forEach(w => { if (allNotes.includes(w)) { social++; foundKeywords.push(w) } })
+  
+  let tone = 'neutral'
+  if (nostalgic > 1) tone = 'nostalgic'
+  else if (social > 1) tone = 'social'
+  else if (positive > negative + 1) tone = 'positive'
+  else if (negative > positive + 1) tone = 'reflective'
+  
+  return { tone, keywords: foundKeywords.slice(0, 5) }
+}
+
+function randomChoice<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+// ============================================================================
+// INSIGHT DATA STRUCTURE
+// ============================================================================
+
+interface InsightData {
+  // Artist data
+  uniqueArtists: string[]
+  topArtist: string
+  artistCounts: { [key: string]: number }
+  artistGenres: { [key: string]: string[] }
+  topGenres: string[]
+  
+  // Song data
+  songs: string[]
+  topSong: string
+  trackCount: number
+  detectedThemes: string[]
+  
+  // Metadata analysis
+  avgPopularity: number
+  popularityTier: string
+  avgDuration: number
+  durationTier: string
+  hasExplicit: boolean
+  decadeBreakdown: { [key: string]: number }
+  dominantDecade: string
+  
+  // Context
+  season: Season
+  yearsSpan: number
+  yearsList: number[]
+  
+  // Notes analysis
+  notesTone: string
+  notesKeywords: string[]
+  
+  // People
+  peopleTagged: string[]
+}
+
+function buildInsightData(
+  artists: string[],
+  songs: string[],
+  date: string,
+  artistGenres: { [key: string]: string[] },
+  genreAnalysis: { [key: string]: number },
+  entryMetadata?: {
+    popularity?: number[]
+    duration?: number[]
+    explicit?: boolean[]
+    releaseDate?: string[]
+    notes?: string[]
+    people?: string[]
+    years?: number[]
+  }
+): InsightData {
+  // Artist analysis
+  const artistCounts: { [key: string]: number } = {}
+  artists.forEach((artist: string) => {
+    artistCounts[artist] = (artistCounts[artist] || 0) + 1
+  })
+  const uniqueArtists = Array.from(new Set(artists))
+  const topArtist = Object.entries(artistCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || ''
+  
+  // Genre analysis
+  const topGenres = Object.entries(genreAnalysis)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([genre]) => genre)
+  
+  // Theme detection
+  const allText = [...songs, ...artists].join(' ')
+  const detectedThemes = detectThemes(allText)
+  
+  // Metadata analysis
+  const popularity = entryMetadata?.popularity || []
+  const avgPopularity = popularity.length > 0 
+    ? popularity.reduce((a, b) => a + b, 0) / popularity.length 
+    : 50
+  
+  const duration = entryMetadata?.duration || []
+  const avgDuration = duration.length > 0 
+    ? duration.reduce((a, b) => a + b, 0) / duration.length 
+    : 210000
+  
+  const explicit = entryMetadata?.explicit || []
+  const hasExplicit = explicit.some(e => e)
+  
+  // Decade analysis
+  const releaseDates = entryMetadata?.releaseDate || []
+  const decadeBreakdown: { [key: string]: number } = {}
+  releaseDates.forEach(rd => {
+    if (rd) {
+      const decade = getDecade(rd)
+      decadeBreakdown[decade] = (decadeBreakdown[decade] || 0) + 1
+    }
+  })
+  const dominantDecade = Object.entries(decadeBreakdown)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || '2020s'
+  
+  // Notes analysis
+  const notes = entryMetadata?.notes || []
+  const { tone: notesTone, keywords: notesKeywords } = analyzeNotesSentiment(notes)
+  
+  // Years span for "On This Day"
+  const years = entryMetadata?.years || []
+  const yearsSpan = years.length > 0 ? Math.max(...years) - Math.min(...years) + 1 : 1
+  
+  return {
+    uniqueArtists,
+    topArtist,
+    artistCounts,
+    artistGenres,
+    topGenres,
+    songs,
+    topSong: songs[0] || '',
+    trackCount: artists.length,
+    detectedThemes,
+    avgPopularity,
+    popularityTier: getPopularityTier(avgPopularity),
+    avgDuration,
+    durationTier: getDurationTier(avgDuration),
+    hasExplicit,
+    decadeBreakdown,
+    dominantDecade,
+    season: getSeason(date),
+    yearsSpan,
+    yearsList: Array.from(new Set(years)).sort(),
+    notesTone,
+    notesKeywords,
+    peopleTagged: entryMetadata?.people || [],
+  }
+}
+
+// ============================================================================
+// 15 PERSONALIZED TEMPLATE FUNCTIONS
+// ============================================================================
+
+const insightTemplates = [
+  // 1. Song-focused with artist context
+  (data: InsightData) => {
+    const hook = randomChoice(openingHooks)(data.topArtist, data.topSong)
+    let body = ''
+    
+    if (data.trackCount === 1) {
+      body = `"${data.topSong}" by ${data.topArtist} was your pick.`
+      if (data.topGenres.length > 0) {
+        body += ` That ${data.topGenres[0]} sound hit different today.`
+      }
+    } else if (data.uniqueArtists.length === 1) {
+      body = `You gave ${data.topArtist} ${data.trackCount} plays today. Songs like "${data.songs[0]}"${data.songs.length > 1 ? ` and "${data.songs[1]}"` : ''} defined the mood.`
+    } else {
+      body = `"${data.topSong}" led the way, with ${data.uniqueArtists.length - 1} other artist${data.uniqueArtists.length > 2 ? 's' : ''} joining in.`
+    }
+    
+    if (data.peopleTagged.length > 0) {
+      body += ` Shared this moment with ${data.peopleTagged.slice(0, 2).join(' and ')}.`
+    }
+    
+    return `${hook} ${body} ${randomChoice(closingPhrases)(data.topArtist)}`
+  },
+
+  // 2. People-centric (when people are tagged)
+  (data: InsightData) => {
+    if (data.peopleTagged.length > 0) {
+      const people = data.peopleTagged.slice(0, 3)
+      let result = `With ${people.join(', ')}, the soundtrack was ${data.topArtist}.`
+      
+      if (data.songs.length > 0) {
+        result += ` "${data.topSong}" was playing.`
+      }
+      
+      if (data.topGenres.length > 0) {
+        result += ` ${data.topGenres[0]} brings people together.`
+      }
+      
+      return result + ' ' + randomChoice(closingPhrases)(data.topArtist)
+    }
+    
+    // Fallback if no people tagged
+    let result = `Solo listening session with ${data.topArtist}.`
+    if (data.songs.length > 0) {
+      result += ` "${data.topSong}" on repeat.`
+    }
+    return result + ' ' + randomChoice(closingPhrases)(data.topArtist)
+  },
+
+  // 3. Multi-year "On This Day" comparison
+  (data: InsightData) => {
+    if (data.yearsSpan > 1 && data.yearsList.length > 1) {
+      const oldestYear = Math.min(...data.yearsList)
+      const newestYear = Math.max(...data.yearsList)
+      
+      let result = `From ${oldestYear} to ${newestYear}, this date has heard it all.`
+      
+      if (data.artistCounts[data.topArtist] > 1) {
+        result += ` ${data.topArtist} shows up ${data.artistCounts[data.topArtist]} times across the years.`
+      } else {
+        result += ` Each year brought something different: ${data.uniqueArtists.slice(0, 3).join(', ')}.`
+      }
+      
+      if (data.songs.length > 0) {
+        result += ` "${data.topSong}" is part of the collection now.`
+      }
+      
+      return result
+    }
+    
+    // Single year fallback
+    return `${data.yearsList[0] || 'This year'}: "${data.topSong}" by ${data.topArtist}. First entry for this date. ${randomChoice(closingPhrases)(data.topArtist)}`
+  },
+
+  // 4. Genre + specific songs
+  (data: InsightData) => {
+    if (data.topGenres.length > 0) {
+      let result = `${data.topGenres[0]} day.`
+      
+      result += ` "${data.topSong}" by ${data.topArtist} led the charge.`
+      
+      if (data.uniqueArtists.length > 1) {
+        const others = data.uniqueArtists.filter(a => a !== data.topArtist)
+        result += ` Also featuring ${others.slice(0, 2).join(' and ')}.`
+      }
+      
+      if (data.peopleTagged.length > 0) {
+        result += ` ${data.peopleTagged[0]} was there for it.`
+      }
+      
+      return result + ' ' + randomChoice(closingPhrases)(data.topArtist)
+    }
+    
+    return `"${data.topSong}" by ${data.topArtist}. ${data.trackCount} track${data.trackCount > 1 ? 's' : ''} logged. ${randomChoice(closingPhrases)(data.topArtist)}`
+  },
+
+  // 5. Popularity-aware with specifics
+  (data: InsightData) => {
+    const popDesc = randomChoice(popularityDescriptors[data.popularityTier as keyof typeof popularityDescriptors] || popularityDescriptors.midrange)
+    
+    let result = `"${data.topSong}" is a ${popDesc}.`
+    
+    if (data.popularityTier === 'underground' || data.popularityTier === 'indie') {
+      result += ` Not everyone knows ${data.topArtist} like you do.`
+    } else if (data.popularityTier === 'mega' || data.popularityTier === 'mainstream') {
+      result += ` ${data.topArtist} is everywhere for a reason.`
+    }
+    
+    if (data.songs.length > 1) {
+      result += ` Also played: "${data.songs[1]}".`
+    }
+    
+    if (data.peopleTagged.length > 0) {
+      result += ` Enjoyed with ${data.peopleTagged[0]}.`
+    }
+    
+    return result
+  },
+
+  // 6. Decade nostalgia with song names
+  (data: InsightData) => {
+    if (data.dominantDecade !== 'unknown' && decadeVibes[data.dominantDecade]) {
+      const vibes = decadeVibes[data.dominantDecade]
+      
+      let result = `${randomChoice(vibes.adjectives).charAt(0).toUpperCase() + randomChoice(vibes.adjectives).slice(1)} pick.`
+      result += ` "${data.topSong}" brings that ${data.dominantDecade} energy.`
+      result += ` ${data.topArtist} delivers.`
+      
+      if (data.uniqueArtists.length > 1) {
+        result += ` Also on the playlist: ${data.uniqueArtists.filter(a => a !== data.topArtist).slice(0, 2).join(', ')}.`
+      }
+      
+      return result + ' ' + randomChoice(closingPhrases)(data.topArtist)
+    }
+    
+    return `"${data.topSong}" by ${data.topArtist}. Classic choice. ${randomChoice(closingPhrases)(data.topArtist)}`
+  },
+
+  // 7. Theme-driven with song evidence
+  (data: InsightData) => {
+    if (data.detectedThemes.length > 0) {
+      const theme = data.detectedThemes[0]
+      
+      const themeIntros: { [key: string]: string } = {
+        love: 'Love was in the air.',
+        heartbreak: 'Processing some feelings.',
+        joy: 'Good vibes only.',
+        energetic: 'High energy day.',
+        chill: 'Keeping it mellow.',
+        party: 'Party mode activated.',
+        night: 'Late night listening.',
+        reflection: 'Thinking things through.',
+        freedom: 'Breaking free.',
+        nostalgia: 'Looking back.',
+      }
+      
+      let result = themeIntros[theme] || `${theme.charAt(0).toUpperCase() + theme.slice(1)} vibes.`
+      result += ` "${data.topSong}" by ${data.topArtist} fits perfectly.`
+      
+      if (data.songs.length > 1) {
+        result += ` "${data.songs[1]}" added to the mood.`
+      }
+      
+      if (data.peopleTagged.length > 0) {
+        result += ` ${data.peopleTagged[0]} gets it.`
+      }
+      
+      return result
+    }
+    
+    return `"${data.topSong}" by ${data.topArtist}. The vibe was clear. ${randomChoice(closingPhrases)(data.topArtist)}`
+  },
+
+  // 8. Notes-informed with specifics
+  (data: InsightData) => {
+    let result = ''
+    
+    if (data.notesTone === 'nostalgic' && data.notesKeywords.length > 0) {
+      result = `Memories tied to "${data.topSong}".`
+      result += ` ${data.topArtist} takes you back.`
+    } else if (data.notesTone === 'positive') {
+      result = `Good times with "${data.topSong}" playing.`
+      result += ` ${data.topArtist} matched the energy.`
+    } else if (data.notesTone === 'social') {
+      result = `Social moment soundtracked by ${data.topArtist}.`
+      result += ` "${data.topSong}" was the pick.`
+    } else {
+      result = `"${data.topSong}" by ${data.topArtist} captured the moment.`
+    }
+    
+    if (data.peopleTagged.length > 0) {
+      result += ` With ${data.peopleTagged.slice(0, 2).join(' and ')}.`
+    }
+    
+    return result + ' ' + randomChoice(closingPhrases)(data.topArtist)
+  },
+
+  // 9. Artist loyalty detector
+  (data: InsightData) => {
+    if (data.artistCounts[data.topArtist] >= 2) {
+      let result = `${data.topArtist} ${data.artistCounts[data.topArtist]} times? Loyal listener.`
+      result += ` "${data.songs[0]}"${data.songs.length > 1 ? ` and "${data.songs[1]}"` : ''} got the plays.`
+      
+      if (data.topGenres.length > 0) {
+        result += ` That ${data.topGenres[0]} sound is clearly your thing.`
+      }
+      
+      return result
+    }
+    
+    if (data.uniqueArtists.length > 3) {
+      let result = `${data.uniqueArtists.length} different artists today. Explorer mode.`
+      result += ` From ${data.uniqueArtists[0]} to ${data.uniqueArtists[data.uniqueArtists.length - 1]}.`
+      result += ` "${data.topSong}" stood out.`
+      return result
+    }
+    
+    return `${data.topArtist} with "${data.topSong}". Quality pick. ${randomChoice(closingPhrases)(data.topArtist)}`
+  },
+
+  // 10. Seasonal + personal
+  (data: InsightData) => {
+    const seasonPhrase = randomChoice(seasonalPhrases[data.season])
+    
+    let result = `${seasonPhrase}.`
+    result += ` "${data.topSong}" by ${data.topArtist} fits the season.`
+    
+    if (data.songs.length > 1) {
+      result += ` Also played "${data.songs[1]}".`
+    }
+    
+    if (data.peopleTagged.length > 0) {
+      result += ` ${data.season.charAt(0).toUpperCase() + data.season.slice(1)} memories with ${data.peopleTagged[0]}.`
+    }
+    
+    return result
+  },
+
+  // 11. Duration-aware
+  (data: InsightData) => {
+    let result = ''
+    
+    if (data.durationTier === 'short') {
+      result = `Quick tracks today. "${data.topSong}" gets straight to the point.`
+    } else if (data.durationTier === 'epic' || data.durationTier === 'long') {
+      result = `Taking your time with "${data.topSong}". ${data.topArtist} rewards patience.`
+    } else {
+      result = `"${data.topSong}" by ${data.topArtist}. Perfect length.`
+    }
+    
+    if (data.uniqueArtists.length > 1) {
+      result += ` Also: ${data.uniqueArtists.filter(a => a !== data.topArtist).slice(0, 2).join(', ')}.`
+    }
+    
+    if (data.peopleTagged.length > 0) {
+      result += ` Listened with ${data.peopleTagged[0]}.`
+    }
+    
+    return result + ' ' + randomChoice(closingPhrases)(data.topArtist)
+  },
+
+  // 12. Explicit content aware
+  (data: InsightData) => {
+    let result = ''
+    
+    if (data.hasExplicit) {
+      result = `Unfiltered listening today. "${data.topSong}" by ${data.topArtist} doesn't hold back.`
+    } else {
+      result = `Clean picks. "${data.topSong}" by ${data.topArtist} set the tone.`
+    }
+    
+    if (data.topGenres.length > 0) {
+      result += ` ${data.topGenres[0]} energy throughout.`
+    }
+    
+    if (data.peopleTagged.length > 0) {
+      result += ` Playing for ${data.peopleTagged.slice(0, 2).join(' and ')}.`
+    }
+    
+    return result + ' ' + randomChoice(closingPhrases)(data.topArtist)
+  },
+
+  // 13. Song title emphasis
+  (data: InsightData) => {
+    const hook = randomChoice(openingHooks)(data.topArtist, data.topSong)
+    
+    let result = hook
+    
+    if (data.songs.length === 1) {
+      result += ` One song, one moment. ${data.topArtist} nailed it.`
+    } else if (data.songs.length === 2) {
+      result += ` Two songs defined the day: "${data.songs[0]}" and "${data.songs[1]}".`
+    } else {
+      result += ` "${data.songs[0]}", "${data.songs[1]}", and ${data.songs.length - 2} more.`
+    }
+    
+    if (data.peopleTagged.length > 0) {
+      result += ` ${data.peopleTagged[0]} heard it too.`
+    }
+    
+    return result
+  },
+
+  // 14. Artist + genre fusion
+  (data: InsightData) => {
+    let result = `${data.topArtist}`
+    
+    if (data.topGenres.length > 0) {
+      result += ` bringing that ${data.topGenres[0]}`
+      if (data.topGenres.length > 1) {
+        result += ` and ${data.topGenres[1]}`
+      }
+      result += ` sound.`
+    } else {
+      result += ` on the playlist.`
+    }
+    
+    result += ` "${data.topSong}" was the standout.`
+    
+    if (data.uniqueArtists.length > 1) {
+      const others = data.uniqueArtists.filter(a => a !== data.topArtist)
+      result += ` Joined by ${others.slice(0, 2).join(' and ')}.`
+    }
+    
+    if (data.peopleTagged.length > 0) {
+      result += ` Shared with ${data.peopleTagged[0]}.`
+    }
+    
+    return result + ' ' + randomChoice(closingPhrases)(data.topArtist)
+  },
+
+  // 15. Full context summary
+  (data: InsightData) => {
+    let parts: string[] = []
+    
+    // Song and artist
+    parts.push(`"${data.topSong}" by ${data.topArtist}.`)
+    
+    // Count
+    if (data.trackCount > 1) {
+      parts.push(`${data.trackCount} tracks total.`)
+    }
+    
+    // People
+    if (data.peopleTagged.length > 0) {
+      parts.push(`With ${data.peopleTagged.slice(0, 2).join(' and ')}.`)
+    }
+    
+    // Genre
+    if (data.topGenres.length > 0) {
+      parts.push(`${data.topGenres[0]} vibes.`)
+    }
+    
+    // Years
+    if (data.yearsSpan > 1) {
+      parts.push(`${data.yearsSpan} years of memories on this date.`)
+    }
+    
+    // Add closing
+    parts.push(randomChoice(closingPhrases)(data.topArtist))
+    
+    return parts.join(' ')
+  },
+]
+
+// ============================================================================
+// MAIN EXPORT
+// ============================================================================
+
 export async function POST(request: Request) {
   try {
     const { userId } = await auth()
@@ -25,20 +717,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { artists, songs, date } = await request.json()
+    const { 
+      artists, 
+      songs, 
+      date,
+      // Optional extended data for richer insights
+      popularity,
+      duration, 
+      explicit,
+      releaseDate,
+      notes,
+      people,
+      years,
+    } = await request.json()
 
     if (!artists || !Array.isArray(artists) || artists.length === 0) {
       return NextResponse.json({ error: 'No artists provided' }, { status: 400 })
     }
 
-    // Count artist occurrences
-    const artistCounts: { [key: string]: number } = {}
-    artists.forEach((artist: string) => {
-      artistCounts[artist] = (artistCounts[artist] || 0) + 1
-    })
-
     const uniqueArtists = Array.from(new Set(artists))
-    const topArtist = Object.entries(artistCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
 
     // Fetch genre information from Spotify for smarter analysis
     let artistGenres: { [key: string]: string[] } = {}
@@ -59,350 +756,36 @@ export async function POST(request: Request) {
             })
           }
         } catch (err) {
-          // Continue if artist not found
           console.error(`Error fetching genre for ${artist}:`, err)
         }
       }
     } catch (err) {
       console.error('Error fetching Spotify data:', err)
-      // Continue with basic analysis if Spotify fails
     }
 
-    // Analyze song titles for themes
-    const allSongTitles = songs.join(' ').toLowerCase()
-    const allArtists = artists.join(' ').toLowerCase()
-    const allText = allSongTitles + ' ' + allArtists
-
-    // Detect themes from song titles
-    const themeKeywords: { [key: string]: string[] } = {
-      love: ['love', 'heart', 'kiss', 'romance', 'darling', 'baby', 'sweet'],
-      party: ['party', 'dance', 'club', 'night', 'celebration', 'fun'],
-      emotional: ['cry', 'tears', 'sad', 'lonely', 'hurt', 'pain', 'broken'],
-      energetic: ['fire', 'energy', 'power', 'strong', 'wild', 'intense'],
-      chill: ['calm', 'peace', 'quiet', 'soft', 'gentle', 'smooth', 'easy'],
-      nostalgic: ['memory', 'remember', 'old', 'past', 'yesterday', 'time'],
-    }
-
-    const detectedThemes: string[] = []
-    for (const [theme, keywords] of Object.entries(themeKeywords)) {
-      if (keywords.some(keyword => allSongTitles.includes(keyword))) {
-        detectedThemes.push(theme)
+    // Build comprehensive insight data
+    const insightData = buildInsightData(
+      artists,
+      songs,
+      date,
+      artistGenres,
+      genreAnalysis,
+      {
+        popularity,
+        duration,
+        explicit,
+        releaseDate,
+        notes,
+        people,
+        years,
       }
-    }
+    )
 
-    // Analyze genre patterns
-    const topGenres = Object.entries(genreAnalysis)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([genre]) => genre)
-
-    // Determine the insight pattern based on data
-    let patternData: {
-      type: 'single-artist' | 'dominant-artist' | 'genre-focused' | 'curated-mix' | 'eclectic'
-      topArtist?: string
-      otherArtists?: string[]
-      genreDesc?: string
-      artistsList?: string
-      primaryGenre?: string
-    }
-
-    if (uniqueArtists.length === 1) {
-      const genres = artistGenres[topArtist || ''] || []
-      const genreDesc = genres.length > 0 ? `, blending ${genres.slice(0, 2).join(' and ')}` : ''
-      patternData = {
-        type: 'single-artist',
-        topArtist: topArtist,
-        genreDesc,
-      }
-    } else if (uniqueArtists.length <= 3 && topArtist && artistCounts[topArtist] >= 2) {
-      const otherArtists = uniqueArtists.filter(a => a !== topArtist)
-      const genres = artistGenres[topArtist || ''] || []
-      const genreDesc = genres.length > 0 ? ` (${genres[0]})` : ''
-      patternData = {
-        type: 'dominant-artist',
-        topArtist,
-        otherArtists,
-        genreDesc,
-      }
-    } else if (topGenres.length >= 2 && topGenres[0] && genreAnalysis[topGenres[0]] >= 2) {
-      patternData = {
-        type: 'genre-focused',
-        artistsList: uniqueArtists.slice(0, 3).join(', ') + (uniqueArtists.length > 3 ? ' and more' : ''),
-        primaryGenre: topGenres[0],
-      }
-    } else if (uniqueArtists.length <= 5) {
-      const genres = topGenres.length > 0 ? ` (${topGenres.join(', ')})` : ''
-      patternData = {
-        type: 'curated-mix',
-        artistsList: uniqueArtists.slice(0, 3).join(', ') + (uniqueArtists.length > 3 ? ' and more' : ''),
-        genreDesc: genres,
-      }
-    } else {
-      patternData = {
-        type: 'eclectic',
-        artistsList: `${uniqueArtists[0]} to ${uniqueArtists[uniqueArtists.length - 1]}`,
-      }
-    }
-
-    // 10 different format templates
-    const formatTemplates = [
-      // Template 1: Direct and descriptive
-      (data: typeof patternData, artists: string[], tracks: number, themes: string[], genres: string[]) => {
-        let base = ''
-        if (data.type === 'single-artist') {
-          base = `A deep dive into ${data.topArtist}${data.genreDesc || ''}—${tracks} ${tracks === 1 ? 'track' : 'tracks'} showing your connection to their sound.`
-        } else if (data.type === 'dominant-artist') {
-          base = `${data.topArtist}${data.genreDesc || ''} dominates this day, with ${data.otherArtists?.length === 1 ? data.otherArtists[0] : data.otherArtists?.join(' and ')} adding ${data.otherArtists?.length === 1 ? 'a different flavor' : 'variety'}.`
-        } else if (data.type === 'genre-focused') {
-          base = `A ${data.primaryGenre}-focused day with ${artists.length} artists—${data.artistsList}—creating a cohesive ${data.primaryGenre} atmosphere.`
-        } else if (data.type === 'curated-mix') {
-          base = `A curated selection of ${artists.length} artists${data.genreDesc || ''}—${data.artistsList}—showing intentional listening.`
-        } else {
-          base = `An eclectic journey through ${artists.length} different artists—from ${data.artistsList}—showing a day of musical exploration across genres.`
-        }
-        if (themes.length > 0) {
-          const themeText = themes.length === 1 ? themes[0] : themes.slice(0, 2).join(' and ')
-          base += ` The ${themeText} theme${themes.length > 1 ? 's' : ''} ${themes.length > 1 ? 'emerge' : 'emerges'} through the song titles.`
-        }
-        if (genres.length === 1) {
-          base += ` The ${genres[0]} sound ties everything together.`
-        } else if (genres.length >= 2) {
-          base += ` ${genres[0]} and ${genres[1]} blend throughout.`
-        }
-        return base
-      },
-      // Template 2: Conversational
-      (data: typeof patternData, artists: string[], tracks: number, themes: string[], genres: string[]) => {
-        let base = ''
-        if (data.type === 'single-artist') {
-          base = `You really dove deep into ${data.topArtist}${data.genreDesc || ''} today—${tracks} ${tracks === 1 ? 'song' : 'songs'} that show how much you connect with their music.`
-        } else if (data.type === 'dominant-artist') {
-          base = `${data.topArtist}${data.genreDesc || ''} was clearly the star today, while ${data.otherArtists?.length === 1 ? data.otherArtists[0] : data.otherArtists?.join(' and ')} brought ${data.otherArtists?.length === 1 ? 'something different' : 'some variety'} to the mix.`
-        } else if (data.type === 'genre-focused') {
-          base = `You kept it ${data.primaryGenre} today with ${artists.length} artists like ${data.artistsList}, creating a really cohesive vibe.`
-        } else if (data.type === 'curated-mix') {
-          base = `You carefully selected ${artists.length} artists${data.genreDesc || ''}—${data.artistsList}—showing you knew exactly what you wanted to hear.`
-        } else {
-          base = `What an adventure! You explored ${artists.length} different artists, from ${data.artistsList}, taking your ears on quite the journey.`
-        }
-        if (themes.length > 0) {
-          const themeText = themes.length === 1 ? themes[0] : themes.slice(0, 2).join(' and ')
-          base += ` There's a real ${themeText} vibe running through these tracks.`
-        }
-        if (genres.length === 1) {
-          base += ` That ${genres[0]} sound really brings it all together.`
-        } else if (genres.length >= 2) {
-          base += ` You can hear ${genres[0]} and ${genres[1]} mixing throughout.`
-        }
-        return base
-      },
-      // Template 3: Reflective
-      (data: typeof patternData, artists: string[], tracks: number, themes: string[], genres: string[]) => {
-        let base = ''
-        if (data.type === 'single-artist') {
-          base = `Today was all about ${data.topArtist}${data.genreDesc || ''}—${tracks} ${tracks === 1 ? 'track' : 'tracks'} that reflect your deep appreciation for their artistry.`
-        } else if (data.type === 'dominant-artist') {
-          base = `While ${data.topArtist}${data.genreDesc || ''} took center stage, ${data.otherArtists?.length === 1 ? data.otherArtists[0] : data.otherArtists?.join(' and ')} provided ${data.otherArtists?.length === 1 ? 'a nice contrast' : 'some interesting contrast'}.`
-        } else if (data.type === 'genre-focused') {
-          base = `You stayed in the ${data.primaryGenre} lane today, with ${artists.length} artists including ${data.artistsList} all contributing to that signature sound.`
-        } else if (data.type === 'curated-mix') {
-          base = `This ${artists.length}-artist collection${data.genreDesc || ''}—featuring ${data.artistsList}—reveals a thoughtful approach to your listening.`
-        } else {
-          base = `Your musical taste took you far and wide today—${artists.length} artists spanning from ${data.artistsList}, showing your love for diversity.`
-        }
-        if (themes.length > 0) {
-          const themeText = themes.length === 1 ? themes[0] : themes.slice(0, 2).join(' and ')
-          base += ` The underlying ${themeText} theme${themes.length > 1 ? 's' : ''} add${themes.length > 1 ? '' : 's'} another layer to this collection.`
-        }
-        if (genres.length === 1) {
-          base += ` It's all held together by that distinctive ${genres[0]} energy.`
-        } else if (genres.length >= 2) {
-          base += ` The fusion of ${genres[0]} and ${genres[1]} creates something special here.`
-        }
-        return base
-      },
-      // Template 4: Energetic
-      (data: typeof patternData, artists: string[], tracks: number, themes: string[], genres: string[]) => {
-        let base = ''
-        if (data.type === 'single-artist') {
-          base = `You went all-in on ${data.topArtist}${data.genreDesc || ''} today! ${tracks} ${tracks === 1 ? 'song' : 'songs'} that prove you're a true fan.`
-        } else if (data.type === 'dominant-artist') {
-          base = `${data.topArtist}${data.genreDesc || ''} ruled the day, with ${data.otherArtists?.length === 1 ? data.otherArtists[0] : data.otherArtists?.join(' and ')} keeping things fresh.`
-        } else if (data.type === 'genre-focused') {
-          base = `Pure ${data.primaryGenre} energy today! ${artists.length} artists—${data.artistsList}—all delivering that ${data.primaryGenre} sound you love.`
-        } else if (data.type === 'curated-mix') {
-          base = `You handpicked ${artists.length} amazing artists${data.genreDesc || ''}: ${data.artistsList}. This is quality curation!`
-        } else {
-          base = `You didn't hold back today—${artists.length} artists from ${data.artistsList}? That's musical exploration at its finest!`
-        }
-        if (themes.length > 0) {
-          const themeText = themes.length === 1 ? themes[0] : themes.slice(0, 2).join(' and ')
-          base += ` Plus, there's a strong ${themeText} thread connecting these tracks.`
-        }
-        if (genres.length === 1) {
-          base += ` Everything's unified by that ${genres[0]} groove.`
-        } else if (genres.length >= 2) {
-          base += ` The way ${genres[0]} meets ${genres[1]} here? Perfect.`
-        }
-        return base
-      },
-      // Template 5: Analytical
-      (data: typeof patternData, artists: string[], tracks: number, themes: string[], genres: string[]) => {
-        let base = ''
-        if (data.type === 'single-artist') {
-          base = `Analysis: ${tracks} ${tracks === 1 ? 'track' : 'tracks'} from ${data.topArtist}${data.genreDesc || ''} indicates a focused listening session centered on this artist's unique style.`
-        } else if (data.type === 'dominant-artist') {
-          base = `Pattern detected: ${data.topArtist}${data.genreDesc || ''} appears as the primary focus, complemented by ${data.otherArtists?.length === 1 ? data.otherArtists[0] : data.otherArtists?.join(' and ')} for stylistic variation.`
-        } else if (data.type === 'genre-focused') {
-          base = `Genre consistency observed: ${data.primaryGenre} dominates across ${artists.length} artists (${data.artistsList}), suggesting an intentional thematic approach.`
-        } else if (data.type === 'curated-mix') {
-          base = `Selection pattern: ${artists.length} artists${data.genreDesc || ''}—${data.artistsList}—demonstrate a deliberate, curated listening strategy.`
-        } else {
-          base = `Diversity metric: ${artists.length} distinct artists ranging from ${data.artistsList} indicate a broad musical exploration pattern.`
-        }
-        if (themes.length > 0) {
-          const themeText = themes.length === 1 ? themes[0] : themes.slice(0, 2).join(' and ')
-          base += ` Thematic analysis reveals ${themeText} ${themes.length > 1 ? 'themes' : 'theme'} present in song titles.`
-        }
-        if (genres.length === 1) {
-          base += ` Genre cohesion factor: ${genres[0]} serves as the unifying element.`
-        } else if (genres.length >= 2) {
-          base += ` Genre intersection: ${genres[0]} and ${genres[1]} demonstrate significant overlap.`
-        }
-        return base
-      },
-      // Template 6: Storytelling
-      (data: typeof patternData, artists: string[], tracks: number, themes: string[], genres: string[]) => {
-        let base = ''
-        if (data.type === 'single-artist') {
-          base = `The story of this day begins and ends with ${data.topArtist}${data.genreDesc || ''}. ${tracks} ${tracks === 1 ? 'track' : 'tracks'} tell the tale of your connection to their music.`
-        } else if (data.type === 'dominant-artist') {
-          base = `Today's musical narrative featured ${data.topArtist}${data.genreDesc || ''} as the main character, with ${data.otherArtists?.length === 1 ? data.otherArtists[0] : data.otherArtists?.join(' and ')} playing supporting roles.`
-        } else if (data.type === 'genre-focused') {
-          base = `This was a ${data.primaryGenre} story told through ${artists.length} voices—${data.artistsList}—each adding their chapter to the same musical tale.`
-        } else if (data.type === 'curated-mix') {
-          base = `You wrote today's soundtrack with ${artists.length} carefully chosen artists${data.genreDesc || ''}: ${data.artistsList}. Each selection tells part of the story.`
-        } else {
-          base = `Today's playlist reads like a musical novel, taking you from ${data.artistsList} across ${artists.length} different chapters of sound.`
-        }
-        if (themes.length > 0) {
-          const themeText = themes.length === 1 ? themes[0] : themes.slice(0, 2).join(' and ')
-          base += ` The ${themeText} ${themes.length > 1 ? 'themes' : 'theme'} running through these songs add${themes.length > 1 ? '' : 's'} depth to the narrative.`
-        }
-        if (genres.length === 1) {
-          base += ` It all comes together under the ${genres[0]} umbrella.`
-        } else if (genres.length >= 2) {
-          base += ` The ${genres[0]} and ${genres[1]} elements create a rich, layered story.`
-        }
-        return base
-      },
-      // Template 7: Casual/Relaxed
-      (data: typeof patternData, artists: string[], tracks: number, themes: string[], genres: string[]) => {
-        let base = ''
-        if (data.type === 'single-artist') {
-          base = `Just vibing with ${data.topArtist}${data.genreDesc || ''} today—${tracks} ${tracks === 1 ? 'track' : 'tracks'} of pure enjoyment.`
-        } else if (data.type === 'dominant-artist') {
-          base = `Mostly ${data.topArtist}${data.genreDesc || ''} today, with a bit of ${data.otherArtists?.length === 1 ? data.otherArtists[0] : data.otherArtists?.join(' and ')} mixed in for good measure.`
-        } else if (data.type === 'genre-focused') {
-          base = `Stayed in that ${data.primaryGenre} zone with ${artists.length} artists including ${data.artistsList}. Nice and consistent.`
-        } else if (data.type === 'curated-mix') {
-          base = `Put together a nice little mix of ${artists.length} artists${data.genreDesc || ''}—${data.artistsList}. Good choices all around.`
-        } else {
-          base = `Went all over the place today—${artists.length} artists from ${data.artistsList}. Variety is the spice of life, right?`
-        }
-        if (themes.length > 0) {
-          const themeText = themes.length === 1 ? themes[0] : themes.slice(0, 2).join(' and ')
-          base += ` Also noticed some ${themeText} vibes in the song titles.`
-        }
-        if (genres.length === 1) {
-          base += ` That ${genres[0]} sound really ties it all together.`
-        } else if (genres.length >= 2) {
-          base += ` Nice blend of ${genres[0]} and ${genres[1]} going on.`
-        }
-        return base
-      },
-      // Template 8: Poetic
-      (data: typeof patternData, artists: string[], tracks: number, themes: string[], genres: string[]) => {
-        let base = ''
-        if (data.type === 'single-artist') {
-          base = `In the realm of ${data.topArtist}${data.genreDesc || ''}, you found ${tracks} ${tracks === 1 ? 'a moment' : 'moments'} of musical truth.`
-        } else if (data.type === 'dominant-artist') {
-          base = `${data.topArtist}${data.genreDesc || ''} danced in the foreground, while ${data.otherArtists?.length === 1 ? data.otherArtists[0] : data.otherArtists?.join(' and ')} whispered harmony in the spaces between.`
-        } else if (data.type === 'genre-focused') {
-          base = `A ${data.primaryGenre} symphony played out across ${artists.length} artists—${data.artistsList}—each note finding its place in the greater melody.`
-        } else if (data.type === 'curated-mix') {
-          base = `You painted with ${artists.length} colors${data.genreDesc || ''}, ${data.artistsList}, each stroke intentional, each choice meaningful.`
-        } else {
-          base = `Your musical canvas stretched wide today—${artists.length} artists from ${data.artistsList}, each a different shade in your auditory palette.`
-        }
-        if (themes.length > 0) {
-          const themeText = themes.length === 1 ? themes[0] : themes.slice(0, 2).join(' and ')
-          base += ` The ${themeText} ${themes.length > 1 ? 'themes' : 'theme'} echo${themes.length > 1 ? '' : 'es'} like a refrain throughout.`
-        }
-        if (genres.length === 1) {
-          base += ` All woven together by the ${genres[0]} thread that binds them.`
-        } else if (genres.length >= 2) {
-          base += ` Where ${genres[0]} and ${genres[1]} meet, something beautiful emerges.`
-        }
-        return base
-      },
-      // Template 9: Observational
-      (data: typeof patternData, artists: string[], tracks: number, themes: string[], genres: string[]) => {
-        let base = ''
-        if (data.type === 'single-artist') {
-          base = `Interesting: you dedicated this entire listening session to ${data.topArtist}${data.genreDesc || ''}, with ${tracks} ${tracks === 1 ? 'selection' : 'selections'} from their catalog.`
-        } else if (data.type === 'dominant-artist') {
-          base = `${data.topArtist}${data.genreDesc || ''} clearly had your attention, though ${data.otherArtists?.length === 1 ? data.otherArtists[0] : data.otherArtists?.join(' and ')} made ${data.otherArtists?.length === 1 ? 'an appearance' : 'appearances'} as well.`
-        } else if (data.type === 'genre-focused') {
-          base = `Notable pattern: you maintained a ${data.primaryGenre} focus across ${artists.length} artists (${data.artistsList}), showing a preference for this particular sound.`
-        } else if (data.type === 'curated-mix') {
-          base = `Observation: ${artists.length} artists${data.genreDesc || ''}—${data.artistsList}—suggest a well-considered selection process.`
-        } else {
-          base = `Wide range observed: ${artists.length} different artists from ${data.artistsList} indicate an exploratory listening approach.`
-        }
-        if (themes.length > 0) {
-          const themeText = themes.length === 1 ? themes[0] : themes.slice(0, 2).join(' and ')
-          base += ` Additionally, ${themeText} ${themes.length > 1 ? 'themes' : 'theme'} appear${themes.length > 1 ? '' : 's'} to be present.`
-        }
-        if (genres.length === 1) {
-          base += ` The common thread? ${genres[0]}.`
-        } else if (genres.length >= 2) {
-          base += ` Genre overlap noted between ${genres[0]} and ${genres[1]}.`
-        }
-        return base
-      },
-      // Template 10: Enthusiastic
-      (data: typeof patternData, artists: string[], tracks: number, themes: string[], genres: string[]) => {
-        let base = ''
-        if (data.type === 'single-artist') {
-          base = `Wow! You really went all out with ${data.topArtist}${data.genreDesc || ''} today! ${tracks} ${tracks === 1 ? 'amazing track' : 'incredible tracks'} that show your love for their music.`
-        } else if (data.type === 'dominant-artist') {
-          base = `${data.topArtist}${data.genreDesc || ''} absolutely crushed it today! And ${data.otherArtists?.length === 1 ? data.otherArtists[0] : data.otherArtists?.join(' and ')}? Perfect additions!`
-        } else if (data.type === 'genre-focused') {
-          base = `Yes! ${data.primaryGenre} all the way! ${artists.length} artists like ${data.artistsList} bringing that ${data.primaryGenre} fire!`
-        } else if (data.type === 'curated-mix') {
-          base = `What a lineup! ${artists.length} incredible artists${data.genreDesc || ''}—${data.artistsList}—this is top-tier curation!`
-        } else {
-          base = `Incredible diversity! ${artists.length} artists from ${data.artistsList}? You really covered all the bases today!`
-        }
-        if (themes.length > 0) {
-          const themeText = themes.length === 1 ? themes[0] : themes.slice(0, 2).join(' and ')
-          base += ` And those ${themeText} ${themes.length > 1 ? 'themes' : 'theme'}? Absolutely perfect!`
-        }
-        if (genres.length === 1) {
-          base += ` That ${genres[0]} energy? It's everywhere and it's amazing!`
-        } else if (genres.length >= 2) {
-          base += ` The combo of ${genres[0]} and ${genres[1]}? Pure magic!`
-        }
-        return base
-      },
-    ]
-
-    // Randomly select a template format
-    const selectedTemplate = formatTemplates[Math.floor(Math.random() * formatTemplates.length)]
+    // Randomly select a template
+    const selectedTemplate = randomChoice(insightTemplates)
     
-    // Build the insight using the selected template
-    const insight = selectedTemplate(patternData, uniqueArtists, artists.length, detectedThemes, topGenres)
+    // Generate the insight
+    const insight = selectedTemplate(insightData)
 
     return NextResponse.json({ insight })
   } catch (error: any) {
@@ -413,4 +796,3 @@ export async function POST(request: Request) {
     )
   }
 }
-

@@ -47,13 +47,24 @@ export async function GET() {
   }
 }
 
+const validThemes = [
+  'american-robin',
+  'northern-cardinal',
+  'eastern-bluebird',
+  'american-goldfinch',
+  'baltimore-oriole',
+  'indigo-bunting',
+  'house-finch',
+  'cedar-waxwing',
+  'black-capped-chickadee',
+  'painted-bunting',
+] as const
+
 const updateProfileSchema = z.object({
   username: z
     .string()
-    .min(3, 'Username must be at least 3 characters')
-    .max(30, 'Username must be at most 30 characters')
-    .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores')
-    .transform((val) => val.trim().toLowerCase())
+    .max(50)
+    .transform((val) => (val.trim() === '' ? null : val.trim()))
     .optional()
     .nullable(),
   image: z
@@ -81,6 +92,9 @@ const updateProfileSchema = z.object({
     }))
     .optional()
     .nullable(),
+  theme: z
+    .enum(validThemes)
+    .optional(),
 })
 
 export async function PUT(request: Request) {
@@ -126,6 +140,7 @@ export async function PUT(request: Request) {
     if (data.bio !== undefined) updateData.bio = data.bio || null
     if (data.favoriteArtists !== undefined) updateData.favoriteArtists = JSON.stringify(data.favoriteArtists || [])
     if (data.favoriteSongs !== undefined) updateData.favoriteSongs = JSON.stringify(data.favoriteSongs || [])
+    if (data.theme !== undefined) updateData.theme = data.theme
 
     const { data: updatedUser, error } = await supabase
       .from('users')

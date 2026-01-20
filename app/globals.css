@@ -2,24 +2,160 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --primary: #B65A2A;
-  --bg: #1a1a1a;
-  --card: #2a2a2a;
-  --text: #ffffff;
-  --text-muted: #b0b0b0;
+/* ============================================
+   SONGBIRD THEME SYSTEM
+   Each theme is inspired by a different songbird
+   ============================================ */
+
+/* Default Theme: American Robin */
+:root,
+[data-theme="american-robin"] {
+  --primary: #D2691E;
+  --accent: #F4A460;
+  --bg: #1A1A1A;
+  --surface: #2A2A2A;
+  --card: #333333;
+  --text: #F5F5F5;
+  --text-muted: #A0A0A0;
   --warn-bg: #5c1d1d;
   --warn-text: #ffffff;
 }
+
+/* Northern Cardinal - Vivid crimson with soft coral */
+[data-theme="northern-cardinal"] {
+  --primary: #C41E3A;
+  --accent: #FF6B6B;
+  --bg: #141414;
+  --surface: #2A2228;
+  --card: #3A2A32;
+  --text: #FAFAFA;
+  --text-muted: #B0A0A5;
+  --warn-bg: #5c1d1d;
+  --warn-text: #ffffff;
+}
+
+/* Eastern Bluebird - Soft sky blue with warm peach */
+[data-theme="eastern-bluebird"] {
+  --primary: #6CA0DC;
+  --accent: #E8A87C;
+  --bg: #0F1520;
+  --surface: #1A2535;
+  --card: #243345;
+  --text: #F0F4F8;
+  --text-muted: #8BA4B8;
+  --warn-bg: #3d2020;
+  --warn-text: #ffffff;
+}
+
+/* American Goldfinch - Bright lemon yellow with olive */
+[data-theme="american-goldfinch"] {
+  --primary: #FFD700;
+  --accent: #9CB071;
+  --bg: #141810;
+  --surface: #1E241A;
+  --card: #2A3224;
+  --text: #FFFEF5;
+  --text-muted: #A8B098;
+  --warn-bg: #4a3d1d;
+  --warn-text: #ffffff;
+}
+
+/* Baltimore Oriole - Deep orange with warm gold */
+[data-theme="baltimore-oriole"] {
+  --primary: #FF6600;
+  --accent: #FFB347;
+  --bg: #12100E;
+  --surface: #221E1A;
+  --card: #2E2822;
+  --text: #FFF8F0;
+  --text-muted: #B0A090;
+  --warn-bg: #5c2d1d;
+  --warn-text: #ffffff;
+}
+
+/* Indigo Bunting - Electric indigo with bright violet */
+[data-theme="indigo-bunting"] {
+  --primary: #4B0082;
+  --accent: #8A2BE2;
+  --bg: #0C0A14;
+  --surface: #1A1528;
+  --card: #252038;
+  --text: #F5F0FF;
+  --text-muted: #9080A8;
+  --warn-bg: #3d1d3d;
+  --warn-text: #ffffff;
+}
+
+/* House Finch - Dusty rose-red with soft blush */
+[data-theme="house-finch"] {
+  --primary: #B5495B;
+  --accent: #D4A5A5;
+  --bg: #171515;
+  --surface: #252022;
+  --card: #322A2E;
+  --text: #F8F5F5;
+  --text-muted: #A89898;
+  --warn-bg: #5c1d2d;
+  --warn-text: #ffffff;
+}
+
+/* Cedar Waxwing - Warm tan with berry red */
+[data-theme="cedar-waxwing"] {
+  --primary: #C2A878;
+  --accent: #8B0000;
+  --bg: #14120E;
+  --surface: #221F1A;
+  --card: #2E2A24;
+  --text: #F5F2EB;
+  --text-muted: #A8A090;
+  --warn-bg: #4a2d1d;
+  --warn-text: #ffffff;
+}
+
+/* Black-capped Chickadee - Soft gray with warm buff */
+[data-theme="black-capped-chickadee"] {
+  --primary: #8C8C8C;
+  --accent: #D4B896;
+  --bg: #121212;
+  --surface: #1E1E1E;
+  --card: #2A2A2A;
+  --text: #FFFFFF;
+  --text-muted: #909090;
+  --warn-bg: #4a3d3d;
+  --warn-text: #ffffff;
+}
+
+/* Painted Bunting - Premium multicolor theme */
+[data-theme="painted-bunting"] {
+  --primary: #00AA44;
+  --accent: #AAFF00;
+  --bg: #0A1214;
+  --surface: #142028;
+  --card: #1E2E38;
+  --text: #FFFFFF;
+  --text-muted: #78A0A8;
+  --warn-bg: #2d3d4a;
+  --warn-text: #ffffff;
+  /* Special gradient for premium theme */
+  --primary-gradient: linear-gradient(135deg, #0066CC, #00AA44, #CC0033);
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
 
 body {
   background-color: var(--bg);
   color: var(--text);
   font-family: 'Crimson Text', Georgia, 'Times New Roman', serif;
   font-weight: 400;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Wrapped animations */
+/* ============================================
+   WRAPPED ANIMATIONS
+   ============================================ */
+
 @keyframes slide-in {
   from {
     opacity: 0;
@@ -108,4 +244,425 @@ body {
   animation: fly-away 1.5s ease-out forwards;
 }
 
+/* ============================================
+   THEME TRANSITION EFFECTS
+   ============================================ */
 
+.theme-transition {
+  transition: background-color 0.3s ease, 
+              border-color 0.3s ease, 
+              color 0.3s ease;
+}
+
+/* ============================================
+   SONGBIRD ANIMATIONS
+   Enhanced animations for bird PNGs
+   ============================================ */
+
+/* Gentle bobbing - idle state */
+@keyframes bird-bob {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-bird-bob {
+  animation: bird-bob 2s ease-in-out infinite;
+}
+
+/* Head tilt - curious state */
+@keyframes bird-tilt {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(8deg);
+  }
+  75% {
+    transform: rotate(-5deg);
+  }
+}
+
+.animate-bird-tilt {
+  animation: bird-tilt 3s ease-in-out infinite;
+}
+
+/* Quick hop - happy/excited state */
+@keyframes bird-hop {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    transform: translateY(-12px) scale(1.05);
+  }
+  50% {
+    transform: translateY(0) scale(0.98);
+  }
+  70% {
+    transform: translateY(-6px) scale(1.02);
+  }
+}
+
+.animate-bird-hop {
+  animation: bird-hop 0.6s ease-out;
+}
+
+/* Wing flap simulation - uses scaleX */
+@keyframes bird-flap {
+  0%, 100% {
+    transform: scaleX(1);
+  }
+  25% {
+    transform: scaleX(1.1);
+  }
+  75% {
+    transform: scaleX(0.95);
+  }
+}
+
+.animate-bird-flap {
+  animation: bird-flap 0.15s ease-in-out infinite;
+}
+
+/* Feather ruffle - shake */
+@keyframes bird-ruffle {
+  0%, 100% {
+    transform: rotate(0) scale(1);
+  }
+  10% {
+    transform: rotate(-3deg) scale(1.02);
+  }
+  20% {
+    transform: rotate(3deg) scale(1.02);
+  }
+  30% {
+    transform: rotate(-2deg) scale(1.01);
+  }
+  40% {
+    transform: rotate(2deg) scale(1.01);
+  }
+  50% {
+    transform: rotate(0) scale(1);
+  }
+}
+
+.animate-bird-ruffle {
+  animation: bird-ruffle 0.5s ease-out;
+}
+
+/* Singing pulse */
+@keyframes bird-sing {
+  0%, 100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.05);
+  }
+  30% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.03);
+  }
+  60% {
+    transform: scale(1);
+  }
+}
+
+.animate-bird-sing {
+  animation: bird-sing 0.8s ease-in-out infinite;
+}
+
+/* Proud puff - chest out */
+@keyframes bird-proud {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1) translateY(-3px);
+  }
+  100% {
+    transform: scale(1.08) translateY(-2px);
+  }
+}
+
+.animate-bird-proud {
+  animation: bird-proud 0.4s ease-out forwards;
+}
+
+/* Sleepy droop */
+@keyframes bird-sleepy {
+  0%, 100% {
+    transform: rotate(0) translateY(0);
+    opacity: 0.7;
+  }
+  50% {
+    transform: rotate(-3deg) translateY(2px);
+    opacity: 0.6;
+  }
+}
+
+.animate-bird-sleepy {
+  animation: bird-sleepy 3s ease-in-out infinite;
+}
+
+/* Flying across screen */
+@keyframes bird-fly-across {
+  0% {
+    transform: translateX(-100px) translateY(0) rotate(-10deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  25% {
+    transform: translateX(25vw) translateY(-20px) rotate(5deg);
+  }
+  50% {
+    transform: translateX(50vw) translateY(0) rotate(-5deg);
+  }
+  75% {
+    transform: translateX(75vw) translateY(-15px) rotate(5deg);
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100vw) translateY(0) rotate(-10deg);
+    opacity: 0;
+  }
+}
+
+.animate-bird-fly-across {
+  animation: bird-fly-across 2s ease-in-out forwards;
+}
+
+/* Floating gently */
+@keyframes bird-float {
+  0%, 100% {
+    transform: translateY(0) rotate(0);
+  }
+  25% {
+    transform: translateY(-8px) rotate(2deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(0);
+  }
+  75% {
+    transform: translateY(-10px) rotate(-2deg);
+  }
+}
+
+.animate-bird-float {
+  animation: bird-float 4s ease-in-out infinite;
+}
+
+/* Breathe - very subtle */
+@keyframes bird-breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.animate-bird-breathe {
+  animation: bird-breathe 3s ease-in-out infinite;
+}
+
+/* ============================================
+   PARTICLE EFFECTS
+   For music notes, hearts, sparkles
+   ============================================ */
+
+/* Floating music note */
+@keyframes note-float {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-40px) rotate(15deg);
+  }
+}
+
+.animate-note-float {
+  animation: note-float 1.5s ease-out forwards;
+}
+
+/* Heart burst */
+@keyframes heart-burst {
+  0% {
+    opacity: 1;
+    transform: scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5) translateY(-20px);
+  }
+}
+
+.animate-heart-burst {
+  animation: heart-burst 0.8s ease-out forwards;
+}
+
+/* Sparkle */
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0) rotate(0);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(180deg);
+  }
+}
+
+.animate-sparkle {
+  animation: sparkle 0.6s ease-in-out;
+}
+
+/* Confetti fall */
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(-20px) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(100px) rotate(720deg);
+  }
+}
+
+.animate-confetti {
+  animation: confetti-fall 2s ease-out forwards;
+}
+
+/* ============================================
+   COMBINED EFFECTS
+   ============================================ */
+
+/* Bird with glow (for Painted Bunting or achievements) */
+.bird-glow {
+  filter: drop-shadow(0 0 8px var(--primary));
+}
+
+.bird-glow-rainbow {
+  filter: drop-shadow(0 0 6px #0066CC) 
+          drop-shadow(0 0 6px #00AA44) 
+          drop-shadow(0 0 6px #CC0033);
+  animation: rainbow-glow 2s ease-in-out infinite;
+}
+
+@keyframes rainbow-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px #0066CC);
+  }
+  33% {
+    filter: drop-shadow(0 0 8px #00AA44);
+  }
+  66% {
+    filter: drop-shadow(0 0 8px #CC0033);
+  }
+}
+
+/* Bird entering scene */
+@keyframes bird-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.8);
+  }
+  60% {
+    transform: translateY(-5px) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-bird-enter {
+  animation: bird-enter 0.5s ease-out forwards;
+}
+
+/* ============================================
+   TAP-TO-ADD ENTRY ANIMATION
+   Bird flies off → Content swipes in
+   ============================================ */
+
+/* Bird flies off to top-right */
+@keyframes bird-flyoff {
+  0% {
+    transform: translateX(0) translateY(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  30% {
+    transform: translateX(20px) translateY(-30px) rotate(-10deg) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(150px) translateY(-200px) rotate(-20deg) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.animate-bird-flyoff {
+  animation: bird-flyoff 0.5s ease-in forwards;
+}
+
+/* Music note trails when flying */
+@keyframes note-trail {
+  0% {
+    opacity: 1;
+    transform: translateX(0) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-30px) translateY(20px) scale(0.5);
+  }
+}
+
+.animate-note-trail {
+  animation: note-trail 0.4s ease-out forwards;
+}
+
+/* Content swipes in from right */
+@keyframes swipe-in-right {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-swipe-in {
+  animation: swipe-in-right 0.4s ease-out forwards;
+}
+
+/* Container fade out for bird section */
+@keyframes fade-out-up {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+.animate-fade-out-up {
+  animation: fade-out-up 0.3s ease-out forwards;
+}

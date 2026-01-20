@@ -46,8 +46,7 @@ export default function FullHistoryTab() {
     
     setLoading(true)
     try {
-      // Fetch ALL entries with excludeImages for performance, all=true for no pagination limit
-      const res = await fetch('/api/entries?all=true&excludeImages=true&pageSize=10000')
+      const res = await fetch('/api/entries')
       const data = await res.json()
       if (res.ok) {
         // Sort by date string directly (YYYY-MM-DD format sorts correctly)
@@ -56,7 +55,6 @@ export default function FullHistoryTab() {
         )
         setEntries(sorted)
         setFilteredEntries(sorted)
-        console.log('[FullHistoryTab] Loaded', sorted.length, 'entries')
       } else if (res.status === 401) {
         console.error('Unauthorized - please sign in')
         window.location.href = '/auth/signin'
