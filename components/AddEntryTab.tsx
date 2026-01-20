@@ -175,8 +175,8 @@ export default function AddEntryTab() {
     )
   }
 
-  // If today and no form shown and no existing entry, show the songbird landing page
-  if (isToday && !showForm && !existingEntry) {
+  // If today and no form shown, show the songbird landing page (whether or not they have an entry)
+  if (isToday && !showForm) {
     const fullDateString = today.toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
@@ -201,77 +201,114 @@ export default function AddEntryTab() {
           ) : null}
         </div>
 
-        {/* Prompt */}
-        <p className="text-text/70 text-base sm:text-lg mb-8 text-center">
-          How will we remember today?
-        </p>
-
-        {/* SongBird CTA - Entire bird is clickable */}
-        <div className={`flex flex-col items-center mb-8 ${showFlyingAnimation ? 'pointer-events-none' : ''}`}>
-          <div className="relative">
-            {/* Music note trails - appear when flying */}
-            {showFlyingAnimation && (
-              <>
-                <span 
-                  className="absolute top-1/2 left-1/2 text-2xl text-primary animate-note-trail"
-                  style={{ animationDelay: '0.05s' }}
-                >
-                  ♪
-                </span>
-                <span 
-                  className="absolute top-1/3 left-1/3 text-xl text-accent animate-note-trail"
-                  style={{ animationDelay: '0.15s' }}
-                >
-                  ♫
-                </span>
-                <span 
-                  className="absolute top-2/3 left-2/3 text-lg text-primary animate-note-trail"
-                  style={{ animationDelay: '0.25s' }}
-                >
-                  ♪
-                </span>
-              </>
-            )}
+        {/* Show existing entry OR prompt to add */}
+        {existingEntry ? (
+          /* User has already logged today - show their song */
+          <div className="mb-8">
+            <p className="text-text/70 text-base sm:text-lg mb-6 text-center">
+              Today's song
+            </p>
             
-            <button
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                setShowFlyingAnimation(true)
-                // Bird flies off (0.5s) then form swipes in (0.4s)
-                setTimeout(() => {
-                  setAnimateSwipeIn(true)
-                  setShowForm(true)
-                  setShowFlyingAnimation(false)
-                  // Reset swipe animation flag after it plays
-                  setTimeout(() => setAnimateSwipeIn(false), 500)
-                }, 600)
-              }}
-              className={`group relative transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/50 rounded-full
-                ${showFlyingAnimation ? 'animate-bird-flyoff' : 'hover:scale-105 active:scale-95'}
-              `}
-              aria-label="Add today's song"
-              type="button"
-              disabled={showFlyingAnimation}
-            >
-              {/* Subtle idle animation - pulse/glow */}
-              <div 
-                className={`transition-all ${showFlyingAnimation ? '' : 'animate-pulse group-hover:drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] group-hover:animate-none'}`} 
-                style={{ animationDuration: '3s' }}
-              >
-                <ThemeBird size={144} state={showFlyingAnimation ? 'fly' : 'bounce'} showParticles={false} />
+            {/* Today's Entry Card */}
+            <div className="bg-surface rounded-2xl p-6 mb-4">
+              <div className="flex items-center gap-4">
+                {/* Album art placeholder - we don't have it in existingEntry but can show bird */}
+                <div className="w-20 h-20 bg-accent/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <ThemeBird size={48} state="proud" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-xl font-bold text-text truncate">{existingEntry.songTitle}</h3>
+                  <p className="text-text/70 truncate">{existingEntry.artist}</p>
+                  {existingEntry.notes && (
+                    <p className="text-text/50 text-sm mt-2 line-clamp-2">{existingEntry.notes}</p>
+                  )}
+                </div>
               </div>
-            </button>
+              
+              {/* Edit button */}
+              <button
+                onClick={() => setShowForm(true)}
+                className="mt-4 w-full py-2 px-4 bg-accent/20 text-accent rounded-lg text-sm font-medium hover:bg-accent/30 transition-colors"
+              >
+                Edit today's entry
+              </button>
+            </div>
           </div>
-          
-          {/* Instruction hint - fades out when flying */}
-          <p 
-            className={`mt-3 text-text/50 text-sm transition-opacity duration-200 ${showFlyingAnimation ? 'opacity-0' : 'animate-pulse'}`} 
-            style={{ animationDuration: '2s' }}
-          >
-            Tap the songbird to log your song
-          </p>
-        </div>
+        ) : (
+          /* No entry yet - show bird CTA */
+          <>
+            <p className="text-text/70 text-base sm:text-lg mb-8 text-center">
+              How will we remember today?
+            </p>
+
+            {/* SongBird CTA - Entire bird is clickable */}
+            <div className={`flex flex-col items-center mb-8 ${showFlyingAnimation ? 'pointer-events-none' : ''}`}>
+              <div className="relative">
+                {/* Music note trails - appear when flying */}
+                {showFlyingAnimation && (
+                  <>
+                    <span 
+                      className="absolute top-1/2 left-1/2 text-2xl text-primary animate-note-trail"
+                      style={{ animationDelay: '0.05s' }}
+                    >
+                      ♪
+                    </span>
+                    <span 
+                      className="absolute top-1/3 left-1/3 text-xl text-accent animate-note-trail"
+                      style={{ animationDelay: '0.15s' }}
+                    >
+                      ♫
+                    </span>
+                    <span 
+                      className="absolute top-2/3 left-2/3 text-lg text-primary animate-note-trail"
+                      style={{ animationDelay: '0.25s' }}
+                    >
+                      ♪
+                    </span>
+                  </>
+                )}
+                
+                <button
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setShowFlyingAnimation(true)
+                    // Bird flies off (0.5s) then form swipes in (0.4s)
+                    setTimeout(() => {
+                      setAnimateSwipeIn(true)
+                      setShowForm(true)
+                      setShowFlyingAnimation(false)
+                      // Reset swipe animation flag after it plays
+                      setTimeout(() => setAnimateSwipeIn(false), 500)
+                    }, 600)
+                  }}
+                  className={`group relative transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/50 rounded-full
+                    ${showFlyingAnimation ? 'animate-bird-flyoff' : 'hover:scale-105 active:scale-95'}
+                  `}
+                  aria-label="Add today's song"
+                  type="button"
+                  disabled={showFlyingAnimation}
+                >
+                  {/* Subtle idle animation - pulse/glow */}
+                  <div 
+                    className={`transition-all ${showFlyingAnimation ? '' : 'animate-pulse group-hover:drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] group-hover:animate-none'}`} 
+                    style={{ animationDuration: '3s' }}
+                  >
+                    <ThemeBird size={144} state={showFlyingAnimation ? 'fly' : 'bounce'} showParticles={false} />
+                  </div>
+                </button>
+              </div>
+              
+              {/* Instruction hint - fades out when flying */}
+              <p 
+                className={`mt-3 text-text/50 text-sm transition-opacity duration-200 ${showFlyingAnimation ? 'opacity-0' : 'animate-pulse'}`} 
+                style={{ animationDuration: '2s' }}
+              >
+                Tap the songbird to log your song
+              </p>
+            </div>
+          </>
+        )}
 
         {/* On This Day Section - BETWEEN bird and Wrapped banner */}
         {onThisDayEntries.length > 0 ? (
