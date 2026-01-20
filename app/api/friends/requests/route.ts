@@ -5,6 +5,13 @@ import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 import { sendPushToUser } from '@/lib/sendPushToUser'
 
+// Simple ID generator
+function generateId(): string {
+  const timestamp = Date.now().toString(36)
+  const randomPart = Math.random().toString(36).substring(2, 15)
+  return `c${timestamp}${randomPart}`
+}
+
 const friendRequestSchema = z.object({
   receiverUsername: z.string().min(1).max(50),
 })
@@ -128,9 +135,11 @@ export async function POST(request: Request) {
     }
 
     // Create the friend request
+    const friendRequestId = generateId()
     const { data: friendRequest, error } = await supabase
       .from('friend_requests')
       .insert({
+        id: friendRequestId,
         senderId: userId,
         receiverId: receiver.id,
         status: 'pending',
@@ -144,6 +153,7 @@ export async function POST(request: Request) {
 
     // Create notification for the receiver
     await supabase.from('notifications').insert({
+      id: generateId(),
       userId: receiver.id,
       type: 'friend_request',
       relatedId: friendRequest.id,

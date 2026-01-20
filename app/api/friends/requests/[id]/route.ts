@@ -5,6 +5,13 @@ import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 import { sendPushToUser } from '@/lib/sendPushToUser'
 
+// Simple ID generator
+function generateId(): string {
+  const timestamp = Date.now().toString(36)
+  const randomPart = Math.random().toString(36).substring(2, 15)
+  return `c${timestamp}${randomPart}`
+}
+
 const updateRequestSchema = z.object({
   action: z.enum(['accept', 'decline']),
 })
@@ -76,6 +83,7 @@ export async function PUT(
     // If accepted, create notification and send push
     if (action === 'accept') {
       await supabase.from('notifications').insert({
+        id: generateId(),
         userId: friendRequest.senderId,
         type: 'friend_request_accepted',
         relatedId: friendRequest.id,
