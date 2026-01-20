@@ -81,10 +81,11 @@ export async function GET() {
     }
 
     // Find the song with the highest count (tie goes to first logged)
-    let topSong: typeof songCounts extends Map<string, infer V> ? V : never = null as any
-    for (const song of songCounts.values()) {
-      if (!topSong || song.count > topSong.count) {
-        topSong = song
+    const songArray = Array.from(songCounts.values())
+    let topSong = songArray[0] || null
+    for (let i = 1; i < songArray.length; i++) {
+      if (songArray[i].count > topSong.count) {
+        topSong = songArray[i]
       }
     }
 
