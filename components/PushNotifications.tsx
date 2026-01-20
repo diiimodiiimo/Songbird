@@ -29,19 +29,30 @@ export default function PushNotifications() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
+    // Guard against SSR
+    if (typeof window === 'undefined') return
+
     // Check if running in standalone mode (installed PWA)
     const checkStandalone = () => {
-      const isStandaloneMode = 
-        window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as any).standalone === true ||
-        document.referrer.includes('android-app://');
-      setIsStandalone(isStandaloneMode)
+      try {
+        const isStandaloneMode = 
+          window.matchMedia('(display-mode: standalone)').matches ||
+          (window.navigator as any).standalone === true ||
+          document.referrer.includes('android-app://');
+        setIsStandalone(isStandaloneMode)
+      } catch (e) {
+        // Ignore errors
+      }
     }
     checkStandalone()
 
     // Check notification permission
     if ('Notification' in window) {
-      setPermission(Notification.permission)
+      try {
+        setPermission(Notification.permission)
+      } catch (e) {
+        // Ignore errors on browsers that don't support Notification API properly
+      }
     }
 
     // Listen for PWA install prompt
@@ -57,13 +68,18 @@ export default function PushNotifications() {
     checkSubscription()
 
     // Determine if we should show the banner
-    const dismissed = localStorage.getItem('pushBannerDismissed')
-    const dismissedAt = dismissed ? parseInt(dismissed, 10) : 0
-    const daysSinceDismissed = (Date.now() - dismissedAt) / (1000 * 60 * 60 * 24)
-    
-    // Show banner if not dismissed in last 7 days and notifications aren't set up
-    if (daysSinceDismissed > 7 && Notification.permission !== 'granted') {
-      setShowBanner(true)
+    try {
+      const dismissed = localStorage.getItem('pushBannerDismissed')
+      const dismissedAt = dismissed ? parseInt(dismissed, 10) : 0
+      const daysSinceDismissed = (Date.now() - dismissedAt) / (1000 * 60 * 60 * 24)
+      
+      // Show banner if not dismissed in last 7 days and notifications aren't set up
+      const notificationPermission = 'Notification' in window ? Notification.permission : 'denied'
+      if (daysSinceDismissed > 7 && notificationPermission !== 'granted') {
+        setShowBanner(true)
+      }
+    } catch (e) {
+      // Ignore localStorage errors
     }
 
     return () => {
