@@ -274,7 +274,7 @@ export default function AddEntryTab() {
         </div>
 
         {/* On This Day Section - BETWEEN bird and Wrapped banner */}
-        {onThisDayEntries.length > 0 && (
+        {onThisDayEntries.length > 0 ? (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-text">On This Day</h3>
@@ -317,6 +317,30 @@ export default function AddEntryTab() {
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+        ) : (
+          /* Welcome section for new users with no entries */
+          <div className="mb-8">
+            <div className="bg-surface/50 rounded-xl p-5 text-center">
+              <h3 className="text-lg font-semibold text-text mb-2">Welcome to SongBird! 🐦</h3>
+              <p className="text-text/60 text-sm mb-4">
+                Log one song each day that captures how you're feeling. Over time, you'll build a beautiful musical autobiography.
+              </p>
+              <div className="grid grid-cols-3 gap-4 text-center mt-4">
+                <div>
+                  <div className="text-2xl mb-1">📅</div>
+                  <div className="text-xs text-text/50">Daily logging</div>
+                </div>
+                <div>
+                  <div className="text-2xl mb-1">🔙</div>
+                  <div className="text-xs text-text/50">On This Day memories</div>
+                </div>
+                <div>
+                  <div className="text-2xl mb-1">👥</div>
+                  <div className="text-xs text-text/50">Share with friends</div>
+                </div>
+              </div>
             </div>
           </div>
         )}
