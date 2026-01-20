@@ -7,6 +7,9 @@ import Image from 'next/image'
 import Link from 'next/link'
 import ThemeBird, { ThemeBirdLogo } from '@/components/ThemeBird'
 
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic'
+
 interface PublicProfile {
   username: string
   name: string

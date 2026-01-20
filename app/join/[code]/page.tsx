@@ -5,6 +5,9 @@ import { useUser, SignInButton, SignUpButton } from '@clerk/nextjs'
 import { useRouter, useParams } from 'next/navigation'
 import ThemeBird from '@/components/ThemeBird'
 
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic'
+
 export default function JoinPage() {
   const { isSignedIn, isLoaded } = useUser()
   const router = useRouter()
