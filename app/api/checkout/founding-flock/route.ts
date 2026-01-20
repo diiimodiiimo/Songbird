@@ -43,9 +43,16 @@ export async function POST() {
     }
 
     // 5. Create or retrieve Stripe customer
-    let stripeCustomerId = user.stripeCustomerId
+    // Search for existing customer by email first
+    const existingCustomers = await stripe.customers.list({
+      email: user.email,
+      limit: 1,
+    })
 
-    if (!stripeCustomerId) {
+    let stripeCustomerId: string
+    if (existingCustomers.data.length > 0) {
+      stripeCustomerId = existingCustomers.data[0].id
+    } else {
       const customer = await stripe.customers.create({
         email: user.email,
         metadata: {
@@ -54,12 +61,6 @@ export async function POST() {
         },
       })
       stripeCustomerId = customer.id
-
-      // Store customer ID for future use
-      await supabase
-        .from('users')
-        .update({ stripeCustomerId })
-        .eq('id', user.id)
     }
 
     // 6. Create Stripe Checkout Session
