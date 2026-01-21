@@ -1,0 +1,134 @@
+name: Ralph - Autonomous Dev Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'What do you want built?'
+        required: true
+        type: string
+      branch_name:
+        description: 'Branch name (optional - will auto-generate if empty)'
+        required: false
+        type: string
+      max_iterations:
+        description: 'Max iterations (default: 10)'
+        required: false
+        default: '10'
+        type: string
+
+jobs:
+  ralph:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Claude Code
+        run: |
+          npm install -g @anthropic-ai/claude-code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Generate branch name
+        id: branch
+        run: |
+          if [ -n "${{ inputs.branch_name }}" ]; then
+            BRANCH="${{ inputs.branch_name }}"
+          else
+            BRANCH="ralph/$(date +%Y%m%d-%H%M)-$(echo '${{ inputs.task }}' | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | cut -c1-30)"
+          fi
+          echo "name=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Create branch
+        run: |
+          git config user.name "Ralph Bot"
+          git config user.email "ralph@songbird.app"
+          git checkout -b ${{ steps.branch.outputs.name }}
+
+      - name: Create task file
+        run: |
+          cat > .ralph/current-task.md << 'TASK'
+          # Current Task
+          
+          ${{ inputs.task }}
+          
+          ## Instructions
+          
+          1. Break this down into small, testable steps
+          2. Implement each step
+          3. Run typecheck (`npm run typecheck`) after each change
+          4. Run tests (`npm test`) if relevant
+          5. Commit after each working step with descriptive messages
+          6. When complete, create a summary in `.ralph/completed/$(date +%Y%m%d-%H%M%S).md`
+          
+          ## Context
+          
+          - This is SongBird, a music journaling app
+          - Stack: Next.js, PostgreSQL/Prisma, Clerk auth, Spotify API
+          - Check AGENTS.md files for patterns
+          - Check .ralph/progress.txt for learnings from previous runs
+          TASK
+
+      - name: Run Ralph loop
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          MAX=${{ inputs.max_iterations }}
+          
+          for i in $(seq 1 $MAX); do
+            echo "═══════════════════════════════════"
+            echo "═══ Ralph Iteration $i of $MAX ═══"
+            echo "═══════════════════════════════════"
+            
+            OUTPUT=$(claude-code --dangerously-skip-permissions \
+              --print "Read .ralph/current-task.md and .ralph/progress.txt, then continue working on the task. If complete, output <RALPH_COMPLETE> and stop." \
+              2>&1 | tee /dev/stderr) || true
+            
+            if echo "$OUTPUT" | grep -q "<RALPH_COMPLETE>"; then
+              echo "✅ Ralph completed the task!"
+              break
+            fi
+            
+            sleep 5
+          done
+
+      - name: Push branch
+        run: |
+          git push origin ${{ steps.branch.outputs.name }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.branch.outputs.name }}
+          title: "🐦 Ralph: ${{ inputs.task }}"
+          body: |
+            ## Task
+            ${{ inputs.task }}
+            
+            ## What Ralph Did
+            Check the commits for details.
+            
+            ## Review Checklist
+            - [ ] Code looks correct
+            - [ ] Tested locally
+            - [ ] Ready to merge
+            
+            ---
+            *This PR was autonomously created by Ralph*
+          labels: ralph, auto-generated

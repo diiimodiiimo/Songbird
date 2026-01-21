@@ -50,6 +50,7 @@ interface FeedEntry {
   vibeCount: number
   hasVibed: boolean
   commentCount: number
+  isOwnEntry?: boolean
 }
 
 // Heart icon for vibe button
@@ -243,8 +244,8 @@ export default function FeedTab() {
     return (
       <div className="max-w-md mx-auto">
         <InviteFriendsCTA
-          heading="Your flock is quiet"
-          subtext="Invite friends to see their songs of the day in your feed!"
+          heading="Your feed is empty"
+          subtext="Log your first song to see it here, and invite friends to share the journey!"
           showBird
         />
         <div className="text-center pb-8">
@@ -263,18 +264,26 @@ export default function FeedTab() {
 
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
-      <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Friends Feed</h3>
+      <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Your Feed</h3>
 
       <div className="space-y-3 sm:space-y-4">
         {entries.map((entry) => (
           <div
             key={entry.id}
-            className="bg-surface rounded-xl overflow-hidden border-2 border-transparent hover:border-accent/30 transition-all"
+            className={`bg-surface rounded-xl overflow-hidden border-2 transition-all ${
+              entry.isOwnEntry 
+                ? 'border-accent/40 ring-1 ring-accent/20' 
+                : 'border-transparent hover:border-accent/30'
+            }`}
           >
-            {/* Friend Header - Prominent */}
+            {/* User Header - with "You" indicator for own entries */}
             <Link
               href={`/user/${entry.user.username || entry.user.email}`}
-              className="block bg-accent/10 border-b border-accent/20 p-3 sm:p-4 hover:bg-accent/15 transition-colors cursor-pointer"
+              className={`block border-b p-3 sm:p-4 transition-colors cursor-pointer ${
+                entry.isOwnEntry 
+                  ? 'bg-accent/20 border-accent/30 hover:bg-accent/25' 
+                  : 'bg-accent/10 border-accent/20 hover:bg-accent/15'
+              }`}
             >
               <div className="flex items-center gap-3">
                 {entry.user.image ? (
@@ -283,7 +292,7 @@ export default function FeedTab() {
                     alt={entry.user.username || entry.user.name || entry.user.email}
                     width={40}
                     height={40}
-                    className="rounded-full border-2 border-accent"
+                    className={`rounded-full border-2 ${entry.isOwnEntry ? 'border-accent' : 'border-accent'}`}
                     style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
                   />
                 ) : (
@@ -292,8 +301,15 @@ export default function FeedTab() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-accent text-sm sm:text-base truncate">
-                    {entry.user.username || entry.user.name || entry.user.email.split('@')[0]}
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-accent text-sm sm:text-base truncate">
+                      {entry.isOwnEntry ? 'You' : (entry.user.username || entry.user.name || entry.user.email.split('@')[0])}
+                    </span>
+                    {entry.isOwnEntry && (
+                      <span className="text-xs bg-accent/30 text-accent px-2 py-0.5 rounded-full">
+                        Your post
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs sm:text-sm text-text/70">
                     {(() => {

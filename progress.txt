@@ -1,0 +1,25 @@
+# Ralph Progress Log
+
+Started: January 2025
+
+## Codebase Patterns
+
+_Ralph will add patterns here as it learns them_
+
+- Prisma: Always run `npx prisma generate` after schema changes
+- Auth: Use Clerk's `auth()` in server components, `useAuth()` in client
+- Spotify: Token refresh handled in `/lib/spotify.ts`
+- Styling: Tailwind + warm color palette (robin theme)
+- Database: PostgreSQL on Vercel Postgres
+
+## Key Files
+
+- `prisma/schema.prisma` - Database schema
+- `src/app/` - Next.js app router pages
+- `src/components/` - Reusable components  
+- `src/lib/` - Utilities and API helpers
+- `AGENTS.md` - Root agent instructions
+
+---
+
+_Iteration logs will be appended below_

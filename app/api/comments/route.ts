@@ -60,9 +60,11 @@ export async function POST(request: Request) {
 
     if (entry && entry.userId !== userId) {
       // Create notification for the entry owner
+      const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
       await supabase
         .from('notifications')
         .insert({
+          id: notificationId,
           userId: entry.userId,
           type: 'comment',
           relatedId: comment.id,

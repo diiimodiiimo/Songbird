@@ -4,7 +4,7 @@ import { getSupabase } from '@/lib/supabase'
 import { getFriendIds } from '@/lib/friends'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 
-// GET - Get friends feed (entries from friends, showing only song + mentions)
+// GET - Get feed (entries from user + friends, so user can see vibes/comments on their posts)
 export async function GET() {
   try {
     const { userId: clerkUserId } = await auth()
@@ -20,27 +20,26 @@ export async function GET() {
     // Get all friend IDs
     const friendIds = await getFriendIds(userId)
 
-    if (friendIds.length === 0) {
-      return NextResponse.json({ entries: [] })
-    }
+    // Include both user's own entries AND friends' entries
+    const allUserIds = [userId, ...friendIds]
 
     const supabase = getSupabase()
 
-    // Get entries from friends
+    // Get entries from user AND friends
     const { data: entries, error } = await supabase
       .from('entries')
       .select('id, date, songTitle, artist, albumTitle, albumArt, createdAt, userId, trackId')
-      .in('userId', friendIds)
+      .in('userId', allUserIds)
       .order('createdAt', { ascending: false })
       .limit(50)
 
     if (error) throw error
 
-    // Get user info for all friend IDs
+    // Get user info for user + all friends
     const { data: users } = await supabase
       .from('users')
       .select('id, email, name, username, image')
-      .in('id', friendIds)
+      .in('id', allUserIds)
 
     const userMap = new Map((users || []).map(u => [u.id, u]))
 
@@ -107,9 +106,10 @@ export async function GET() {
       vibeCount: vibeCountMap.get(entry.id) || 0,
       hasVibed: userVibeSet.has(entry.id),
       commentCount: commentCountMap.get(entry.id) || 0,
+      isOwnEntry: entry.userId === userId, // Flag to identify user's own entries
     }))
 
-    return NextResponse.json({ entries: feedEntries })
+    return NextResponse.json({ entries: feedEntries, currentUserId: userId })
   } catch (error: any) {
     console.error('[feed] Error:', error?.message || error)
     return NextResponse.json(

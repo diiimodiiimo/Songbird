@@ -27,3 +27,5 @@ CREATE INDEX IF NOT EXISTS idx_song_associations_user_friend ON song_association
 -- Grant permissions (for Supabase RLS - adjust as needed)
 -- ALTER TABLE song_associations ENABLE ROW LEVEL SECURITY;
 
+
+

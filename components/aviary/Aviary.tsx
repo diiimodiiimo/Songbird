@@ -125,3 +125,5 @@ function calculatePosition(index: number, total: number): { x: number; y: number
   }
 }
 
+
+

@@ -282,3 +282,5 @@ export default function YourBirds({ onSelectBird, compact = false }: YourBirdsPr
   )
 }
 
+
+

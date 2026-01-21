@@ -203,54 +203,87 @@ export default function Notifications() {
                   <p className="text-text/30 text-xs mt-1">All quiet in the nest</p>
                 </div>
               ) : (
-                notifications.map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={`w-full text-left p-2 sm:p-3 hover:bg-accent/5 transition-colors ${
-                      !notification.read ? 'bg-accent/10' : ''
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className="text-sm sm:text-base flex-shrink-0 mt-0.5">
-                        {getNotificationIcon(notification.type)}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs sm:text-sm leading-snug line-clamp-2">
-                          {getNotificationText(notification)}
-                        </div>
-                        <div className="text-[10px] sm:text-xs text-text/40 mt-0.5">
-                          {new Date(notification.createdAt).toLocaleDateString()}
-                        </div>
-                        
-                        {/* Friend request action buttons */}
-                        {notification.type === 'friend_request' && notification.relatedId && (
-                          <div className="flex gap-2 mt-2">
-                            <button
-                              onClick={() => handleFriendRequest(notification.id, notification.relatedId!, 'accept')}
-                              disabled={loading}
-                              className="px-3 py-1 bg-accent text-bg text-xs font-medium rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50"
-                            >
-                              Accept
-                            </button>
-                            <button
-                              onClick={() => handleFriendRequest(notification.id, notification.relatedId!, 'decline')}
-                              disabled={loading}
-                              className="px-3 py-1 bg-surface border border-text/20 text-text/70 text-xs font-medium rounded-lg hover:bg-surface/80 transition-colors disabled:opacity-50"
-                            >
-                              Decline
-                            </button>
+                notifications.map((notification) => {
+                  // Determine if notification is clickable and should navigate
+                  const isClickable = ['vibe', 'comment', 'mention'].includes(notification.type)
+                  
+                  const handleNotificationClick = () => {
+                    if (!isClickable) return
+                    
+                    // Mark as read
+                    if (!notification.read) {
+                      markAsRead([notification.id])
+                    }
+                    
+                    // Navigate to feed tab to see interactions on their posts
+                    setIsOpen(false)
+                    window.dispatchEvent(new Event('navigateToFeed'))
+                  }
+                  
+                  return (
+                    <div
+                      key={notification.id}
+                      onClick={isClickable && notification.type !== 'friend_request' ? handleNotificationClick : undefined}
+                      className={`w-full text-left p-2 sm:p-3 hover:bg-accent/5 transition-colors ${
+                        !notification.read ? 'bg-accent/10' : ''
+                      } ${isClickable && notification.type !== 'friend_request' ? 'cursor-pointer' : ''}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm sm:text-base flex-shrink-0 mt-0.5">
+                          {getNotificationIcon(notification.type)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs sm:text-sm leading-snug line-clamp-2">
+                            {getNotificationText(notification)}
                           </div>
-                        )}
+                          <div className="text-[10px] sm:text-xs text-text/40 mt-0.5">
+                            {new Date(notification.createdAt).toLocaleDateString()}
+                          </div>
+                          {isClickable && notification.type !== 'friend_request' && (
+                            <div className="text-[10px] sm:text-xs text-accent/70 mt-1">
+                              Tap to view in feed →
+                            </div>
+                          )}
+                          
+                          {/* Friend request action buttons */}
+                          {notification.type === 'friend_request' && notification.relatedId && (
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleFriendRequest(notification.id, notification.relatedId!, 'accept')
+                                }}
+                                disabled={loading}
+                                className="px-3 py-1 bg-accent text-bg text-xs font-medium rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50"
+                              >
+                                Accept
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleFriendRequest(notification.id, notification.relatedId!, 'decline')
+                                }}
+                                disabled={loading}
+                                className="px-3 py-1 bg-surface border border-text/20 text-text/70 text-xs font-medium rounded-lg hover:bg-surface/80 transition-colors disabled:opacity-50"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            dismissNotification(notification.id)
+                          }}
+                          className="text-text/30 text-xs flex-shrink-0 hover:text-text/60 p-1"
+                        >
+                          ×
+                        </button>
                       </div>
-                      <button 
-                        onClick={() => dismissNotification(notification.id)}
-                        className="text-text/30 text-xs flex-shrink-0 hover:text-text/60 p-1"
-                      >
-                        ×
-                      </button>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>

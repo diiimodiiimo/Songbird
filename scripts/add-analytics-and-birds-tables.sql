@@ -34,3 +34,5 @@ CREATE INDEX IF NOT EXISTS idx_unlocked_birds_userId ON unlocked_birds("userId")
 -- CREATE POLICY "Users can view their own unlocked birds" ON unlocked_birds
 --   FOR SELECT USING (auth.uid()::text = "userId");
 
+
+

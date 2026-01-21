@@ -90,13 +90,18 @@ export default function Dashboard() {
     const handleNavigateToFriends = () => {
       setActiveTab('feed')
     }
+    const handleNavigateToFeed = () => {
+      setActiveTab('feed')
+    }
     window.addEventListener('navigateToWrapped', handleNavigateToWrapped)
     window.addEventListener('navigateToMemory', handleNavigateToMemory)
     window.addEventListener('navigateToFriends', handleNavigateToFriends)
+    window.addEventListener('navigateToFeed', handleNavigateToFeed)
     return () => {
       window.removeEventListener('navigateToWrapped', handleNavigateToWrapped)
       window.removeEventListener('navigateToMemory', handleNavigateToMemory)
       window.removeEventListener('navigateToFriends', handleNavigateToFriends)
+      window.removeEventListener('navigateToFeed', handleNavigateToFeed)
     }
   }, [user])
 

@@ -6,6 +6,13 @@ import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 import { sendPushToUser } from '@/lib/sendPushToUser'
 
+// Simple ID generator
+function generateId(prefix: string = 'm'): string {
+  const timestamp = Date.now().toString(36)
+  const randomPart = Math.random().toString(36).substring(2, 9)
+  return `${prefix}_${timestamp}_${randomPart}`
+}
+
 const mentionSchema = z.object({
   entryId: z.string(),
   userId: z.string(),
@@ -72,6 +79,7 @@ export async function POST(request: Request) {
     const { data: mention, error } = await supabase
       .from('mentions')
       .insert({
+        id: generateId('mention'),
         entryId,
         userId: mentionedUserId,
         createdAt: new Date().toISOString(),
@@ -90,6 +98,7 @@ export async function POST(request: Request) {
 
     // Create notification
     await supabase.from('notifications').insert({
+      id: generateId('notif'),
       userId: mentionedUserId,
       type: 'mention',
       relatedId: entryId,
