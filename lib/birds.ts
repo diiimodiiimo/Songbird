@@ -198,10 +198,10 @@ export async function getBirdUnlockStatuses(userId: string): Promise<BirdUnlockS
   try {
     const supabase = getSupabase()
     
-    // Get user data (only columns that exist)
+    // Get user data including premium status
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('createdAt')
+      .select('createdAt, isPremium, isFoundingMember')
       .eq('id', userId)
       .single()
 
@@ -222,11 +222,16 @@ export async function getBirdUnlockStatuses(userId: string): Promise<BirdUnlockS
     )
 
     const totalEntries = entriesCount || 0
-    
-    // FOUNDING FLOCK: All current users and new signups get all birds unlocked
-    // This is a launch incentive - everyone who joins early is a "Founding Member"
-    // We can add a separate premium bird later
-    const isFoundingMember = true // Everyone gets founding member status for now!
+
+    // FOUNDING FLOCK CUTOFF DATE
+    // Anyone who signed up before this date is automatically a founding member
+    // and gets all birds unlocked. New users after this date must earn birds
+    // via streaks or purchase premium.
+    const FOUNDING_CUTOFF_DATE = new Date('2026-01-27T00:00:00Z')
+    const isFoundingMember =
+      user.isPremium ||
+      user.isFoundingMember ||
+      createdAt < FOUNDING_CUTOFF_DATE
 
     // Calculate a "virtual streak" based on entries (since we don't have streak data)
     // Assume average of 1 entry per day = streak
