@@ -8,7 +8,7 @@ import ThemeBird from './ThemeBird'
 import SpotifyAttribution from './SpotifyAttribution'
 import MilestoneModal from './MilestoneModal'
 import { UpgradePrompt } from './UpgradePrompt'
-import { getLocalDateString, isToday as isTodayLocal, parseLocalDate } from '@/lib/date-utils'
+import { getLocalDateString, isToday as isTodayLocal, parseLocalDate, getLocalStartOfDay } from '@/lib/date-utils'
 
 interface Track {
   id: string

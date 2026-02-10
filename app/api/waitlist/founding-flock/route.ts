@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     // Check if email already exists in waitlist
     const { data: existing } = await supabase
       .from('waitlist_entries')
-      .select('id, email, foundingFlockEligible')
+      .select('id, email, name, source, referralCode, foundingFlockEligible')
       .eq('email', email)
       .single()
 

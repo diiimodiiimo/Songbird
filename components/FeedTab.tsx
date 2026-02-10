@@ -181,9 +181,9 @@ export default function FeedTab() {
       
       if (initialLoad) {
         // Deduplicate by entry ID
-        const uniqueEntries = Array.from(
+        const uniqueEntries: FeedEntry[] = Array.from(
           new Map(newEntries.map((e: FeedEntry) => [e.id, e])).values()
-        )
+        ) as FeedEntry[]
         setEntries(uniqueEntries)
         // Mark entries as seen when loaded
         const entryIds = new Set(uniqueEntries.map((e: FeedEntry) => e.id))
@@ -268,7 +268,7 @@ export default function FeedTab() {
           if (entry.isIntersecting) {
             const entryId = entry.target.getAttribute('data-entry-id')
             if (entryId) {
-              setSeenEntryIds(prev => new Set([...prev, entryId]))
+              setSeenEntryIds(prev => new Set([...Array.from(prev), entryId]))
             }
           }
         })

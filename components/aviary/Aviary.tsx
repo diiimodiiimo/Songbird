@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { AviaryBird } from './AviaryBird'
+import { AviaryBird as AviaryBirdComponent } from './AviaryBird'
 import { SongPreviewModal } from './SongPreviewModal'
 import { ContactsDiscovery } from './ContactsDiscovery'
+import { EmptyAviary } from './EmptyAviary'
+import type { AviaryData, AviaryBird as AviaryBirdType } from '@/types/aviary'
 
 interface AviaryProps {
   data: AviaryData
@@ -177,7 +179,7 @@ export function Aviary({ data }: AviaryProps) {
             <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
               {unreadFriends.map((friend) => (
                 <div key={friend.user.id} className="flex-shrink-0">
-                  <AviaryBird
+                  <AviaryBirdComponent
                     bird={friend}
                     size="medium"
                     onTap={() => handleBirdTap(friend)}
@@ -200,7 +202,7 @@ export function Aviary({ data }: AviaryProps) {
             <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
               {otherFriends.map((friend) => (
                 <div key={friend.user.id} className="flex-shrink-0">
-                  <AviaryBird
+                  <AviaryBirdComponent
                     bird={friend}
                     size="medium"
                     onTap={() => handleBirdTap(friend)}

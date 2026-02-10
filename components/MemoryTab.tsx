@@ -7,6 +7,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import ThemeBird from './ThemeBird'
 import SpotifyAttribution from './SpotifyAttribution'
+import SongbirdFlight from './SongbirdFlight'
 import { getLocalDateString } from '@/lib/date-utils'
 
 interface Entry {
@@ -59,8 +60,6 @@ export default function MemoryTab() {
   const [showNotes, setShowNotes] = useState(true)
   const [aiInsight, setAiInsight] = useState<string | null>(null)
   const [loadingInsight, setLoadingInsight] = useState(false)
-  const [recentReflectionInsight, setRecentReflectionInsight] = useState<string | null>(null)
-  const [loadingRecentReflectionInsight, setLoadingRecentReflectionInsight] = useState(false)
   const [journeyNarrative, setJourneyNarrative] = useState<string | null>(null)
   const [loadingJourneyNarrative, setLoadingJourneyNarrative] = useState(false)
   const [milestoneData, setMilestoneData] = useState<MilestoneData | null>(null)
@@ -189,10 +188,8 @@ export default function MemoryTab() {
         
         if (recent.length >= 2) {
           setRecentReflectionEntries(recent)
-          fetchRecentReflectionInsight(recent)
         } else {
           setRecentReflectionEntries([])
-          setRecentReflectionInsight(null)
         }
       }
     } catch (error) {
@@ -202,50 +199,6 @@ export default function MemoryTab() {
     }
   }
 
-  const fetchRecentReflectionInsight = async (entries: Entry[]) => {
-    if (entries.length < 2) return
-    
-    setLoadingRecentReflectionInsight(true)
-    try {
-      // Fetch full entry details with metadata from on-this-day endpoint for each entry
-      // We'll use the entries we have and extract what we can
-      const artists = entries.map(e => e.artist)
-      const songs = entries.map(e => e.songTitle)
-      const popularity = entries.map(e => e.popularity).filter((p): p is number => p !== null && p !== undefined)
-      const duration = entries.map(e => e.durationMs).filter((d): d is number => d !== null && d !== undefined)
-      const explicit = entries.map(e => e.explicit || false)
-      const releaseDate = entries.map(e => e.releaseDate).filter((r): r is string => r !== null && r !== undefined)
-      const notes = entries.map(e => e.notes).filter((n): n is string => n !== null && n !== undefined)
-      const people = entries.flatMap(e => e.people?.map(p => p.name) || [])
-      const years = entries.map(e => parseInt(e.date.split('-')[0]))
-      
-      const res = await fetch('/api/ai-insight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          artists, 
-          songs, 
-          date: new Date().toISOString().split('T')[0],
-          context: 'recent',
-          popularity: popularity.length > 0 ? popularity : undefined,
-          duration: duration.length > 0 ? duration : undefined,
-          explicit: explicit.length > 0 ? explicit : undefined,
-          releaseDate: releaseDate.length > 0 ? releaseDate : undefined,
-          notes: notes.length > 0 ? notes : undefined,
-          people: people.length > 0 ? people : undefined,
-          years: years.length > 0 ? years : undefined,
-        }),
-      })
-      const data = await res.json()
-      if (res.ok && data.insight) {
-        setRecentReflectionInsight(data.insight)
-      }
-    } catch (error) {
-      console.error('Error fetching recent reflection insight:', error)
-    } finally {
-      setLoadingRecentReflectionInsight(false)
-    }
-  }
 
   const fetchJourneyNarrative = async () => {
     if (!user || !isLoaded || recentEntries.length === 0 || !milestoneData) return
@@ -476,60 +429,11 @@ export default function MemoryTab() {
         )}
       </div>
 
-      {/* Recent Reflections Section - SECOND */}
+      {/* Recent Flight Section - SECOND */}
       {recentReflectionEntries.length >= 2 && (
         <div className="mb-12">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-6">Recent Reflections</h2>
-          
-          {loadingRecentReflectionInsight ? (
-            <div className="bg-surface/50 rounded-xl p-4 mb-6 border border-accent/20">
-              <div className="text-text/60 text-sm">Reflecting on your recent music...</div>
-            </div>
-          ) : recentReflectionInsight ? (
-            <div className="bg-surface/50 rounded-xl p-4 mb-6 border border-accent/20">
-              <div className="text-text/90 text-sm italic">"{recentReflectionInsight}"</div>
-            </div>
-          ) : null}
-
-          <div className="space-y-3 mb-6">
-            {recentReflectionEntries.slice(0, 5).map((entry) => (
-              <div key={entry.id} className="bg-surface rounded-lg p-4 hover:bg-surface/80 transition-colors">
-                <div className="flex gap-3">
-                  {entry.albumArt && (
-                    <div className="flex-shrink-0">
-                      <Image
-                        src={entry.albumArt}
-                        alt={entry.songTitle}
-                        width={60}
-                        height={60}
-                        className="rounded-lg"
-                        style={{ objectFit: 'cover' }}
-                      />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-text/60 mb-1">
-                      {(() => {
-                        const [year, month, day] = entry.date.split('-')
-                        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
-                        return date.toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric', 
-                          year: 'numeric' 
-                        })
-                      })()}
-                    </div>
-                    <h4 className="font-semibold text-lg mb-1 truncate">
-                      {entry.songTitle}
-                    </h4>
-                    <div className="text-text/70 text-sm truncate">
-                      {entry.artist}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-6">Your Recent Flight</h2>
+          <SongbirdFlight entries={recentReflectionEntries} />
         </div>
       )}
 

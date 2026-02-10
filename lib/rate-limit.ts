@@ -30,10 +30,10 @@ const rateLimitStore = new Map<string, Map<string, RateLimitWindow>>()
 // Cleanup old entries every 5 minutes
 setInterval(() => {
   const now = Date.now()
-  for (const [userId, limits] of rateLimitStore.entries()) {
-    for (const [type, window] of limits.entries()) {
+  for (const [userId, limits] of Array.from(rateLimitStore.entries())) {
+    for (const [type, window] of Array.from(limits.entries())) {
       // Remove requests older than the window
-      window.requests = window.requests.filter(timestamp => now - timestamp < window.windowMs)
+      window.requests = window.requests.filter((timestamp: number) => now - timestamp < window.windowMs)
       
       // If no recent requests, remove the window
       if (window.requests.length === 0) {

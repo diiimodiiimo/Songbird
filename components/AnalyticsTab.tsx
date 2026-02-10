@@ -8,6 +8,7 @@ import { getSpotifyArtistUrl } from '@/lib/spotify'
 import ThemeBird from './ThemeBird'
 
 interface AnalyticsData {
+  totalEntries: number
   topArtists: Array<{ artist: string; count: number }>
   topSongs: Array<{ songTitle: string; artist: string; count: number; albumArt?: string | null }>
   topPeople?: Array<{ name: string; count: number }>

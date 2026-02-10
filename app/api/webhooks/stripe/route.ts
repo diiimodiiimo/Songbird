@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'invoice.payment_succeeded': {
-        const invoice = event.data.object as Stripe.Invoice
+        const invoice = event.data.object as any
         
         if (invoice.subscription && typeof invoice.subscription === 'string') {
           // Get subscription to check metadata
@@ -263,7 +263,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice
+        const invoice = event.data.object as any
         
         if (invoice.subscription && typeof invoice.subscription === 'string') {
           const subscription = await stripe.subscriptions.retrieve(invoice.subscription)

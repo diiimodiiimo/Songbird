@@ -437,7 +437,7 @@ export async function getBirdUnlockStatuses(userId: string): Promise<BirdUnlockS
       name: bird.name,
       shortName: bird.shortName,
       isUnlocked: bird.unlockType === 'default',
-      unlockMethod: bird.unlockType === 'default' ? 'default' : undefined,
+      unlockMethod: bird.unlockType === 'default' ? 'default' as const : undefined,
       canPurchase: false,
       unlockCondition: bird.unlockCondition,
     }))
