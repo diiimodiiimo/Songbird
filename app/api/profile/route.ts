@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 
 export async function GET() {
   try {
@@ -25,7 +25,7 @@ export async function GET() {
       }, { status: 500 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    const userId = await getUserIdFromClerk(clerkUserId)
     console.log('[profile] Database user ID:', userId)
     
     if (!userId) {
@@ -206,7 +206,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    const userId = await getUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }

@@ -34,9 +34,9 @@ export async function canCreateEntry(clerkUserId: string): Promise<{
 
   // Free users: check monthly limit
   const { getSupabase } = await import('./supabase')
-  const { getPrismaUserIdFromClerk } = await import('./clerk-sync')
+  const { getUserIdFromClerk } = await import('./clerk-sync')
   
-  const userId = await getPrismaUserIdFromClerk(clerkUserId)
+  const userId = await getUserIdFromClerk(clerkUserId)
   if (!userId) {
     return { allowed: false, reason: 'User not found' }
   }
@@ -97,9 +97,9 @@ export async function canAddFriend(clerkUserId: string): Promise<{
 
   // Free users: check friend limit
   const { getSupabase } = await import('./supabase')
-  const { getPrismaUserIdFromClerk } = await import('./clerk-sync')
+  const { getUserIdFromClerk } = await import('./clerk-sync')
   
-  const userId = await getPrismaUserIdFromClerk(clerkUserId)
+  const userId = await getUserIdFromClerk(clerkUserId)
   if (!userId) {
     return { allowed: false, reason: 'User not found' }
   }
@@ -207,9 +207,9 @@ export async function getUserUsageStats(clerkUserId: string): Promise<{
 }> {
   const status = await getUserPremiumStatus(clerkUserId)
   const { getSupabase } = await import('./supabase')
-  const { getPrismaUserIdFromClerk } = await import('./clerk-sync')
+  const { getUserIdFromClerk } = await import('./clerk-sync')
   
-  const userId = await getPrismaUserIdFromClerk(clerkUserId)
+  const userId = await getUserIdFromClerk(clerkUserId)
   if (!userId) {
     return {
       entriesThisMonth: 0,

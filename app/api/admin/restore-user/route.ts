@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 
 /**
  * Admin endpoint to check and restore user data

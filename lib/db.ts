@@ -1,14 +1,13 @@
-import { supabase, DbUser, DbEntry, DbFriendRequest, DbNotification, DbPersonReference } from './supabase'
+import { getSupabase, DbUser, DbEntry, DbFriendRequest, DbNotification, DbPersonReference } from './supabase'
 
 /**
  * Database helper functions using Supabase REST API
- * This is more reliable than Prisma for Vercel serverless
  */
 
 // ============ USER FUNCTIONS ============
 
 export async function getUserById(id: string): Promise<DbUser | null> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('users')
@@ -25,7 +24,7 @@ export async function getUserById(id: string): Promise<DbUser | null> {
 }
 
 export async function getUserByClerkId(clerkId: string): Promise<DbUser | null> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('users')
@@ -42,7 +41,7 @@ export async function getUserByClerkId(clerkId: string): Promise<DbUser | null> 
 }
 
 export async function getUserByEmail(email: string): Promise<DbUser | null> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('users')
@@ -59,7 +58,7 @@ export async function getUserByEmail(email: string): Promise<DbUser | null> {
 }
 
 export async function createUser(user: Partial<DbUser>): Promise<DbUser> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('users')
@@ -76,7 +75,7 @@ export async function createUser(user: Partial<DbUser>): Promise<DbUser> {
 }
 
 export async function updateUser(id: string, updates: Partial<DbUser>): Promise<DbUser> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('users')
@@ -94,7 +93,7 @@ export async function updateUser(id: string, updates: Partial<DbUser>): Promise<
 }
 
 export async function findUserByIdOrClerkId(idOrClerkId: string): Promise<DbUser | null> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   // Try by id first
   let { data, error } = await supabase
@@ -118,7 +117,7 @@ export async function getEntriesByUserId(
   userId: string,
   options?: { limit?: number; offset?: number; orderBy?: 'asc' | 'desc' }
 ): Promise<DbEntry[]> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   let query = supabase
     .from('entries')
@@ -144,7 +143,7 @@ export async function getEntriesByUserId(
 }
 
 export async function getEntryByUserAndDate(userId: string, date: string): Promise<DbEntry | null> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   // Date should be YYYY-MM-DD format
   const startOfDay = `${date}T00:00:00.000Z`
@@ -167,7 +166,7 @@ export async function getEntryByUserAndDate(userId: string, date: string): Promi
 }
 
 export async function createEntry(entry: Partial<DbEntry>): Promise<DbEntry> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('entries')
@@ -184,7 +183,7 @@ export async function createEntry(entry: Partial<DbEntry>): Promise<DbEntry> {
 }
 
 export async function updateEntry(id: string, updates: Partial<DbEntry>): Promise<DbEntry> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('entries')
@@ -202,7 +201,7 @@ export async function updateEntry(id: string, updates: Partial<DbEntry>): Promis
 }
 
 export async function deleteEntry(id: string): Promise<void> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { error } = await supabase
     .from('entries')
@@ -216,7 +215,7 @@ export async function deleteEntry(id: string): Promise<void> {
 }
 
 export async function countEntriesByUserId(userId: string): Promise<number> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { count, error } = await supabase
     .from('entries')
@@ -234,7 +233,7 @@ export async function countEntriesByUserId(userId: string): Promise<number> {
 // ============ FRIEND FUNCTIONS ============
 
 export async function getFriendsByUserId(userId: string): Promise<DbUser[]> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   // Get accepted friend requests where user is sender or receiver
   const { data: requests, error } = await supabase
@@ -268,7 +267,7 @@ export async function getFriendsByUserId(userId: string): Promise<DbUser[]> {
 }
 
 export async function getFriendRequests(userId: string, status?: string): Promise<(DbFriendRequest & { sender: DbUser; receiver: DbUser })[]> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   let query = supabase
     .from('friend_requests')
@@ -296,7 +295,7 @@ export async function getFriendRequests(userId: string, status?: string): Promis
 // ============ NOTIFICATION FUNCTIONS ============
 
 export async function getNotificationsByUserId(userId: string, limit = 20): Promise<DbNotification[]> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('notifications')
@@ -314,7 +313,7 @@ export async function getNotificationsByUserId(userId: string, limit = 20): Prom
 }
 
 export async function markNotificationsRead(userId: string): Promise<void> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { error } = await supabase
     .from('notifications')
@@ -331,7 +330,7 @@ export async function markNotificationsRead(userId: string): Promise<void> {
 // ============ PERSON REFERENCE FUNCTIONS ============
 
 export async function getPersonReferencesByEntryId(entryId: string): Promise<DbPersonReference[]> {
-  if (!supabase) throw new Error('Supabase not configured')
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('person_references')
@@ -349,11 +348,9 @@ export async function getPersonReferencesByEntryId(entryId: string): Promise<DbP
 // ============ UTILITY FUNCTIONS ============
 
 export async function testConnection(): Promise<{ success: boolean; message: string; userCount?: number }> {
-  if (!supabase) {
-    return { success: false, message: 'Supabase not configured - missing SUPABASE_SERVICE_ROLE_KEY' }
-  }
-
   try {
+    const supabase = getSupabase()
+
     const { count, error } = await supabase
       .from('users')
       .select('*', { count: 'exact', head: true })

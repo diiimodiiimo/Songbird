@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { getOnThisDayDateLimit } from '@/lib/paywall'
 
 /**
  * OPTIMIZED: Combined endpoint for Today page data
- * Uses Supabase REST API (more reliable on Vercel than Prisma)
+ * Uses Supabase REST API
  */
 export async function GET(request: Request) {
   const startTime = Date.now()
@@ -23,9 +23,9 @@ export async function GET(request: Request) {
 
     const supabase = getSupabase()
 
-    let prismaUserId: string | null = null
+    let dbUserId: string | null = null
     try {
-      prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
+      dbUserId = await getUserIdFromClerk(clerkUserId)
     } catch (syncError: any) {
       console.error('[today-data] clerk-sync error:', syncError?.message)
       return NextResponse.json({
@@ -34,13 +34,13 @@ export async function GET(request: Request) {
       }, { status: 500 })
     }
 
-    if (!prismaUserId) {
-      console.log('[today-data] No prismaUserId found')
+    if (!dbUserId) {
+      console.log('[today-data] No dbUserId found')
       return NextResponse.json({
         error: 'User not found in database',
       }, { status: 404 })
     }
-    console.log('[today-data] Database userId:', prismaUserId)
+    console.log('[today-data] Database userId:', dbUserId)
 
     const { searchParams } = new URL(request.url)
     const dateParam = searchParams.get('date')
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
       supabase
         .from('entries')
         .select('id, date, songTitle, artist, albumArt, notes')
-        .eq('userId', prismaUserId)
+        .eq('userId', dbUserId)
         .order('date', { ascending: false }),
 
       // Check for existing entry on selected date
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
           id, songTitle, artist, notes,
           person_references (id, name)
         `)
-        .eq('userId', prismaUserId)
+        .eq('userId', dbUserId)
         .gte('date', `${dateParam}T00:00:00.000Z`)
         .lte('date', `${dateParam}T23:59:59.999Z`)
         .maybeSingle(),
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
           receiver:users!friend_requests_receiverId_fkey(id, name, email)
         `)
         .eq('status', 'accepted')
-        .or(`senderId.eq.${prismaUserId},receiverId.eq.${prismaUserId}`),
+        .or(`senderId.eq.${dbUserId},receiverId.eq.${dbUserId}`),
     ])
 
     if (entriesResult.error) {
@@ -168,7 +168,7 @@ export async function GET(request: Request) {
 
     // Format friends list
     const friendsList = (friendsResult.data || []).map((fr: any) => {
-      const friend = fr.senderId === prismaUserId ? fr.receiver : fr.sender
+      const friend = fr.senderId === dbUserId ? fr.receiver : fr.sender
       return {
         id: friend?.id || '',
         name: friend?.name || friend?.email?.split('@')[0] || 'Unknown',

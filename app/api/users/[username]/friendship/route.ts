@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 
 export async function GET(
   request: Request,
@@ -13,7 +13,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const currentUserId = await getPrismaUserIdFromClerk(clerkUserId)
+    const currentUserId = await getUserIdFromClerk(clerkUserId)
     if (!currentUserId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }

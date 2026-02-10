@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { z } from 'zod'
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const reporterId = await getPrismaUserIdFromClerk(clerkUserId)
+    const reporterId = await getUserIdFromClerk(clerkUserId)
     if (!reporterId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }

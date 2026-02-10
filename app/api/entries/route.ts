@@ -15,7 +15,7 @@ function generateId(): string {
  * Get Supabase user ID directly from Clerk email
  * Bypasses Clerk ID mapping - goes straight to Supabase
  */
-async function getSupabaseUserIdFromClerk(): Promise<string | null> {
+async function getUserIdFromClerkEmail(): Promise<string | null> {
   try {
     const clerkUser = await currentUser()
     if (!clerkUser?.emailAddresses?.[0]?.emailAddress) {
@@ -65,14 +65,14 @@ export async function GET(request: Request) {
       return rateLimitResult.response!
     }
 
-    const prismaUserId = await getSupabaseUserIdFromClerk()
-    if (!prismaUserId) {
+    const dbUserId = await getUserIdFromClerkEmail()
+    if (!dbUserId) {
       console.error('[entries] GET: Failed to get Supabase user ID')
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { searchParams } = new URL(request.url)
-    const targetUserId = searchParams.get('userId') || prismaUserId
+    const targetUserId = searchParams.get('userId') || dbUserId
     const date = searchParams.get('date')
     const excludeImages = searchParams.get('excludeImages') === 'true'
 
@@ -216,7 +216,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = await getSupabaseUserIdFromClerk()
+    const userId = await getUserIdFromClerkEmail()
     if (!userId) {
       console.error('[entries] POST: Failed to get Supabase user ID')
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })

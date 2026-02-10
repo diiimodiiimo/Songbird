@@ -1,6 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 
-const prisma = new PrismaClient()
+const supabase = getScriptSupabase()
 
 // ONLY these names should be detected
 const ALLOWED_NAMES = new Set([
@@ -36,7 +36,6 @@ function normalizeName(name: string): string {
 function extractPersonNames(text: string): string[] {
   if (!text || text.trim().length === 0) return []
 
-  const textLower = text.toLowerCase()
   const foundNames = new Set<string>()
 
   // Also check for nickname variants
@@ -73,20 +72,29 @@ async function autoDetectPeople(dryRun: boolean = true, userId?: string) {
   console.log(`\n🔍 Auto-detecting people from notes...`)
   console.log(`Mode: ${dryRun ? 'DRY RUN (no changes will be made)' : 'APPLY (will create records)'}\n`)
 
-  // Get all entries with notes but no people references
-  const entries = await prisma.entry.findMany({
-    where: {
-      notes: { not: null },
-      people: { none: {} },
-      ...(userId ? { userId } : {}),
-    },
-    include: {
-      people: true,
-    },
-    orderBy: {
-      date: 'desc',
-    },
-  })
+  // Get all entries with notes
+  let query = supabase
+    .from('entries')
+    .select('id, date, songTitle, artist, notes, userId')
+    .not('notes', 'is', null)
+    .order('date', { ascending: false })
+
+  if (userId) {
+    query = query.eq('userId', userId)
+  }
+
+  const { data: allEntries, error: entriesError } = await query
+  if (entriesError) throw entriesError
+
+  // Filter out entries that already have people references
+  const entryIds = allEntries.map((e: any) => e.id)
+  const { data: existingPeople } = await supabase
+    .from('person_references')
+    .select('entryId')
+    .in('entryId', entryIds)
+
+  const entriesWithPeople = new Set((existingPeople || []).map((p: any) => p.entryId))
+  const entries = allEntries.filter((e: any) => !entriesWithPeople.has(e.id))
 
   console.log(`Found ${entries.length} entries with notes and no existing people tags\n`)
 
@@ -102,7 +110,7 @@ async function autoDetectPeople(dryRun: boolean = true, userId?: string) {
     if (detectedNames.length > 0) {
       entryResults.push({
         entryId: entry.id,
-        date: entry.date.toISOString().split('T')[0],
+        date: new Date(entry.date).toISOString().split('T')[0],
         songTitle: entry.songTitle,
         artist: entry.artist,
         detectedNames,
@@ -180,20 +188,25 @@ async function autoDetectPeople(dryRun: boolean = true, userId?: string) {
       
       for (const canonicalName of Array.from(canonicalNames)) {
         try {
-          await prisma.personReference.create({
-            data: {
+          const { error: insertError } = await supabase
+            .from('person_references')
+            .insert({
               entryId: result.entryId,
               name: canonicalName,
               source: 'auto_migration',
-            },
-          })
-          created++
-        } catch (error: any) {
-          if (error.code === 'P2002') {
-            skipped++
+            })
+
+          if (insertError) {
+            if (insertError.code === '23505') { // Unique constraint violation
+              skipped++
+            } else {
+              throw insertError
+            }
           } else {
-            console.error(`Error creating PersonReference for "${canonicalName}" in entry ${result.entryId}:`, error)
+            created++
           }
+        } catch (error: any) {
+          console.error(`Error creating PersonReference for "${canonicalName}" in entry ${result.entryId}:`, error)
         }
       }
     }
@@ -203,8 +216,6 @@ async function autoDetectPeople(dryRun: boolean = true, userId?: string) {
       console.log(`⊘ Skipped ${skipped} (already existed)`)
     }
   }
-
-  await prisma.$disconnect()
 }
 
 // Main execution
@@ -213,4 +224,3 @@ const dryRun = !args.includes('--apply')
 const userId = args.find(arg => arg.startsWith('--userId='))?.split('=')[1]
 
 autoDetectPeople(dryRun, userId).catch(console.error)
-

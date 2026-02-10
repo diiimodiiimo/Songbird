@@ -1,6 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 
-const prisma = new PrismaClient()
+const supabase = getScriptSupabase()
 
 async function getUserID() {
   try {
@@ -12,14 +12,13 @@ async function getUserID() {
       process.exit(1)
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-      },
-    })
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email, name')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (error) throw error
 
     if (!user) {
       console.error(`User with email ${email} not found`)
@@ -35,16 +34,7 @@ async function getUserID() {
   } catch (error: any) {
     console.error('Error:', error.message)
     process.exit(1)
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
 getUserID()
-
-
-
-
-
-
-

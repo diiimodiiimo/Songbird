@@ -1,6 +1,6 @@
 import { getSupabase } from './supabase'
 
-// In-memory cache for clerk-to-prisma user ID mapping
+// In-memory cache for clerk-to-database user ID mapping
 const userIdCache = new Map<string, { id: string; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
@@ -32,12 +32,12 @@ function generateInviteCode(): string {
  * - For existing users: users.id may differ from clerkId
  * 
  * This ID should be used for all database queries (entries.userId, etc.)
- * Uses Supabase REST API (more reliable on Vercel than Prisma)
+ * Uses Supabase REST API for reliable serverless database access.
  * 
  * @param clerkUserId - The Clerk user ID (from auth().userId)
  * @returns The database users.id field, or null if user not found/can't be created
  */
-export async function getPrismaUserIdFromClerk(clerkUserId: string): Promise<string | null> {
+export async function getUserIdFromClerk(clerkUserId: string): Promise<string | null> {
   if (!clerkUserId) {
     console.log('[clerk-sync] No clerkUserId provided')
     return null
@@ -192,12 +192,13 @@ export async function getPrismaUserIdFromClerk(clerkUserId: string): Promise<str
 /**
  * Helper to get database user ID from Clerk auth
  */
-export async function getPrismaUserId(): Promise<string | null> {
+export async function getUserId(): Promise<string | null> {
   const { auth } = await import('@clerk/nextjs/server')
   const { userId } = await auth()
   if (!userId) return null
-  return await getPrismaUserIdFromClerk(userId)
+  return await getUserIdFromClerk(userId)
 }
+
 
 /**
  * Get or create a full user object from Clerk ID

@@ -1,5 +1,5 @@
 """
-Import data from Google Sheets to the new Prisma database
+Import data from Google Sheets to the Supabase database
 Run this after creating your account in the Next.js app
 """
 
@@ -12,11 +12,11 @@ from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import get_as_dataframe
 import pandas as pd
 
-# Add parent directory to path to import Prisma client
+# Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def import_from_sheets(user_id: str):
-    """Import entries from Google Sheets to Prisma database"""
+    """Import entries from Google Sheets to Supabase database"""
     
     # Load Google credentials
     creds_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'google-credentials.json')
@@ -110,8 +110,8 @@ if __name__ == "__main__":
         print("Usage: python scripts/import_from_sheets.py <your-user-id>")
         print("\nTo find your user ID:")
         print("1. Sign up and log in to the app at http://127.0.0.1:3000")
-        print("2. Open Prisma Studio: npx prisma studio")
-        print("3. Look at the 'User' table to find your ID")
+        print("2. Check the Supabase dashboard or run: npx tsx scripts/list-users.ts")
+        print("3. Find your user ID from the output")
         sys.exit(1)
     
     user_id = sys.argv[1]

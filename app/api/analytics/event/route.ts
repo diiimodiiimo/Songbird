@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { trackEvent } from '@/lib/analytics'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 
 // Analytics event logging - stores to database
 export async function POST(request: Request) {
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     let internalUserId: string | null = null
     if (clerkId) {
       try {
-        internalUserId = await getPrismaUserIdFromClerk(clerkId)
+        internalUserId = await getUserIdFromClerk(clerkId)
       } catch {
         // Continue without user ID if lookup fails
       }

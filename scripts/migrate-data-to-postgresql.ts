@@ -1,72 +1,55 @@
 /**
- * Migration Script: SQLite → PostgreSQL
+ * Migration Script: SQLite → Supabase (PostgreSQL)
  * 
- * This script migrates data from your SQLite database to PostgreSQL.
+ * This script migrates data from your SQLite database to Supabase PostgreSQL.
+ * 
+ * Note: This script previously used Prisma for both SQLite and PostgreSQL connections.
+ * It has been updated to use Supabase for the PostgreSQL side.
+ * You still need 'better-sqlite3' installed to read from SQLite.
  * 
  * Usage:
- * 1. Make sure both databases are set up
- * 2. Set SQLITE_DATABASE_URL in .env (temporary)
+ * 1. Make sure Supabase environment variables are set in .env.local
+ * 2. Make sure better-sqlite3 is installed: npm install better-sqlite3
  * 3. Run: npx tsx scripts/migrate-data-to-postgresql.ts
  */
 
-import { PrismaClient } from '@prisma/client'
-import { PrismaClient as SQLiteClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 
-// You'll need to temporarily create a SQLite Prisma client
-// This is a simplified version - you may need to adjust based on your setup
+let sqlite3: any
+try {
+  sqlite3 = require('better-sqlite3')
+} catch {
+  console.error('❌ better-sqlite3 is not installed. Run: npm install better-sqlite3')
+  process.exit(1)
+}
+
+const supabase = getScriptSupabase()
 
 async function migrateData() {
-  console.log('🚀 Starting data migration from SQLite to PostgreSQL...\n')
+  console.log('🚀 Starting data migration from SQLite to Supabase PostgreSQL...\n')
 
-  // SQLite connection (source)
-  const sqliteClient = new PrismaClient({
-    datasources: {
-      db: {
-        url: process.env.SQLITE_DATABASE_URL || 'file:./dev.db',
-      },
-    },
-  })
-
-  // PostgreSQL connection (destination)
-  const postgresClient = new PrismaClient({
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
-  })
+  const sqliteDbPath = process.env.SQLITE_DATABASE_PATH || './prisma/dev.db'
+  let db: any
 
   try {
-    // Check PostgreSQL connection
-    await postgresClient.$connect()
-    console.log('✅ Connected to PostgreSQL\n')
+    db = sqlite3.default(sqliteDbPath)
+    console.log(`✅ Connected to SQLite: ${sqliteDbPath}\n`)
+  } catch (error: any) {
+    console.error(`❌ Could not open SQLite database at ${sqliteDbPath}:`, error.message)
+    process.exit(1)
+  }
 
-    // Check SQLite connection
-    await sqliteClient.$connect()
-    console.log('✅ Connected to SQLite\n')
-
+  try {
     // Migrate Users
     console.log('📦 Migrating users...')
-    const users = await sqliteClient.user.findMany()
+    const users = db.prepare('SELECT * FROM users').all() as any[]
     console.log(`   Found ${users.length} users`)
     
     for (const user of users) {
       try {
-        await postgresClient.user.upsert({
-          where: { id: user.id },
-          update: {
-            email: user.email,
-            name: user.name,
-            username: user.username,
-            password: user.password,
-            image: user.image,
-            bio: user.bio,
-            favoriteArtists: user.favoriteArtists,
-            favoriteSongs: user.favoriteSongs,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
-          },
-          create: {
+        const { error } = await supabase
+          .from('users')
+          .upsert({
             id: user.id,
             email: user.email,
             name: user.name,
@@ -76,10 +59,10 @@ async function migrateData() {
             bio: user.bio,
             favoriteArtists: user.favoriteArtists,
             favoriteSongs: user.favoriteSongs,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
-          },
-        })
+            createdAt: new Date(user.createdAt).toISOString(),
+            updatedAt: new Date(user.updatedAt).toISOString(),
+          }, { onConflict: 'id' })
+        if (error) throw error
       } catch (error: any) {
         console.error(`   ⚠️  Error migrating user ${user.email}:`, error.message)
       }
@@ -88,49 +71,32 @@ async function migrateData() {
 
     // Migrate Entries
     console.log('📦 Migrating entries...')
-    const entries = await sqliteClient.entry.findMany()
+    const entries = db.prepare('SELECT * FROM entries').all() as any[]
     console.log(`   Found ${entries.length} entries`)
     
     for (const entry of entries) {
       try {
-        await postgresClient.entry.upsert({
-          where: { id: entry.id },
-          update: {
-            date: entry.date,
-            userId: entry.userId,
-            songTitle: entry.songTitle,
-            artist: entry.artist,
-            albumTitle: entry.albumTitle,
-            albumArt: entry.albumArt,
-            durationMs: entry.durationMs,
-            explicit: entry.explicit,
-            popularity: entry.popularity,
-            releaseDate: entry.releaseDate,
-            trackId: entry.trackId,
-            uri: entry.uri,
-            notes: entry.notes,
-            createdAt: entry.createdAt,
-            updatedAt: entry.updatedAt,
-          },
-          create: {
+        const { error } = await supabase
+          .from('entries')
+          .upsert({
             id: entry.id,
-            date: entry.date,
+            date: new Date(entry.date).toISOString(),
             userId: entry.userId,
             songTitle: entry.songTitle,
             artist: entry.artist,
             albumTitle: entry.albumTitle,
             albumArt: entry.albumArt,
             durationMs: entry.durationMs,
-            explicit: entry.explicit,
+            explicit: entry.explicit ? true : false,
             popularity: entry.popularity,
             releaseDate: entry.releaseDate,
             trackId: entry.trackId,
             uri: entry.uri,
             notes: entry.notes,
-            createdAt: entry.createdAt,
-            updatedAt: entry.updatedAt,
-          },
-        })
+            createdAt: new Date(entry.createdAt).toISOString(),
+            updatedAt: new Date(entry.updatedAt).toISOString(),
+          }, { onConflict: 'id' })
+        if (error) throw error
       } catch (error: any) {
         console.error(`   ⚠️  Error migrating entry ${entry.id}:`, error.message)
       }
@@ -139,29 +105,22 @@ async function migrateData() {
 
     // Migrate Person References
     console.log('📦 Migrating person references...')
-    const people = await sqliteClient.personReference.findMany()
+    const people = db.prepare('SELECT * FROM person_references').all() as any[]
     console.log(`   Found ${people.length} person references`)
     
     for (const person of people) {
       try {
-        await postgresClient.personReference.upsert({
-          where: { id: person.id },
-          update: {
-            entryId: person.entryId,
-            name: person.name,
-            userId: person.userId,
-            source: person.source,
-            createdAt: person.createdAt,
-          },
-          create: {
+        const { error } = await supabase
+          .from('person_references')
+          .upsert({
             id: person.id,
             entryId: person.entryId,
             name: person.name,
             userId: person.userId,
             source: person.source,
-            createdAt: person.createdAt,
-          },
-        })
+            createdAt: new Date(person.createdAt).toISOString(),
+          }, { onConflict: 'id' })
+        if (error) throw error
       } catch (error: any) {
         console.error(`   ⚠️  Error migrating person ${person.id}:`, error.message)
       }
@@ -170,25 +129,20 @@ async function migrateData() {
 
     // Migrate Mentions
     console.log('📦 Migrating mentions...')
-    const mentions = await sqliteClient.mention.findMany()
+    const mentions = db.prepare('SELECT * FROM mentions').all() as any[]
     console.log(`   Found ${mentions.length} mentions`)
     
     for (const mention of mentions) {
       try {
-        await postgresClient.mention.upsert({
-          where: { id: mention.id },
-          update: {
-            entryId: mention.entryId,
-            userId: mention.userId,
-            createdAt: mention.createdAt,
-          },
-          create: {
+        const { error } = await supabase
+          .from('mentions')
+          .upsert({
             id: mention.id,
             entryId: mention.entryId,
             userId: mention.userId,
-            createdAt: mention.createdAt,
-          },
-        })
+            createdAt: new Date(mention.createdAt).toISOString(),
+          }, { onConflict: 'id' })
+        if (error) throw error
       } catch (error: any) {
         console.error(`   ⚠️  Error migrating mention ${mention.id}:`, error.message)
       }
@@ -197,25 +151,20 @@ async function migrateData() {
 
     // Migrate Entry Tags
     console.log('📦 Migrating entry tags...')
-    const tags = await sqliteClient.entryTag.findMany()
+    const tags = db.prepare('SELECT * FROM entry_tags').all() as any[]
     console.log(`   Found ${tags.length} entry tags`)
     
     for (const tag of tags) {
       try {
-        await postgresClient.entryTag.upsert({
-          where: { id: tag.id },
-          update: {
-            entryId: tag.entryId,
-            userId: tag.userId,
-            createdAt: tag.createdAt,
-          },
-          create: {
+        const { error } = await supabase
+          .from('entry_tags')
+          .upsert({
             id: tag.id,
             entryId: tag.entryId,
             userId: tag.userId,
-            createdAt: tag.createdAt,
-          },
-        })
+            createdAt: new Date(tag.createdAt).toISOString(),
+          }, { onConflict: 'id' })
+        if (error) throw error
       } catch (error: any) {
         console.error(`   ⚠️  Error migrating tag ${tag.id}:`, error.message)
       }
@@ -224,29 +173,22 @@ async function migrateData() {
 
     // Migrate Friend Requests
     console.log('📦 Migrating friend requests...')
-    const friendRequests = await sqliteClient.friendRequest.findMany()
+    const friendRequests = db.prepare('SELECT * FROM friend_requests').all() as any[]
     console.log(`   Found ${friendRequests.length} friend requests`)
     
     for (const fr of friendRequests) {
       try {
-        await postgresClient.friendRequest.upsert({
-          where: { id: fr.id },
-          update: {
-            senderId: fr.senderId,
-            receiverId: fr.receiverId,
-            status: fr.status,
-            createdAt: fr.createdAt,
-            updatedAt: fr.updatedAt,
-          },
-          create: {
+        const { error } = await supabase
+          .from('friend_requests')
+          .upsert({
             id: fr.id,
             senderId: fr.senderId,
             receiverId: fr.receiverId,
             status: fr.status,
-            createdAt: fr.createdAt,
-            updatedAt: fr.updatedAt,
-          },
-        })
+            createdAt: new Date(fr.createdAt).toISOString(),
+            updatedAt: new Date(fr.updatedAt).toISOString(),
+          }, { onConflict: 'id' })
+        if (error) throw error
       } catch (error: any) {
         console.error(`   ⚠️  Error migrating friend request ${fr.id}:`, error.message)
       }
@@ -255,50 +197,38 @@ async function migrateData() {
 
     // Migrate Notifications
     console.log('📦 Migrating notifications...')
-    const notifications = await sqliteClient.notification.findMany()
+    const notifications = db.prepare('SELECT * FROM notifications').all() as any[]
     console.log(`   Found ${notifications.length} notifications`)
     
     for (const notif of notifications) {
       try {
-        await postgresClient.notification.upsert({
-          where: { id: notif.id },
-          update: {
-            userId: notif.userId,
-            type: notif.type,
-            relatedId: notif.relatedId,
-            read: notif.read,
-            createdAt: notif.createdAt,
-          },
-          create: {
+        const { error } = await supabase
+          .from('notifications')
+          .upsert({
             id: notif.id,
             userId: notif.userId,
             type: notif.type,
             relatedId: notif.relatedId,
-            read: notif.read,
-            createdAt: notif.createdAt,
-          },
-        })
+            read: notif.read ? true : false,
+            createdAt: new Date(notif.createdAt).toISOString(),
+          }, { onConflict: 'id' })
+        if (error) throw error
       } catch (error: any) {
         console.error(`   ⚠️  Error migrating notification ${notif.id}:`, error.message)
       }
     }
     console.log('   ✅ Notifications migrated\n')
 
+    db.close()
     console.log('🎉 Migration complete!\n')
     console.log('Next steps:')
     console.log('1. Test your app: npm run dev')
-    console.log('2. Verify data in Prisma Studio: npx prisma studio')
-    console.log('3. Remove SQLITE_DATABASE_URL from .env if you added it')
+    console.log('2. Verify data in Supabase dashboard')
 
   } catch (error) {
     console.error('❌ Migration failed:', error)
     process.exit(1)
-  } finally {
-    await sqliteClient.$disconnect()
-    await postgresClient.$disconnect()
   }
 }
 
 migrateData()
-
-

@@ -1,17 +1,15 @@
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 
-const prisma = new PrismaClient()
+const supabase = getScriptSupabase()
 
 async function revertDates() {
   try {
     console.log('Fetching all entries...')
-    const entries = await prisma.entry.findMany({
-      select: {
-        id: true,
-        date: true,
-        songTitle: true,
-      },
-    })
+    const { data: entries, error } = await supabase
+      .from('entries')
+      .select('id, date, songTitle')
+
+    if (error) throw error
 
     console.log(`Found ${entries.length} entries to revert\n`)
 
@@ -32,10 +30,12 @@ async function revertDates() {
         const fixedDate = new Date(fixedDateStr + 'T12:00:00.000Z')
 
         // Update the entry
-        await prisma.entry.update({
-          where: { id: entry.id },
-          data: { date: fixedDate },
-        })
+        const { error: updateError } = await supabase
+          .from('entries')
+          .update({ date: fixedDate.toISOString() })
+          .eq('id', entry.id)
+
+        if (updateError) throw updateError
 
         fixed++
         console.log(`✓ Reverted: ${entry.songTitle} - ${currentDateStr} → ${fixedDateStr}`)
@@ -52,15 +52,7 @@ async function revertDates() {
   } catch (error: any) {
     console.error('Revert failed:', error.message)
     process.exit(1)
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
 revertDates()
-
-
-
-
-
-

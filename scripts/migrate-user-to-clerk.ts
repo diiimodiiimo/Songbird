@@ -1,6 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 
-const prisma = new PrismaClient()
+const supabase = getScriptSupabase()
 
 async function migrateUserToClerk() {
   try {
@@ -15,38 +15,37 @@ async function migrateUserToClerk() {
     console.log(`\n🔍 Looking for user with email: ${email}\n`)
 
     // Find user in database
-    const dbUser = await prisma.user.findUnique({
-      where: { email },
-      include: {
-        _count: {
-          select: {
-            entries: true,
-          },
-        },
-      },
-    })
+    const { data: dbUser, error: findError } = await supabase
+      .from('users')
+      .select('id, email, name, clerkId, entries(count)')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (findError) throw findError
 
     if (!dbUser) {
       console.error(`❌ User with email "${email}" not found in database`)
       console.error('\nAvailable users:')
-      const allUsers = await prisma.user.findMany({
-        select: { email: true, name: true },
-      })
-      allUsers.forEach((u) => {
+      const { data: allUsers } = await supabase
+        .from('users')
+        .select('email, name')
+      allUsers?.forEach((u: any) => {
         console.error(`  - ${u.email} (${u.name || 'No name'})`)
       })
       process.exit(1)
     }
 
+    const entryCount = dbUser.entries?.[0]?.count ?? 0
+
     console.log(`✓ Found database user:`)
     console.log(`  ID: ${dbUser.id}`)
     console.log(`  Email: ${dbUser.email}`)
     console.log(`  Name: ${dbUser.name || 'No name'}`)
-    console.log(`  Current Clerk ID: ${(dbUser as any).clerkId || 'None'}`)
-    console.log(`  Entries: ${dbUser._count.entries}`)
+    console.log(`  Current Clerk ID: ${dbUser.clerkId || 'None'}`)
+    console.log(`  Entries: ${entryCount}`)
 
-    if ((dbUser as any).clerkId) {
-      console.log(`\n⚠️  User already has a Clerk ID: ${(dbUser as any).clerkId}`)
+    if (dbUser.clerkId) {
+      console.log(`\n⚠️  User already has a Clerk ID: ${dbUser.clerkId}`)
       console.log('This will update it to the new Clerk account.')
     }
 
@@ -103,14 +102,18 @@ async function migrateUserToClerk() {
     // Update database user with Clerk ID
     console.log(`\n🔗 Linking database user to Clerk account...\n`)
 
-    const updatedUser = await prisma.user.update({
-      where: { id: dbUser.id },
-      data: { clerkId: clerkUser.id } as any,
-    })
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({ clerkId: clerkUser.id })
+      .eq('id', dbUser.id)
+      .select('id, clerkId, email')
+      .single()
+
+    if (updateError) throw updateError
 
     console.log(`✅ Successfully linked user!`)
     console.log(`   Database User ID: ${updatedUser.id}`)
-    console.log(`   Clerk User ID: ${(updatedUser as any).clerkId}`)
+    console.log(`   Clerk User ID: ${updatedUser.clerkId}`)
     console.log(`   Email: ${updatedUser.email}`)
     console.log(`\n🎉 Migration complete! Your data should now be accessible.`)
     console.log(`\n💡 Refresh your browser to see your data.`)
@@ -122,10 +125,7 @@ async function migrateUserToClerk() {
       console.error(error.stack)
     }
     process.exit(1)
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
 migrateUserToClerk()
-

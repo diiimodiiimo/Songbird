@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 
 // Simple ID generator
 function generateId(): string {
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     }
 
     // Get current user
-    const currentUserId = await getPrismaUserIdFromClerk(clerkId)
+    const currentUserId = await getUserIdFromClerk(clerkId)
     if (!currentUserId) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }

@@ -1,8 +1,8 @@
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 import * as fs from 'fs'
 import * as path from 'path'
 
-const prisma = new PrismaClient()
+const supabase = getScriptSupabase()
 
 async function importEntries() {
   try {
@@ -14,9 +14,13 @@ async function importEntries() {
     }
 
     // Verify user exists
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    })
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (error) throw error
 
     if (!user) {
       console.error(`User with ID ${userId} not found`)
@@ -49,15 +53,18 @@ async function importEntries() {
           continue
         }
 
+        const dateStr = date.toISOString().split('T')[0]
+        const startOfDay = `${dateStr}T00:00:00.000Z`
+        const endOfDay = `${dateStr}T23:59:59.999Z`
+
         // Check if entry already exists
-        const existing = await prisma.entry.findUnique({
-          where: {
-            userId_date: {
-              userId: userId,
-              date: date,
-            },
-          },
-        })
+        const { data: existing } = await supabase
+          .from('entries')
+          .select('id')
+          .eq('userId', userId)
+          .gte('date', startOfDay)
+          .lte('date', endOfDay)
+          .maybeSingle()
 
         if (existing) {
           console.log(`⊘ Already exists: ${entry.songTitle} (${entry.date})`)
@@ -66,9 +73,10 @@ async function importEntries() {
         }
 
         // Create entry
-        await prisma.entry.create({
-          data: {
-            date: date,
+        const { error: insertError } = await supabase
+          .from('entries')
+          .insert({
+            date: date.toISOString(),
             userId: userId,
             songTitle: entry.songTitle,
             artist: entry.artist,
@@ -81,8 +89,11 @@ async function importEntries() {
             trackId: entry.trackId || '',
             uri: entry.uri || '',
             notes: entry.notes || null,
-          },
-        })
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+
+        if (insertError) throw insertError
 
         imported++
         console.log(`✓ Imported: ${entry.songTitle} by ${entry.artist} (${entry.date})`)
@@ -100,16 +111,7 @@ async function importEntries() {
   } catch (error: any) {
     console.error('Import failed:', error.message)
     process.exit(1)
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
 importEntries()
-
-
-
-
-
-
-

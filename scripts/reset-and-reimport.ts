@@ -1,6 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 
-const prisma = new PrismaClient()
+const supabase = getScriptSupabase()
 
 async function resetAndReimport() {
   try {
@@ -16,10 +16,13 @@ async function resetAndReimport() {
     console.log(`User ID: ${userId}\n`)
 
     // Verify user exists
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, name: true },
-    })
+    const { data: user, error: findError } = await supabase
+      .from('users')
+      .select('id, email, name')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (findError) throw findError
 
     if (!user) {
       console.error(`Error: User with ID "${userId}" not found`)
@@ -29,12 +32,15 @@ async function resetAndReimport() {
     console.log(`Found user: ${user.email} (${user.name || 'No name'})`)
     console.log('\nDeleting all entries...')
 
-    // Delete all entries for this user (tags will be deleted automatically due to cascade)
-    const deleteResult = await prisma.entry.deleteMany({
-      where: { userId },
-    })
+    // Delete all entries for this user
+    const { error: deleteError, count } = await supabase
+      .from('entries')
+      .delete()
+      .eq('userId', userId)
 
-    console.log(`✓ Deleted ${deleteResult.count} entries\n`)
+    if (deleteError) throw deleteError
+
+    console.log(`✓ Deleted entries for user\n`)
     console.log('✅ Database reset complete!')
     console.log('\nNow you can re-import your data from Google Sheets:')
     console.log('1. Run: python scripts/import_from_sheets.py <your-user-id>')
@@ -42,15 +48,7 @@ async function resetAndReimport() {
   } catch (error: any) {
     console.error('Reset failed:', error.message)
     process.exit(1)
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
 resetAndReimport()
-
-
-
-
-
-

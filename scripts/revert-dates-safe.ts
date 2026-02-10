@@ -1,21 +1,16 @@
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 
-const prisma = new PrismaClient()
+const supabase = getScriptSupabase()
 
 async function revertDatesSafe() {
   try {
     console.log('Fetching all entries...')
-    const entries = await prisma.entry.findMany({
-      select: {
-        id: true,
-        date: true,
-        songTitle: true,
-        userId: true,
-      },
-      orderBy: {
-        date: 'asc',
-      },
-    })
+    const { data: entries, error } = await supabase
+      .from('entries')
+      .select('id, date, songTitle, userId')
+      .order('date', { ascending: true })
+
+    if (error) throw error
 
     console.log(`Found ${entries.length} entries to revert\n`)
 
@@ -28,10 +23,12 @@ async function revertDatesSafe() {
         const tempDate = new Date(currentDateStr + 'T12:00:00.000Z')
         tempDate.setDate(tempDate.getDate() + 1000) // Move to far future
 
-        await prisma.entry.update({
-          where: { id: entry.id },
-          data: { date: tempDate },
-        })
+        const { error: updateError } = await supabase
+          .from('entries')
+          .update({ date: tempDate.toISOString() })
+          .eq('id', entry.id)
+
+        if (updateError) throw updateError
         tempFixed++
       } catch (error: any) {
         console.error(`✗ Error moving entry ${entry.id} to temp: ${error.message}`)
@@ -57,10 +54,12 @@ async function revertDatesSafe() {
         const fixedDateStr = currentDate.toISOString().split('T')[0]
         const fixedDate = new Date(fixedDateStr + 'T12:00:00.000Z')
 
-        await prisma.entry.update({
-          where: { id: entry.id },
-          data: { date: fixedDate },
-        })
+        const { error: updateError } = await supabase
+          .from('entries')
+          .update({ date: fixedDate.toISOString() })
+          .eq('id', entry.id)
+
+        if (updateError) throw updateError
 
         fixed++
         if (fixed % 100 === 0) {
@@ -79,15 +78,7 @@ async function revertDatesSafe() {
   } catch (error: any) {
     console.error('Revert failed:', error.message)
     process.exit(1)
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
 revertDatesSafe()
-
-
-
-
-
-

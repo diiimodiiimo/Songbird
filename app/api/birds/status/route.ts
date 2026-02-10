@@ -7,7 +7,7 @@ import { getBirdUnlockStatuses, BIRD_UNLOCK_REQUIREMENTS } from '@/lib/birds'
  * Get Supabase user ID directly from Clerk email
  * Bypasses Clerk ID mapping - goes straight to Supabase
  */
-async function getSupabaseUserIdFromClerk(): Promise<string | null> {
+async function getUserIdFromClerkEmail(): Promise<string | null> {
   try {
     const clerkUser = await currentUser()
     if (!clerkUser?.emailAddresses?.[0]?.emailAddress) {
@@ -53,7 +53,7 @@ export async function GET() {
     console.log('[birds/status] Clerk ID:', clerkId)
     
     // Get Supabase user ID directly from email (bypasses Clerk ID mapping)
-    const userId = await getSupabaseUserIdFromClerk()
+    const userId = await getUserIdFromClerkEmail()
     console.log('[birds/status] Supabase user ID:', userId)
     
     if (!userId) {

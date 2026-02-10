@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 
 // Simple ID generator
 function generateId(): string {
@@ -19,7 +19,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkId)
+    const userId = await getUserIdFromClerk(clerkId)
 
     if (!userId) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -66,7 +66,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkId)
+    const userId = await getUserIdFromClerk(clerkId)
 
     if (!userId) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })

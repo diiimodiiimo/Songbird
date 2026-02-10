@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { createMonthlyCheckout, stripe } from '@/lib/stripe'
 
 /**
@@ -23,7 +23,7 @@ export async function POST() {
     }
 
     // Get database user ID
-    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    const userId = await getUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }

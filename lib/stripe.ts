@@ -1,6 +1,6 @@
 import Stripe from 'stripe'
 import { getSupabase } from './supabase'
-import { getPrismaUserIdFromClerk } from './clerk-sync'
+import { getUserIdFromClerk } from './clerk-sync'
 
 // Initialize Stripe client
 export const stripe = process.env.STRIPE_SECRET_KEY

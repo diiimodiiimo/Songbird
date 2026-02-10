@@ -1,13 +1,12 @@
 /**
  * Generate invite codes for all users who don't have one
  * 
- * Run with: npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/generate-invite-codes.ts
- * Or: npx tsx scripts/generate-invite-codes.ts
+ * Run with: npx tsx scripts/generate-invite-codes.ts
  */
 
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 
-const prisma = new PrismaClient()
+const supabase = getScriptSupabase()
 
 function generateInviteCode(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
@@ -22,27 +21,23 @@ async function main() {
   console.log('Generating invite codes...')
 
   // Find all users without invite codes
-  const usersWithoutCodes = await prisma.user.findMany({
-    where: {
-      inviteCode: null,
-    },
-    select: {
-      id: true,
-      email: true,
-    },
-  })
+  const { data: usersWithoutCodes, error } = await supabase
+    .from('users')
+    .select('id, email')
+    .is('inviteCode', null)
 
-  console.log(`Found ${usersWithoutCodes.length} users without invite codes`)
+  if (error) throw error
+  console.log(`Found ${(usersWithoutCodes || []).length} users without invite codes`)
 
-  // Generate unique codes
-  const existingCodes = new Set(
-    (await prisma.user.findMany({
-      where: { inviteCode: { not: null } },
-      select: { inviteCode: true },
-    })).map(u => u.inviteCode)
-  )
+  // Get existing codes to avoid duplicates
+  const { data: usersWithCodes } = await supabase
+    .from('users')
+    .select('inviteCode')
+    .not('inviteCode', 'is', null)
 
-  for (const user of usersWithoutCodes) {
+  const existingCodes = new Set((usersWithCodes || []).map(u => u.inviteCode))
+
+  for (const user of usersWithoutCodes || []) {
     let code: string
     do {
       code = generateInviteCode()
@@ -50,22 +45,19 @@ async function main() {
 
     existingCodes.add(code)
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { inviteCode: code },
-    })
-    console.log(`  ✓ ${user.email}: ${code}`)
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ inviteCode: code })
+      .eq('id', user.id)
+
+    if (updateError) {
+      console.error(`  ✗ Error updating ${user.email}:`, updateError.message)
+    } else {
+      console.log(`  ✓ ${user.email}: ${code}`)
+    }
   }
 
   console.log('Done!')
 }
 
-main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect())
-
-
-
-
-
-
+main().catch(console.error)

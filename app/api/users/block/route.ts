@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 // Simple ID generator
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const blockerId = await getPrismaUserIdFromClerk(clerkUserId)
+    const blockerId = await getUserIdFromClerk(clerkUserId)
     if (!blockerId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
@@ -111,7 +111,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const blockerId = await getPrismaUserIdFromClerk(clerkUserId)
+    const blockerId = await getUserIdFromClerk(clerkUserId)
     if (!blockerId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
@@ -167,7 +167,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const blockerId = await getPrismaUserIdFromClerk(clerkUserId)
+    const blockerId = await getUserIdFromClerk(clerkUserId)
     if (!blockerId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }

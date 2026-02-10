@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { currentUser } from '@clerk/nextjs/server'
 
 export async function POST() {
@@ -13,7 +13,7 @@ export async function POST() {
     }
 
     // Get user ID
-    const userId = await getPrismaUserIdFromClerk(clerkId)
+    const userId = await getUserIdFromClerk(clerkId)
 
     if (!userId) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })

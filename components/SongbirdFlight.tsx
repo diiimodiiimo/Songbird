@@ -18,9 +18,11 @@ interface FlightEntry {
 
 interface SongbirdFlightProps {
   entries: FlightEntry[]
+  insight?: string | null
+  loadingInsight?: boolean
 }
 
-export default function SongbirdFlight({ entries }: SongbirdFlightProps) {
+export default function SongbirdFlight({ entries, insight, loadingInsight }: SongbirdFlightProps) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
@@ -298,6 +300,20 @@ export default function SongbirdFlight({ entries }: SongbirdFlightProps) {
           </div>
         </div>
       </div>
+
+      {/* AI Insight for the whole flight */}
+      {(loadingInsight || insight) && (
+        <div className="mt-4 bg-surface/40 rounded-xl p-4 border border-accent/15">
+          {loadingInsight ? (
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-accent/40 animate-pulse" />
+              <span className="text-text/40 text-sm">Reflecting on your week...</span>
+            </div>
+          ) : insight ? (
+            <p className="text-text/80 text-sm italic leading-relaxed">&ldquo;{insight}&rdquo;</p>
+          ) : null}
+        </div>
+      )}
 
       {/* Flight Path Progress - album art thumbnails as stops */}
       <div className="mt-4 flex items-center justify-center">

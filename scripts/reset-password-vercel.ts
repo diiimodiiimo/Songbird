@@ -1,48 +1,41 @@
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 import bcrypt from 'bcryptjs'
 
-// Connect directly to the production Supabase database
-const DATABASE_URL = 'postgresql://postgres:D1modadreamo4979@db.undbrbgtjgslmoswqaww.supabase.co:5432/postgres'
-
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: DATABASE_URL,
-    },
-  },
-})
+// Uses Supabase connection from .env.local
+const supabase = getScriptSupabase()
 
 async function resetPasswords() {
   try {
-    console.log('🔗 Connecting to production database...')
-    console.log('   Database: Supabase PostgreSQL\n')
+    console.log('🔗 Connecting to Supabase...\n')
 
     // Reset password for first user
     const email1 = 'dimotesi44@gmail.com'
     const password1 = 'password123'
     
     console.log(`📧 Resetting password for ${email1}...`)
-    const user1 = await prisma.user.findUnique({
-      where: { email: email1 },
-    })
+    const { data: user1 } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email1)
+      .maybeSingle()
 
     if (!user1) {
       console.log(`   ⚠️  User not found, creating new user...`)
       const hashedPassword1 = await bcrypt.hash(password1, 10)
-      await prisma.user.create({
-        data: {
-          email: email1,
-          name: 'dimo',
-          password: hashedPassword1,
-        },
+      await supabase.from('users').insert({
+        email: email1,
+        name: 'dimo',
+        password: hashedPassword1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
       console.log(`   ✅ User created with password: ${password1}`)
     } else {
       const hashedPassword1 = await bcrypt.hash(password1, 10)
-      await prisma.user.update({
-        where: { email: email1 },
-        data: { password: hashedPassword1 },
-      })
+      await supabase
+        .from('users')
+        .update({ password: hashedPassword1, updatedAt: new Date().toISOString() })
+        .eq('email', email1)
       console.log(`   ✅ Password reset to: ${password1}`)
     }
 
@@ -51,27 +44,29 @@ async function resetPasswords() {
     const password2 = 'password123'
     
     console.log(`\n📧 Resetting password for ${email2}...`)
-    const user2 = await prisma.user.findUnique({
-      where: { email: email2 },
-    })
+    const { data: user2 } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email2)
+      .maybeSingle()
 
     if (!user2) {
       console.log(`   ⚠️  User not found, creating new user...`)
       const hashedPassword2 = await bcrypt.hash(password2, 10)
-      await prisma.user.create({
-        data: {
-          email: email2,
-          name: 'test',
-          password: hashedPassword2,
-        },
+      await supabase.from('users').insert({
+        email: email2,
+        name: 'test',
+        password: hashedPassword2,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
       console.log(`   ✅ User created with password: ${password2}`)
     } else {
       const hashedPassword2 = await bcrypt.hash(password2, 10)
-      await prisma.user.update({
-        where: { email: email2 },
-        data: { password: hashedPassword2 },
-      })
+      await supabase
+        .from('users')
+        .update({ password: hashedPassword2, updatedAt: new Date().toISOString() })
+        .eq('email', email2)
       console.log(`   ✅ Password reset to: ${password2}`)
     }
 
@@ -87,17 +82,8 @@ async function resetPasswords() {
 
   } catch (error: any) {
     console.error('❌ Error:', error.message)
-    if (error.message.includes('P1001')) {
-      console.error('\n⚠️  Could not connect to database. Check your DATABASE_URL.')
-    }
     process.exit(1)
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
 resetPasswords()
-
-
-
-

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { sendPushToUser } from '@/lib/sendPushToUser'
 
 // Create a comment on an entry
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Entry ID and content required' }, { status: 400 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    const userId = await getUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }

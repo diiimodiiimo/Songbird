@@ -7,7 +7,7 @@ A music journaling app that helps users track daily "Song of the Day" entries wi
 ## Tech Stack
 
 - **Framework**: Next.js 14+ (App Router)
-- **Database**: PostgreSQL with Prisma ORM (Vercel Postgres)
+- **Database**: PostgreSQL with Supabase
 - **Auth**: Clerk
 - **Music API**: Spotify
 - **Hosting**: Vercel
@@ -36,8 +36,6 @@ npm run dev          # Start dev server
 npm run typecheck    # TypeScript check
 npm run lint         # ESLint
 npm test             # Run tests
-npx prisma generate  # After schema changes
-npx prisma db push   # Push schema to DB
 ```
 
 ## Patterns

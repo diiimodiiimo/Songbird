@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { sendPushToUser } from '@/lib/sendPushToUser'
 
 // Toggle vibe on an entry
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Entry ID required' }, { status: 400 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    const userId = await getUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
@@ -109,7 +109,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const targetUserId = searchParams.get('userId')
 
-    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    const userId = await getUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }

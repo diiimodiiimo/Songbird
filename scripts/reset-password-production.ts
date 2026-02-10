@@ -1,29 +1,30 @@
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 import bcrypt from 'bcryptjs'
 
-// This script uses DATABASE_URL from environment
-// For production, set DATABASE_URL to your Supabase connection string
-const prisma = new PrismaClient()
+// This script uses NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from .env.local
+const supabase = getScriptSupabase()
 
 async function resetPassword() {
   const email = process.argv[2]
   const newPassword = process.argv[3] || 'password123'
 
   if (!email) {
-    console.log('Usage: DATABASE_URL="your-postgres-url" npx tsx scripts/reset-password-production.ts <email> [newPassword]')
+    console.log('Usage: npx tsx scripts/reset-password-production.ts <email> [newPassword]')
     console.log('\nExample:')
-    console.log('  DATABASE_URL="postgresql://..." npx tsx scripts/reset-password-production.ts dimotesi44@gmail.com mynewpassword')
-    console.log('\nOr set DATABASE_URL in .env and run:')
     console.log('  npx tsx scripts/reset-password-production.ts dimotesi44@gmail.com mynewpassword')
     process.exit(1)
   }
 
   try {
-    console.log(`Connecting to database: ${process.env.DATABASE_URL?.substring(0, 50)}...`)
+    console.log(`Connecting to Supabase...`)
     
-    const user = await prisma.user.findUnique({
-      where: { email },
-    })
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email, name')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (error) throw error
 
     if (!user) {
       console.error(`❌ User with email ${email} not found`)
@@ -34,10 +35,12 @@ async function resetPassword() {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10)
 
-    await prisma.user.update({
-      where: { email },
-      data: { password: hashedPassword },
-    })
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ password: hashedPassword, updatedAt: new Date().toISOString() })
+      .eq('email', email)
+
+    if (updateError) throw updateError
 
     console.log(`✅ Password reset for ${email}`)
     console.log(`   New password: ${newPassword}`)
@@ -46,17 +49,8 @@ async function resetPassword() {
     console.log(`   Password: ${newPassword}`)
   } catch (error: any) {
     console.error('❌ Error resetting password:', error.message)
-    if (error.message.includes('P1001')) {
-      console.error('\n⚠️  Database connection failed. Make sure DATABASE_URL is set correctly.')
-    }
     process.exit(1)
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
 resetPassword()
-
-
-
-

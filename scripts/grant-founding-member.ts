@@ -5,9 +5,9 @@
  *   npx tsx scripts/grant-founding-member.ts friend@email.com
  */
 
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 
-const prisma = new PrismaClient()
+const supabase = getScriptSupabase()
 
 async function main() {
   const email = process.argv[2]
@@ -21,17 +21,13 @@ async function main() {
   console.log(`🔍 Looking for user with email: ${email}`)
 
   // Find user by email
-  const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      username: true,
-      isPremium: true,
-      isFoundingMember: true,
-    },
-  })
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('id, email, name, username, isPremium, isFoundingMember')
+    .eq('email', email.toLowerCase())
+    .maybeSingle()
+
+  if (error) throw error
 
   if (!user) {
     console.error(`❌ User not found with email: ${email}`)
@@ -47,19 +43,24 @@ async function main() {
   }
 
   // Grant founding membership
-  const updatedUser = await prisma.user.update({
-    where: { id: user.id },
-    data: {
+  const { data: updatedUser, error: updateError } = await supabase
+    .from('users')
+    .update({
       isPremium: true,
       isFoundingMember: true,
-      premiumSince: new Date(),
-    },
-  })
+      premiumSince: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+    .eq('id', user.id)
+    .select('name, username, email, premiumSince')
+    .single()
+
+  if (updateError) throw updateError
 
   console.log(`🎉 Successfully granted Founding Flock membership!`)
   console.log(`   Name: ${updatedUser.name || updatedUser.username || 'N/A'}`)
   console.log(`   Email: ${updatedUser.email}`)
-  console.log(`   Premium Since: ${updatedUser.premiumSince?.toISOString()}`)
+  console.log(`   Premium Since: ${updatedUser.premiumSince}`)
 }
 
 main()
@@ -67,12 +68,3 @@ main()
     console.error('Error:', e)
     process.exit(1)
   })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
-
-
-
-
-
-

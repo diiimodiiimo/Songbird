@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { calculateStreak, restoreStreak } from '@/lib/streak'
 
 // Get current streak status
@@ -12,7 +12,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkId)
+    const userId = await getUserIdFromClerk(clerkId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkId)
+    const userId = await getUserIdFromClerk(clerkId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }

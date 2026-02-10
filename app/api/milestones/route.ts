@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 
 interface Milestone {
   type: string
@@ -99,8 +99,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
-    if (!prismaUserId) {
+    const dbUserId = await getUserIdFromClerk(clerkUserId)
+    if (!dbUserId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
     const { data: entries, error } = await supabase
       .from('entries')
       .select('date')
-      .eq('userId', prismaUserId)
+      .eq('userId', dbUserId)
       .order('date', { ascending: true })
 
     if (error) {
@@ -145,7 +145,7 @@ export async function GET(request: Request) {
     const { data: streakData } = await supabase
       .from('users')
       .select('currentStreak')
-      .eq('id', prismaUserId)
+      .eq('id', dbUserId)
       .single()
 
     const currentStreak = streakData?.currentStreak || 0

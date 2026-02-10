@@ -64,6 +64,9 @@ export default function MemoryTab() {
   const [loadingJourneyNarrative, setLoadingJourneyNarrative] = useState(false)
   const [milestoneData, setMilestoneData] = useState<MilestoneData | null>(null)
   const [loadingMilestones, setLoadingMilestones] = useState(false)
+  const [flightInsight, setFlightInsight] = useState<string | null>(null)
+  const [loadingFlightInsight, setLoadingFlightInsight] = useState(false)
+  const [recentDaysOpen, setRecentDaysOpen] = useState(false)
 
   // Fetch On This Day entries
   useEffect(() => {
@@ -188,8 +191,10 @@ export default function MemoryTab() {
         
         if (recent.length >= 2) {
           setRecentReflectionEntries(recent)
+          fetchFlightInsight(recent)
         } else {
           setRecentReflectionEntries([])
+          setFlightInsight(null)
         }
       }
     } catch (error) {
@@ -199,6 +204,38 @@ export default function MemoryTab() {
     }
   }
 
+  const fetchFlightInsight = async (entries: Entry[]) => {
+    if (entries.length < 2) return
+
+    setLoadingFlightInsight(true)
+    try {
+      const artists = entries.map(e => e.artist)
+      const songs = entries.map(e => e.songTitle)
+      const notes = entries.map(e => e.notes).filter((n): n is string => n !== null && n !== undefined)
+      const people = entries.flatMap(e => e.people?.map(p => p.name) || [])
+
+      const res = await fetch('/api/ai-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          artists,
+          songs,
+          date: new Date().toISOString().split('T')[0],
+          context: 'recent',
+          notes: notes.length > 0 ? notes : undefined,
+          people: people.length > 0 ? people : undefined,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.insight) {
+        setFlightInsight(data.insight)
+      }
+    } catch (error) {
+      console.error('Error fetching flight insight:', error)
+    } finally {
+      setLoadingFlightInsight(false)
+    }
+  }
 
   const fetchJourneyNarrative = async () => {
     if (!user || !isLoaded || recentEntries.length === 0 || !milestoneData) return
@@ -433,86 +470,115 @@ export default function MemoryTab() {
       {recentReflectionEntries.length >= 2 && (
         <div className="mb-12">
           <h2 className="text-2xl sm:text-3xl font-bold mb-6">Your Recent Flight</h2>
-          <SongbirdFlight entries={recentReflectionEntries} />
+          <SongbirdFlight
+            entries={recentReflectionEntries}
+            insight={flightInsight}
+            loadingInsight={loadingFlightInsight}
+          />
         </div>
       )}
 
-      {/* Recent Days Section - THIRD (segues from Recent Reflections) */}
-      <div className="border-t border-surface/50 pt-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl sm:text-2xl font-bold">Recent Days</h2>
-          <Link
-            href="/archive"
-            className="text-accent hover:text-accent/80 text-sm font-medium transition-colors"
-          >
-            Full Archive →
-          </Link>
-        </div>
-
-        {loadingRecent ? (
-          <div className="text-center py-8">
-            <div className="flex justify-center mb-3">
-              <ThemeBird size={48} state="bounce" className="animate-bounce" />
-            </div>
-            <p className="text-text/60">Loading recent entries...</p>
+      {/* Recent Days Section - THIRD (collapsible) */}
+      <div className="border-t border-surface/50 pt-6">
+        <button
+          onClick={() => setRecentDaysOpen(!recentDaysOpen)}
+          className="w-full flex items-center justify-between py-2 group"
+        >
+          <h2 className="text-xl sm:text-2xl font-bold group-hover:text-accent transition-colors">Recent Days</h2>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/archive"
+              onClick={(e) => e.stopPropagation()}
+              className="text-accent hover:text-accent/80 text-sm font-medium transition-colors"
+            >
+              Full Archive →
+            </Link>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`text-text/40 transition-transform duration-300 ${recentDaysOpen ? 'rotate-180' : ''}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </div>
-        ) : recentEntries.length > 0 ? (
-          <div className="space-y-3">
-            {recentEntries.map((entry) => (
-              <div key={entry.id} className="bg-surface rounded-lg p-4 hover:bg-surface/80 transition-colors">
-                <div className="flex gap-3">
-                  {entry.albumArt && (
-                    <div className="flex-shrink-0 self-stretch flex items-center">
-                      <div className="relative group">
-                        <div className="absolute -inset-0.5 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-lg opacity-50 blur-[2px] group-hover:opacity-80 transition-opacity"></div>
-                        <Image
-                          src={entry.albumArt}
-                          alt={entry.songTitle}
-                          width={60}
-                          height={60}
-                          className="relative rounded-lg h-full w-auto border border-white/10"
-                          style={{ objectFit: 'contain' }}
-                        />
+        </button>
+
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            recentDaysOpen ? 'max-h-[2000px] opacity-100 mt-4' : 'max-h-0 opacity-0'
+          }`}
+        >
+          {loadingRecent ? (
+            <div className="text-center py-8">
+              <div className="flex justify-center mb-3">
+                <ThemeBird size={48} state="bounce" className="animate-bounce" />
+              </div>
+              <p className="text-text/60">Loading recent entries...</p>
+            </div>
+          ) : recentEntries.length > 0 ? (
+            <div className="space-y-3">
+              {recentEntries.map((entry) => (
+                <div key={entry.id} className="bg-surface rounded-lg p-4 hover:bg-surface/80 transition-colors">
+                  <div className="flex gap-3">
+                    {entry.albumArt && (
+                      <div className="flex-shrink-0 self-stretch flex items-center">
+                        <div className="relative group">
+                          <div className="absolute -inset-0.5 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-lg opacity-50 blur-[2px] group-hover:opacity-80 transition-opacity"></div>
+                          <Image
+                            src={entry.albumArt}
+                            alt={entry.songTitle}
+                            width={60}
+                            height={60}
+                            className="relative rounded-lg h-full w-auto border border-white/10"
+                            style={{ objectFit: 'contain' }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-text/60 mb-1">
-                      {(() => {
-                        const [year, month, day] = entry.date.split('-')
-                        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
-                        return date.toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric', 
-                          year: 'numeric' 
-                        })
-                      })()}
-                    </div>
-                    <h4 className="font-semibold text-lg mb-1 truncate">
-                      {entry.songTitle}
-                    </h4>
-                    <div className="text-text/70 text-sm truncate">
-                      {entry.artist}
-                    </div>
-                    {showNotes && (entry.notesPreview || entry.notes) && (
-                      <p className="text-text/80 text-xs mt-2 line-clamp-2">
-                        {entry.notesPreview || entry.notes}
-                      </p>
                     )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-text/60 mb-1">
+                        {(() => {
+                          const [year, month, day] = entry.date.split('-')
+                          const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+                          return date.toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric', 
+                            year: 'numeric' 
+                          })
+                        })()}
+                      </div>
+                      <h4 className="font-semibold text-lg mb-1 truncate">
+                        {entry.songTitle}
+                      </h4>
+                      <div className="text-text/70 text-sm truncate">
+                        {entry.artist}
+                      </div>
+                      {showNotes && (entry.notesPreview || entry.notes) && (
+                        <p className="text-text/80 text-xs mt-2 line-clamp-2">
+                          {entry.notesPreview || entry.notes}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <div className="flex justify-center mb-3">
-              <ThemeBird size={56} />
+              ))}
             </div>
-            <p className="text-text/60">No recent entries yet.</p>
-            <p className="text-text/40 text-sm mt-1">Start logging songs to see them here!</p>
-          </div>
-        )}
+          ) : (
+            <div className="text-center py-8">
+              <div className="flex justify-center mb-3">
+                <ThemeBird size={56} />
+              </div>
+              <p className="text-text/60">No recent entries yet.</p>
+              <p className="text-text/40 text-sm mt-1">Start logging songs to see them here!</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

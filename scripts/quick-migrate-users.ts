@@ -1,10 +1,21 @@
-import { PrismaClient } from '@prisma/client'
-import * as sqlite3 from 'better-sqlite3'
+import { getScriptSupabase } from './supabase-client'
 
-const postgres = new PrismaClient()
+// Note: This script previously used Prisma + better-sqlite3 to migrate from SQLite to PostgreSQL.
+// Since we no longer use Prisma, this script uses Supabase for the PostgreSQL side.
+// You still need 'better-sqlite3' installed to read from SQLite.
+
+let sqlite3: any
+try {
+  sqlite3 = require('better-sqlite3')
+} catch {
+  console.error('❌ better-sqlite3 is not installed. Run: npm install better-sqlite3')
+  process.exit(1)
+}
+
+const supabase = getScriptSupabase()
 
 async function migrateUsers() {
-  console.log('🚀 Migrating users from SQLite to PostgreSQL...\n')
+  console.log('🚀 Migrating users from SQLite to Supabase...\n')
 
   try {
     // Connect to SQLite directly
@@ -14,24 +25,12 @@ async function migrateUsers() {
     const users = db.prepare('SELECT * FROM users').all() as any[]
     console.log(`Found ${users.length} users in SQLite\n`)
 
-    // Migrate each user to PostgreSQL
+    // Migrate each user to Supabase (PostgreSQL)
     for (const user of users) {
       try {
-        await postgres.user.upsert({
-          where: { id: user.id },
-          update: {
-            email: user.email,
-            name: user.name,
-            username: user.username,
-            password: user.password, // Keep the hashed password
-            image: user.image,
-            bio: user.bio,
-            favoriteArtists: user.favoriteArtists,
-            favoriteSongs: user.favoriteSongs,
-            createdAt: new Date(user.createdAt),
-            updatedAt: new Date(user.updatedAt),
-          },
-          create: {
+        const { error } = await supabase
+          .from('users')
+          .upsert({
             id: user.id,
             email: user.email,
             name: user.name,
@@ -41,10 +40,11 @@ async function migrateUsers() {
             bio: user.bio,
             favoriteArtists: user.favoriteArtists,
             favoriteSongs: user.favoriteSongs,
-            createdAt: new Date(user.createdAt),
-            updatedAt: new Date(user.updatedAt),
-          },
-        })
+            createdAt: new Date(user.createdAt).toISOString(),
+            updatedAt: new Date(user.updatedAt).toISOString(),
+          }, { onConflict: 'id' })
+
+        if (error) throw error
         console.log(`✅ Migrated user: ${user.email}`)
       } catch (error: any) {
         console.error(`❌ Error migrating ${user.email}:`, error.message)
@@ -57,13 +57,7 @@ async function migrateUsers() {
   } catch (error: any) {
     console.error('❌ Migration failed:', error.message)
     process.exit(1)
-  } finally {
-    await postgres.$disconnect()
   }
 }
 
 migrateUsers()
-
-
-
-

@@ -98,7 +98,7 @@ No app combines:
 
 - **Framework**: Next.js 14+ (App Router)
 - **Language**: TypeScript
-- **Database**: PostgreSQL with Prisma ORM
+- **Database**: PostgreSQL with Supabase
 - **Authentication**: Clerk
 - **Styling**: Tailwind CSS
 - **Hosting**: Vercel
@@ -142,12 +142,11 @@ sotd/
 │   ├── Notifications.tsx # Notifications
 │   └── Navigation.tsx    # Navigation component
 ├── lib/
-│   ├── prisma.ts         # Prisma client
+│   ├── supabase.ts       # Supabase client
+│   ├── db.ts             # Database helper functions
 │   ├── clerk-sync.ts     # Clerk user sync helper
 │   ├── spotify.ts        # Spotify API client
 │   └── friends.ts        # Friend utilities
-├── prisma/
-│   └── schema.prisma     # Database schema
 └── scripts/              # Migration and utility scripts
 ```
 
@@ -205,7 +204,7 @@ sotd/
 ## ✅ What's Working
 
 - Core functionality (add entries, view history, analytics)
-- Database schema and Prisma setup (PostgreSQL)
+- Database schema and Supabase setup (PostgreSQL)
 - All API routes with Clerk authentication
 - All components with Clerk authentication
 - Home screen with logo
@@ -257,10 +256,10 @@ Use `.env.local` for local development with:
 - Components: `components/[ComponentName].tsx`
 - Pages: `app/[route]/page.tsx`
 - Utilities: `lib/[utility].ts`
-- Database schema: `prisma/schema.prisma`
+- Database: `lib/supabase.ts` and `lib/db.ts`
 
 ### Database Patterns
-- Use Prisma for all database operations
+- Use Supabase client for all database operations
 - Always use `select` or `include` to limit fields (never fetch all fields)
 - Use indexes for frequently queried fields (userId, date combinations)
 - Handle connection pooling properly for Vercel serverless
@@ -366,11 +365,11 @@ const fetchEntries = async () => {
 
 **Key Files**:
 - `app/api/**/route.ts` - All API routes
-- `lib/prisma.ts` - Prisma client setup
-- `prisma/schema.prisma` - Database schema
+- `lib/supabase.ts` - Supabase client setup
+- `lib/db.ts` - Database helper functions
 
 **Constraints**:
-- Must use Prisma for database operations
+- Must use Supabase for database operations
 - Keep Vercel serverless limits in mind
 - Maintain type safety
 - Don't break existing functionality
@@ -546,8 +545,7 @@ When advising on SongBird, you should:
 ## Key Technologies
 - Next.js 16 (App Router)
 - TypeScript
-- Prisma ORM
-- PostgreSQL
+- Supabase (PostgreSQL)
 - Clerk (auth)
 - Tailwind CSS
 - Spotify API
@@ -556,12 +554,12 @@ When advising on SongBird, you should:
 - Components: `components/*.tsx`
 - API Routes: `app/api/**/route.ts`
 - Pages: `app/**/page.tsx`
-- Database: `prisma/schema.prisma`
+- Database: `lib/supabase.ts`, `lib/db.ts`
 - Styles: `app/globals.css`, `tailwind.config.js`
 
 ## Environment Variables
 - Clerk keys needed for auth
-- Database URL for Prisma
+- Supabase URL and service role key
 - Spotify API keys
 - See `.env` or `.env.local`
 
@@ -569,7 +567,7 @@ When advising on SongBird, you should:
 - Server Components by default
 - 'use client' for client components
 - API routes in `app/api`
-- Prisma for all database access
+- Supabase for all database access
 - Tailwind for styling
 
 ## Getting Started Checklist

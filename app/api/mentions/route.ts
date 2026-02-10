@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { areFriends } from '@/lib/friends'
 import { z } from 'zod'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { sendPushToUser } from '@/lib/sendPushToUser'
 
 // Simple ID generator
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const currentUserId = await getPrismaUserIdFromClerk(clerkUserId)
+    const currentUserId = await getUserIdFromClerk(clerkUserId)
     if (!currentUserId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
@@ -150,7 +150,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    const userId = await getUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }

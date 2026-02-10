@@ -1,7 +1,7 @@
-import { PrismaClient } from '@prisma/client'
+import { getScriptSupabase } from './supabase-client'
 import bcrypt from 'bcryptjs'
 
-const prisma = new PrismaClient()
+const supabase = getScriptSupabase()
 
 async function resetPassword() {
   const email = process.argv[2]
@@ -15,9 +15,13 @@ async function resetPassword() {
   }
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { email },
-    })
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (error) throw error
 
     if (!user) {
       console.error(`❌ User with email ${email} not found`)
@@ -26,23 +30,19 @@ async function resetPassword() {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10)
 
-    await prisma.user.update({
-      where: { email },
-      data: { password: hashedPassword },
-    })
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ password: hashedPassword, updatedAt: new Date().toISOString() })
+      .eq('email', email)
+
+    if (updateError) throw updateError
 
     console.log(`✅ Password reset for ${email}`)
     console.log(`   New password: ${newPassword}`)
   } catch (error: any) {
     console.error('❌ Error resetting password:', error.message)
     process.exit(1)
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
 resetPassword()
-
-
-
-

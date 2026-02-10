@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { getOnThisDayDateLimit } from '@/lib/paywall'
 
 export async function GET(request: Request) {
@@ -11,13 +11,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
-    if (!prismaUserId) {
+    const dbUserId = await getUserIdFromClerk(clerkUserId)
+    if (!dbUserId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId') || prismaUserId
+    const userId = searchParams.get('userId') || dbUserId
     const dateParam = searchParams.get('date')
 
     if (!dateParam || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
