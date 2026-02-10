@@ -1,14 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Image from 'next/image'
 import { getThemeById, getBirdLogo } from '@/lib/theme'
-
-// Check if we're in a mobile environment (Expo)
-const isExpo = typeof window !== 'undefined' && (
-  (window as any).expo || 
-  (typeof navigator !== 'undefined' && (navigator as any).product === 'ReactNative')
-)
 
 interface ContactUser {
   id: string
@@ -34,121 +28,9 @@ export function ContactsDiscovery({ onFriendRequestSent }: ContactsDiscoveryProp
   const [phoneInput, setPhoneInput] = useState('')
   const [showPhoneInput, setShowPhoneInput] = useState(false)
 
-  // Try to get contacts from native device contacts
-  const handleImportContacts = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      let phoneNumbers: string[] = []
-
-      // Check if we're in Expo/React Native environment
-      if (isExpo || (typeof navigator !== 'undefined' && (navigator as any).product === 'ReactNative')) {
-        // Use Expo Contacts API (native mobile)
-        try {
-          // Dynamic import for Expo Contacts (only loads in mobile)
-          const expoContacts = await import('expo-contacts')
-          const { requestPermissionsAsync, getContactsAsync, Fields } = expoContacts
-          
-          // Request permission
-          const { status } = await requestPermissionsAsync()
-          if (status !== 'granted') {
-            setError('Contact access denied. Please enter phone numbers manually.')
-            setShowPhoneInput(true)
-            setLoading(false)
-            return
-          }
-
-          // Get contacts with phone numbers
-          const { data: contacts } = await getContactsAsync({
-            fields: [Fields.PhoneNumbers],
-          })
-
-          // Extract phone numbers from contacts
-          phoneNumbers = contacts
-            .filter(c => c.phoneNumbers && c.phoneNumbers.length > 0)
-            .flatMap(c => c.phoneNumbers!.map(p => p.number || p.digits || ''))
-            .filter(Boolean)
-
-          if (phoneNumbers.length === 0) {
-            setError('No phone numbers found in contacts')
-            setLoading(false)
-            return
-          }
-
-          await findContactsByPhone(phoneNumbers)
-        } catch (expoError: any) {
-          console.error('Expo Contacts error:', expoError)
-          // If expo-contacts isn't available (web environment), fallback
-          if (expoError.code === 'MODULE_NOT_FOUND' || expoError.message?.includes('expo-contacts')) {
-            // We're in web environment - try web Contacts API or show manual input
-            if ('contacts' in navigator && 'ContactsManager' in window) {
-              try {
-                const contactsManager = (navigator as any).contacts
-                const contacts = await contactsManager.select(['tel'], { multiple: true })
-                phoneNumbers = contacts
-                  .flatMap((c: any) => c.tel || [])
-                  .map((p: any) => p.value || p)
-                  .filter(Boolean)
-                
-                if (phoneNumbers.length > 0) {
-                  await findContactsByPhone(phoneNumbers)
-                } else {
-                  setError('No phone numbers found. Please enter manually.')
-                  setShowPhoneInput(true)
-                }
-              } catch (webError) {
-                setError('Contact access not available. Please enter phone numbers manually.')
-                setShowPhoneInput(true)
-              }
-            } else {
-              setError('Contact access not available. Please enter phone numbers manually.')
-              setShowPhoneInput(true)
-            }
-          } else {
-            // Other error - show manual input
-            setError('Failed to access contacts. Please enter phone numbers manually.')
-            setShowPhoneInput(true)
-          }
-          setLoading(false)
-        }
-      } else if ('contacts' in navigator && 'ContactsManager' in window) {
-        // Web Contacts API fallback
-        try {
-          const contactsManager = (navigator as any).contacts
-          const contacts = await contactsManager.select(['tel'], { multiple: true })
-          phoneNumbers = contacts
-            .flatMap((c: any) => c.tel || [])
-            .map((p: any) => p.value || p)
-            .filter(Boolean)
-          
-          if (phoneNumbers.length > 0) {
-            await findContactsByPhone(phoneNumbers)
-          } else {
-            setError('No phone numbers found. Please enter manually.')
-            setShowPhoneInput(true)
-          }
-        } catch (webError) {
-          setError('Contact access not available. Please enter phone numbers manually.')
-          setShowPhoneInput(true)
-        }
-      } else {
-        // No contacts API available - show manual input
-        setShowPhoneInput(true)
-        setError('Contact access not available. Please enter phone numbers manually.')
-      }
-    } catch (err: any) {
-      console.error('Error importing contacts:', err)
-      if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
-        setError('Contact access denied. Please enter phone numbers manually.')
-        setShowPhoneInput(true)
-      } else {
-        setError('Failed to import contacts. Try entering phone numbers manually.')
-        setShowPhoneInput(true)
-      }
-    } finally {
-      setLoading(false)
-    }
+  // On web, go straight to manual phone input (contacts API requires native mobile app)
+  const handleImportContacts = () => {
+    setShowPhoneInput(true)
   }
 
   const handleManualPhoneSubmit = async () => {

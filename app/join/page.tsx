@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/lib/theme'
 import Image from 'next/image'
-import { loadStripe } from '@stripe/stripe-js'
+// Stripe integration disabled for now - uncomment when @stripe/stripe-js is installed
+// import { loadStripe } from '@stripe/stripe-js'
 
 /**
  * Simple waitlist page optimized for social media sharing
@@ -85,9 +86,6 @@ export default function SimpleWaitlistPage() {
     setError('')
 
     try {
-      const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
-      if (!stripe) throw new Error('Stripe not available')
-
       const res = await fetch('/api/waitlist/founding-flock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,10 +94,12 @@ export default function SimpleWaitlistPage() {
 
       const data = await res.json()
 
-      if (res.ok && data.sessionId) {
-        await stripe.redirectToCheckout({ sessionId: data.sessionId })
+      if (res.ok) {
+        setSuccess(true)
+        setEmail('')
+        setName('')
       } else {
-        setError(data.error || 'Failed to start checkout')
+        setError(data.error || 'Failed to reserve spot')
       }
     } catch (error) {
       setError('Something went wrong. Please try again.')
