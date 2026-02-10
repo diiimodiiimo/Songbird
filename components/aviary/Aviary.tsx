@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { AviaryBird as AviaryBirdComponent } from './AviaryBird'
 import { SongPreviewModal } from './SongPreviewModal'
 import { ContactsDiscovery } from './ContactsDiscovery'
+import { SuggestedUsers } from './SuggestedUsers'
 import { EmptyAviary } from './EmptyAviary'
 import type { AviaryData, AviaryBird as AviaryBirdType } from '@/types/aviary'
 
@@ -223,6 +224,9 @@ export function Aviary({ data }: AviaryProps) {
         {friends.length === 0 && (
           <EmptyAviary />
         )}
+
+        {/* Users on SongBird - sorted by mutual friends */}
+        <SuggestedUsers />
 
         {/* Contacts Discovery Section */}
         <ContactsDiscovery />
