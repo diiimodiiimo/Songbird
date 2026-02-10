@@ -6,6 +6,7 @@ import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
 import Link from 'next/link'
 import ThemeBird, { ThemeBirdLogo } from '@/components/ThemeBird'
+import ReportModal from '@/components/ReportModal'
 
 // Force dynamic rendering for this page
 export const dynamic = 'force-dynamic'
@@ -42,6 +43,9 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true)
   const [sendingRequest, setSendingRequest] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [blocking, setBlocking] = useState(false)
 
   useEffect(() => {
     fetchPublicProfile()
@@ -100,6 +104,84 @@ export default function UserProfilePage() {
       setMessage({ type: 'error', text: 'Failed to send friend request' })
     } finally {
       setSendingRequest(false)
+    }
+  }
+
+  const handleBlock = async () => {
+    if (!profile || blocking) return
+
+    setBlocking(true)
+    setMessage(null)
+
+    try {
+      const res = await fetch('/api/users/block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blockedUsername: profile.username }),
+      })
+
+      const data = await res.json()
+      if (res.ok) {
+        setIsBlocked(true)
+        setMessage({ type: 'success', text: `@${profile.username} has been blocked` })
+        fetchFriendshipStatus() // Refresh to update friend status
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to block user' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to block user' })
+    } finally {
+      setBlocking(false)
+    }
+  }
+
+  const handleUnblock = async () => {
+    if (!profile || blocking) return
+
+    setBlocking(true)
+    setMessage(null)
+
+    try {
+      const res = await fetch(`/api/users/block?username=${profile.username}`, {
+        method: 'DELETE',
+      })
+
+      if (res.ok) {
+        setIsBlocked(false)
+        setMessage({ type: 'success', text: `@${profile.username} has been unblocked` })
+      } else {
+        const data = await res.json()
+        setMessage({ type: 'error', text: data.error || 'Failed to unblock user' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to unblock user' })
+    } finally {
+      setBlocking(false)
+    }
+  }
+
+  const handleReport = async (reason: string, description?: string) => {
+    if (!profile) return
+
+    try {
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportedUsername: profile.username,
+          type: 'user',
+          reason,
+          description,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to submit report')
+      }
+    } catch (error) {
+      console.error('Error reporting user:', error)
+      throw error
     }
   }
 
@@ -289,8 +371,43 @@ export default function UserProfilePage() {
                 {sendingRequest ? 'Sending...' : 'Add Friend'}
               </button>
             )}
+
+            {/* Block/Report Actions */}
+            <div className="flex gap-2 pt-2 border-t border-text/10">
+              {isBlocked ? (
+                <button
+                  onClick={handleUnblock}
+                  disabled={blocking}
+                  className="flex-1 px-4 py-2 bg-surface border border-text/20 text-text rounded-lg hover:bg-surface/80 transition-colors disabled:opacity-50 text-sm"
+                >
+                  {blocking ? 'Unblocking...' : 'Unblock User'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleBlock}
+                  disabled={blocking}
+                  className="flex-1 px-4 py-2 bg-surface border border-text/20 text-text rounded-lg hover:bg-surface/80 transition-colors disabled:opacity-50 text-sm"
+                >
+                  {blocking ? 'Blocking...' : 'Block User'}
+                </button>
+              )}
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="flex-1 px-4 py-2 bg-red-900/20 border border-red-500/30 text-red-400 rounded-lg hover:bg-red-900/30 transition-colors text-sm"
+              >
+                Report
+              </button>
+            </div>
           </div>
         )}
+
+        <ReportModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          type="user"
+          reportedUsername={profile?.username}
+          onReport={handleReport}
+        />
       </div>
     </div>
   )

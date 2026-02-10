@@ -1,94 +1,202 @@
 # /performance-audit
 
-Analyze the current file, component, or feature for performance issues and optimization opportunities. Think like a performance engineer preparing for production load.
+Perform a performance audit focused on load times, rendering efficiency, and user experience. Act like a performance engineer optimizing for real users.
 
-## React/Next.js Performance
+## Key Metrics
 
-### Component Rendering
-- Unnecessary re-renders (missing `useMemo`, `useCallback`)
-- Large components that should be split
-- Missing React.memo for pure components
-- State updates triggering cascading renders
+| Metric | Target | Critical |
+|--------|--------|----------|
+| LCP (Largest Contentful Paint) | < 2.5s | > 4s |
+| FID (First Input Delay) | < 100ms | > 300ms |
+| CLS (Cumulative Layout Shift) | < 0.1 | > 0.25 |
+| TTFB (Time to First Byte) | < 600ms | > 1.5s |
 
-### Data Fetching
-- Multiple sequential requests that could be parallel
-- Missing loading states (causes layout shift)
-- Over-fetching (requesting more data than needed)
-- Missing error boundaries
+## Frontend Performance
+
+### React Component Optimization
+
+```tsx
+// Use React.memo for expensive components
+const EntryCard = React.memo(({ entry }: { entry: Entry }) => {
+  return <div>{/* ... */}</div>
+})
+
+// Use useMemo for expensive calculations
+const sortedEntries = useMemo(() => {
+  return entries.sort((a, b) => b.date - a.date)
+}, [entries])
+
+// Use useCallback for handlers passed to children
+const handleVibe = useCallback((entryId: string) => {
+  // ...
+}, [/* deps */])
+```
+
+### Lazy Loading
+```tsx
+// Dynamic imports for heavy components
+const Wrapped = dynamic(() => import('./WrappedTab'), {
+  loading: () => <LoadingSkeleton />,
+})
+
+// Lazy load images
+<Image
+  src={albumArt}
+  alt={songTitle}
+  loading="lazy"
+  placeholder="blur"
+  blurDataURL={PLACEHOLDER}
+/>
+```
 
 ### Bundle Size
-- Large imports that could be dynamic
-- Heavy libraries with smaller alternatives
-- Unused code and dead imports
+```bash
+# Analyze bundle
+npm run build
+npx @next/bundle-analyzer
+```
 
-### Images
-- Missing Next.js `Image` component
-- No size optimization
-- Missing lazy loading
-- Base64 images in bulk data
+Watch for:
+- Large node_modules (lodash → lodash-es)
+- Unused imports
+- Heavy libraries (moment → dayjs)
 
-## Database/API Performance
+## API Performance
 
-### Query Optimization
-- N+1 query patterns
-- Missing database indexes for common queries
-- Fetching all fields instead of using `select`
-- Count queries that could use `.length`
-- Pagination for large datasets
+### Response Size
+```typescript
+// BAD: Fetching all fields
+const { data } = await supabase.from('entries').select('*')
 
-### API Response Size
-- Returning more data than needed
-- Base64 images in bulk responses
-- Missing compression
-- Duplicate data in responses
+// GOOD: Select only needed fields
+const { data } = await supabase
+  .from('entries')
+  .select('id, songTitle, artist, albumArt')
+  .limit(50)
+```
 
-### Connection Management
-- Prisma connection pooling for serverless
-- Database connection reuse
+### Pagination
+```typescript
+// Implement cursor-based pagination
+const { data } = await supabase
+  .from('entries')
+  .select('*')
+  .order('date', { ascending: false })
+  .range(offset, offset + pageSize - 1)
+```
 
-## Client-Side Performance
+### Caching
+```typescript
+// Use Next.js cache for static data
+export const revalidate = 3600 // Cache for 1 hour
 
-### Loading & Rendering
-- Blocking renders during data fetch
-- Layout shift from loading states
-- Flash of empty state before data loads
+// Use SWR for client-side caching
+const { data } = useSWR('/api/entries', fetcher, {
+  revalidateOnFocus: false,
+  dedupingInterval: 60000,
+})
+```
 
-### State Management
-- Excessive useState calls
-- Missing derived state (computing instead of storing)
-- Redundant state across components
+## Database Performance
 
-### Animations
-- Janky animations (not using transforms)
-- Missing `will-change` for animated elements
-- Animations running during scroll
+### Indexes
+```sql
+-- Essential indexes for common queries
+CREATE INDEX idx_entries_user_date ON entries(userId, date);
+CREATE INDEX idx_vibes_entry ON vibes(entryId);
+CREATE INDEX idx_comments_entry ON comments(entryId);
+```
 
-## Vercel/Serverless Considerations
+### N+1 Query Detection
+```typescript
+// BAD: N+1 queries
+for (const entry of entries) {
+  entry.vibeCount = await getVibeCount(entry.id)
+}
 
-- Cold start optimization
-- Function timeout risks (large queries)
-- Edge-compatible code where possible
-- Proper caching headers
+// GOOD: Single query with join
+const { data } = await supabase
+  .from('entries')
+  .select(`
+    *,
+    vibes(count)
+  `)
+```
 
-## Metrics to Consider
+### Heavy Field Avoidance
+```typescript
+// Exclude base64 images from bulk queries
+const { data } = await supabase
+  .from('users')
+  .select('id, username, email')  // NOT image (base64)
+```
 
-- Time to First Byte (TTFB)
-- First Contentful Paint (FCP)
-- Largest Contentful Paint (LCP)
-- Cumulative Layout Shift (CLS)
-- Total Blocking Time (TBT)
+## Image Optimization
+
+### Next.js Image Component
+```tsx
+import Image from 'next/image'
+
+<Image
+  src={albumArt}
+  alt={songTitle}
+  width={64}
+  height={64}
+  className="rounded"
+  priority={isAboveFold}
+/>
+```
+
+### Album Art Caching
+- Spotify album art URLs are already CDN-hosted
+- Don't store base64 locally
+- Use appropriate sizes (64x64 for lists, 300x300 for details)
+
+## Serverless Optimization
+
+### Cold Start Reduction
+```typescript
+// Minimize imports in API routes
+import { getSupabase } from '@/lib/supabase' // Light
+// NOT: import * as everything from 'heavy-library'
+```
+
+### Edge Functions
+```typescript
+// Use edge runtime for simple operations
+export const runtime = 'edge'
+
+export async function GET() {
+  // Lightweight logic only
+}
+```
+
+## Monitoring Checklist
+
+### Before Changes
+- [ ] Measure current performance baseline
+- [ ] Identify slowest pages/routes
+- [ ] Check Vercel Analytics
+
+### During Development
+- [ ] Test with slow 3G throttling
+- [ ] Check network waterfall
+- [ ] Monitor bundle size changes
+
+### After Deployment
+- [ ] Verify Lighthouse scores
+- [ ] Check real user metrics
+- [ ] Monitor error rates
 
 ## Output Format
 
-🔴 **Critical** - Impacts user experience significantly
-🟡 **Warning** - Noticeable performance impact  
-🟢 **Optimization** - Nice to have improvements
+**Performance Score:** X/100
 
-For each issue:
-1. Problem description
-2. Impact assessment
-3. Specific fix with code
-4. Expected improvement
+**Critical Issues:**
+1. Issue with impact and fix
 
+**Warnings:**
+1. Issue with recommendation
 
-
+**Opportunities:**
+1. Optimization suggestion with expected impact

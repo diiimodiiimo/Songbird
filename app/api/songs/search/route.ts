@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import SpotifyWebApi from 'spotify-web-api-node'
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 const spotifyApi = new SpotifyWebApi({
   clientId: process.env.SPOTIPY_CLIENT_ID,
@@ -22,8 +23,15 @@ async function getAccessToken() {
 export async function GET(request: Request) {
   try {
     const { userId } = await auth()
+    
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    // Rate limiting - check after auth to avoid unnecessary work
+    const rateLimitResult = await checkRateLimit(userId, 'SEARCH')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
     }
 
     const { searchParams } = new URL(request.url)
@@ -52,7 +60,9 @@ export async function GET(request: Request) {
       uri: track.uri,
     }))
 
-    return NextResponse.json({ tracks: tracks || [] })
+    return NextResponse.json({ tracks: tracks || [] }, {
+      headers: await getRateLimitHeaders(userId, 'SEARCH'),
+    })
   } catch (error) {
     console.error('Error searching songs:', error)
     return NextResponse.json(

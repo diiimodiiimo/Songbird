@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
+import SpotifyAttribution from './SpotifyAttribution'
 
 interface Entry {
   id: string
@@ -337,6 +338,9 @@ function TimelineView({ onEditPeople, refreshKey }: { onEditPeople: (entry: Entr
                   </h3>
                   <div className="text-text/70 mb-2">
                     {entry.artist}
+                  </div>
+                  <div className="mb-2">
+                    <SpotifyAttribution variant="minimal" />
                   </div>
                   {entry.notes && (
                     <p className="text-text/80 text-sm line-clamp-2 mb-2">

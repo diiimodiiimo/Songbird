@@ -9,6 +9,7 @@ import ThemeSelector from './ThemeSelector'
 import ThemeBird, { ThemeBirdDisplay } from './ThemeBird'
 import YourBirds from './YourBirds'
 import InviteFriendsCTA from './InviteFriendsCTA'
+import NotificationSettings from './NotificationSettings'
 import { trackTabView, trackProfileViewed } from '@/lib/analytics-client'
 import { useTheme, themes, type ThemeId } from '@/lib/theme'
 
@@ -70,6 +71,10 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
   const [loadingVibes, setLoadingVibes] = useState(false)
   const [showBirdsSection, setShowBirdsSection] = useState(false)
   const [unlockedBirds, setUnlockedBirds] = useState<Array<{ birdId: string; isUnlocked: boolean }>>([])
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false)
   const { setTheme } = useTheme()
 
   useEffect(() => {
@@ -81,6 +86,17 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
 
   useEffect(() => {
     if (isLoaded && user) {
+      // Set initial values from Clerk immediately
+      const clerkUsername = user.username || 
+        (user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : '') ||
+        user.emailAddresses[0]?.emailAddress?.split('@')[0] || 
+        ''
+      const clerkImage = user.imageUrl || ''
+      
+      setUsername(clerkUsername)
+      setProfileImage(clerkImage)
+      
+      // Then fetch from database (which will sync and update if needed)
       fetchProfile()
       fetchFriends()
       fetchEntryCount()
@@ -94,12 +110,23 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
   const fetchBirdStatuses = async () => {
     try {
       const res = await fetch('/api/birds/status')
+      const data = await res.json()
       if (res.ok) {
-        const data = await res.json()
+        console.log('[ProfileTab] Bird statuses fetched:', {
+          total: data.totalCount,
+          unlocked: data.unlockedCount,
+          birds: data.birds?.length,
+        })
         setUnlockedBirds(data.birds || [])
+      } else {
+        console.error('[ProfileTab] Failed to fetch bird statuses:', {
+          status: res.status,
+          error: data.error,
+          message: data.message,
+        })
       }
     } catch (error) {
-      console.error('Failed to fetch bird statuses:', error)
+      console.error('[ProfileTab] Error fetching bird statuses:', error)
     }
   }
 
@@ -149,6 +176,29 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
     }
   }
 
+  useEffect(() => {
+    if (isLoaded && user) {
+      // Set initial values from Clerk immediately for instant display
+      const clerkUsername = user.username || 
+        (user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : '') ||
+        user.emailAddresses[0]?.emailAddress?.split('@')[0] || 
+        ''
+      const clerkImage = user.imageUrl || ''
+      
+      setUsername(clerkUsername)
+      setProfileImage(clerkImage)
+      
+      // Then fetch from database (which will sync and update if needed)
+      fetchProfile()
+      fetchFriends()
+      fetchEntryCount()
+      fetchVibedSongs()
+      fetchBirdStatuses()
+      trackTabView('profile')
+      trackProfileViewed(true)
+    }
+  }, [isLoaded, user])
+
   // Refresh profile when component becomes visible (e.g., returning from edit page)
   useEffect(() => {
     if (isLoaded && user && typeof window !== 'undefined') {
@@ -165,17 +215,76 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
     setLoadingProfile(true)
     try {
       const res = await fetch('/api/profile')
+      const data = await res.json().catch(() => ({ error: 'Failed to parse response' }))
+      
       if (res.ok) {
-        const data = await res.json()
-        const user = data.user
-        setUsername(user.username || user.name || '')
-        setProfileImage(user.image || '')
-        setBio(user.bio || '')
-        setSelectedArtists(user.favoriteArtists || [])
-        setSelectedSongs(user.favoriteSongs || [])
+        const dbUser = data.user
+        
+        console.log('[ProfileTab] Fetched user data:', {
+          username: dbUser.username,
+          image: dbUser.image,
+          hasImage: !!dbUser.image,
+          imageLength: dbUser.image?.length,
+        })
+        
+        // Database is source of truth - use it first, only fallback to Clerk if database is empty
+        setUsername(
+          dbUser.username || 
+          dbUser.name || 
+          user.username || 
+          (user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : '') ||
+          user.emailAddresses[0]?.emailAddress?.split('@')[0] || 
+          ''
+        )
+        const imageToUse = dbUser.image || user.imageUrl || ''
+        console.log('[ProfileTab] Setting profile image:', {
+          dbImage: dbUser.image,
+          clerkImage: user.imageUrl,
+          finalImage: imageToUse,
+        })
+        setProfileImage(imageToUse)
+        setBio(dbUser.bio || '')
+        setSelectedArtists(dbUser.favoriteArtists || [])
+        setSelectedSongs(dbUser.favoriteSongs || [])
+        setMessage(null) // Clear any previous errors
+      } else {
+        // API returned an error
+        const errorMessage = data.error || data.message || `HTTP ${res.status}: ${res.statusText}`
+        console.error('[ProfileTab] Failed to fetch profile:', {
+          status: res.status,
+          statusText: res.statusText,
+          error: data.error,
+          message: data.message,
+          fullResponse: data,
+        })
+        setMessage({ 
+          type: 'error', 
+          text: `Failed to load profile: ${errorMessage}. Please check your Supabase configuration.` 
+        })
+        // If API fails, use Clerk data as fallback
+        setUsername(
+          user.username || 
+          (user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : '') ||
+          user.emailAddresses[0]?.emailAddress?.split('@')[0] || 
+          ''
+        )
+        setProfileImage(user.imageUrl || '')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch profile:', error)
+      const errorMessage = error?.message || 'Unknown error occurred'
+      setMessage({ 
+        type: 'error', 
+        text: `Failed to connect to database: ${errorMessage}. Please check your Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).` 
+      })
+      // Fallback to Clerk data on error
+      setUsername(
+        user.username || 
+        (user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : '') ||
+        user.emailAddresses[0]?.emailAddress?.split('@')[0] || 
+        ''
+      )
+      setProfileImage(user.imageUrl || '')
     } finally {
       setLoadingProfile(false)
     }
@@ -277,14 +386,22 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
             {/* Avatar */}
             <div className="flex flex-col items-center gap-4 relative z-10">
               {profileImage ? (
-                <Image
-                  src={profileImage}
-                  alt="Profile"
-                  width={120}
-                  height={120}
-                  className="rounded-full border-4 border-accent"
-                  style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
-                />
+                <div className="relative w-32 h-32">
+                  <Image
+                    src={profileImage}
+                    alt="Profile"
+                    fill
+                    className="rounded-full border-4 border-accent object-cover"
+                    unoptimized
+                    onError={(e) => {
+                      console.error('[ProfileTab] Image load error:', profileImage, e)
+                      setProfileImage('')
+                    }}
+                    onLoad={() => {
+                      console.log('[ProfileTab] Image loaded successfully:', profileImage)
+                    }}
+                  />
+                </div>
               ) : (
                 <div className="w-32 h-32 rounded-full bg-accent/20 border-4 border-accent flex items-center justify-center text-5xl font-bold text-accent">
                   {username.charAt(0).toUpperCase() || user?.emailAddresses[0]?.emailAddress?.charAt(0).toUpperCase() || '?'}
@@ -316,10 +433,18 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
                 <div className="text-xl sm:text-2xl font-bold text-accent">{entryCount}</div>
                 <div className="text-xs sm:text-sm text-text/60">Entries</div>
               </div>
-              <div className="text-center">
+              <button
+                onClick={() => {
+                  // Dispatch event to navigate to feed tab
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('navigateToFriends'))
+                  }
+                }}
+                className="text-center hover:opacity-80 transition-opacity cursor-pointer"
+              >
                 <div className="text-xl sm:text-2xl font-bold text-accent">{friends.length}</div>
                 <div className="text-xs sm:text-sm text-text/60">Friends</div>
-              </div>
+              </button>
               <button 
                 onClick={() => setShowVibesSection(!showVibesSection)}
                 className="text-center hover:opacity-80 transition-opacity"
@@ -400,10 +525,10 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
                 onClick={async () => {
                   try {
                     // Get or create invite code
-                    const res = await fetch('/api/invites', { method: 'POST' })
+                    const res = await fetch('/api/invites')
                     if (res.ok) {
                       const data = await res.json()
-                      const url = `${window.location.origin}/join/${data.code}`
+                      const url = data.inviteUrl || `${window.location.origin}/join/${data.personalCode}`
                       
                       if (navigator.share) {
                         await navigator.share({
@@ -522,7 +647,7 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
                     {friends.map((friend) => (
                       <Link
                         key={friend.id}
-                        href={`/user/${friend.username || friend.email}`}
+                        href={`/user/${encodeURIComponent(friend.username || friend.email || friend.id)}`}
                         className="bg-bg rounded-lg p-3 flex items-center gap-3 hover:bg-accent/5 border border-transparent hover:border-accent/30 transition-all group"
                       >
                         {friend.image ? (
@@ -626,16 +751,80 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
             {/* Divider */}
             <div className="border-t border-surface/50" />
 
-            {/* Email (Read-only) */}
+            {/* Notification Settings */}
             <div>
-              <label className="block mb-2 text-sm font-medium text-text/80">Email</label>
-              <input
-                type="email"
-                value={user?.emailAddresses[0]?.emailAddress || ''}
-                disabled
-                className="w-full px-4 py-3 bg-bg/50 border border-surface/50 rounded-lg text-text/60 cursor-not-allowed"
-              />
-              <p className="text-xs text-text/60 mt-1">Email cannot be changed</p>
+              <button
+                onClick={() => setShowNotificationSettings(!showNotificationSettings)}
+                className="w-full flex items-center justify-between mb-3"
+              >
+                <label className="text-sm font-medium text-text/80">
+                  <span className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-lg">🔔</span>
+                    Notification Settings
+                  </span>
+                </label>
+                <span className="text-text/50">{showNotificationSettings ? '−' : '+'}</span>
+              </button>
+              {showNotificationSettings && (
+                <div className="mb-4">
+                  <NotificationSettings />
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-surface/50" />
+
+            {/* Blocked Users */}
+            <div>
+              <Link
+                href="/settings/blocked"
+                className="w-full flex items-center justify-between mb-3 text-text/80 hover:text-text transition-colors"
+              >
+                <label className="text-sm font-medium">
+                  <span className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-lg">🚫</span>
+                    Blocked Users
+                  </span>
+                </label>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-surface/50" />
+            
+            {/* Account Information */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-text/80">Account Information</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block mb-2 text-sm font-medium text-text/80">Username</label>
+                  <input
+                    type="text"
+                    value={username || 'Not set'}
+                    disabled
+                    className="w-full px-4 py-3 bg-bg/50 border border-surface/50 rounded-lg text-text/60 cursor-not-allowed"
+                  />
+                  <p className="text-xs text-text/60 mt-1">
+                    {username ? 'Edit your username in Edit Profile' : 'Set your username in Edit Profile'}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block mb-2 text-sm font-medium text-text/80">Email</label>
+                  <input
+                    type="email"
+                    value={user?.emailAddresses[0]?.emailAddress || ''}
+                    disabled
+                    className="w-full px-4 py-3 bg-bg/50 border border-surface/50 rounded-lg text-text/60 cursor-not-allowed"
+                  />
+                  <p className="text-xs text-text/60 mt-1">Email cannot be changed</p>
+                </div>
+              </div>
             </div>
 
             {/* Tutorial / How it Works */}
@@ -658,6 +847,37 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
             {/* Divider */}
             <div className="border-t border-surface/50" />
 
+            {/* Legal Links */}
+            <div className="space-y-2">
+              <Link
+                href="/privacy"
+                className="w-full flex items-center justify-between py-2 text-text/60 hover:text-text/80 transition-colors text-sm"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-base">🔒</span>
+                  Privacy Policy
+                </span>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+              <Link
+                href="/terms"
+                className="w-full flex items-center justify-between py-2 text-text/60 hover:text-text/80 transition-colors text-sm"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-base">📄</span>
+                  Terms of Service
+                </span>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-surface/50" />
+
             {/* Sign Out */}
             <button
               onClick={() => window.location.href = '/home'}
@@ -665,9 +885,94 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
             >
               Sign Out
             </button>
+
+            {/* Delete Account */}
+            <button
+              onClick={() => setShowDeleteAccountModal(true)}
+              className="w-full px-6 py-3 bg-red-950/30 text-red-500 border border-red-900/40 font-medium rounded-lg hover:bg-red-950/40 transition-colors mt-3"
+            >
+              Delete Account
+            </button>
           </div>
         )}
       </section>
+
+      {/* Delete Account Modal */}
+      {showDeleteAccountModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-xl p-6 max-w-md w-full border border-red-900/30">
+            <h3 className="text-2xl font-bold mb-2 text-red-400">Delete Account</h3>
+            <p className="text-text/80 mb-4">
+              This action cannot be undone. This will permanently delete your account and all associated data including:
+            </p>
+            <ul className="list-disc list-inside text-text/70 text-sm mb-6 ml-2 space-y-1">
+              <li>All your song entries</li>
+              <li>Your notes and memories</li>
+              <li>Your friends and connections</li>
+              <li>Your profile information</li>
+              <li>All other data associated with your account</li>
+            </ul>
+            <p className="text-text/80 mb-4 font-semibold">
+              To confirm, please type <span className="text-red-400 font-mono">DELETE</span> in the box below:
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type DELETE to confirm"
+              className="w-full px-4 py-3 bg-bg border border-red-900/40 rounded-lg text-text placeholder:text-text/40 mb-4 focus:outline-none focus:ring-2 focus:ring-red-500"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  if (deleteConfirmText !== 'DELETE') {
+                    setMessage({ type: 'error', text: 'Please type DELETE to confirm' })
+                    return
+                  }
+
+                  setDeletingAccount(true)
+                  try {
+                    const res = await fetch('/api/user/delete', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ confirmText: deleteConfirmText }),
+                    })
+
+                    const data = await res.json()
+
+                    if (res.ok) {
+                      // Account deleted successfully, redirect to home
+                      window.location.href = '/home'
+                    } else {
+                      setMessage({ type: 'error', text: data.error || 'Failed to delete account' })
+                      setDeletingAccount(false)
+                    }
+                  } catch (error) {
+                    console.error('Error deleting account:', error)
+                    setMessage({ type: 'error', text: 'An error occurred while deleting your account' })
+                    setDeletingAccount(false)
+                  }
+                }}
+                disabled={deleteConfirmText !== 'DELETE' || deletingAccount}
+                className="flex-1 px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deletingAccount ? 'Deleting...' : 'Permanently Delete Account'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteAccountModal(false)
+                  setDeleteConfirmText('')
+                }}
+                disabled={deletingAccount}
+                className="px-6 py-3 bg-surface border border-text/20 rounded-lg text-text font-medium hover:bg-surface/80 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

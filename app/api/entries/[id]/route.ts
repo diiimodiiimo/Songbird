@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 const updateEntrySchema = z.object({
   songTitle: z.string().optional(),
@@ -16,6 +17,7 @@ const updateEntrySchema = z.object({
   trackId: z.string().optional(),
   uri: z.string().optional(),
   notes: z.string().optional(),
+  mood: z.string().optional(),
   taggedUserIds: z.array(z.string()).optional(),
   peopleNames: z.array(z.string()).optional(),
 })
@@ -26,6 +28,13 @@ export async function PUT(
 ) {
   try {
     const { userId: clerkUserId } = await auth()
+    
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(clerkUserId, 'WRITE')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
+
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -81,6 +90,7 @@ export async function PUT(
     if (data.trackId) updateData.trackId = data.trackId
     if (data.uri) updateData.uri = data.uri
     if (data.notes !== undefined) updateData.notes = data.notes
+    if (data.mood !== undefined) updateData.mood = data.mood
 
     const { data: updatedEntry, error: updateError } = await supabase
       .from('entries')
@@ -148,6 +158,8 @@ export async function PUT(
         mentions: [],
         people: [],
       },
+    }, {
+      headers: await getRateLimitHeaders(clerkUserId, 'WRITE'),
     })
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -170,6 +182,13 @@ export async function DELETE(
 ) {
   try {
     const { userId: clerkUserId } = await auth()
+    
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(clerkUserId, 'WRITE')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
+
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -200,7 +219,9 @@ export async function DELETE(
 
     if (error) throw error
 
-    return NextResponse.json({ message: 'Entry deleted successfully' })
+    return NextResponse.json({ message: 'Entry deleted successfully' }, {
+      headers: await getRateLimitHeaders(clerkUserId, 'WRITE'),
+    })
   } catch (error: any) {
     console.error('[entries/[id]] DELETE Error:', error?.message || error)
     return NextResponse.json(

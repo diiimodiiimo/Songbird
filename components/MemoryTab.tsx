@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import ThemeBird from './ThemeBird'
+import SpotifyAttribution from './SpotifyAttribution'
+import { getLocalDateString } from '@/lib/date-utils'
 
 interface Entry {
   id: string
@@ -23,17 +25,46 @@ interface Entry {
   releaseDate?: string | null
 }
 
+interface Milestone {
+  type: string
+  message: string
+  achieved: boolean
+  achievedDate?: string
+  progress?: {
+    current: number
+    target: number
+    message: string
+  }
+}
+
+interface MilestoneData {
+  milestones: Milestone[]
+  nextMilestone: Milestone | null
+  stats: {
+    entryCount: number
+    daysSinceFirst: number
+  }
+}
+
 export default function MemoryTab() {
   const { user, isLoaded } = useUser()
   const router = useRouter()
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [selectedDate, setSelectedDate] = useState(getLocalDateString())
   const [onThisDayEntries, setOnThisDayEntries] = useState<Entry[]>([])
   const [recentEntries, setRecentEntries] = useState<Entry[]>([])
+  const [recentReflectionEntries, setRecentReflectionEntries] = useState<Entry[]>([])
   const [loadingOnThisDay, setLoadingOnThisDay] = useState(false)
   const [loadingRecent, setLoadingRecent] = useState(false)
+  const [loadingRecentReflections, setLoadingRecentReflections] = useState(false)
   const [showNotes, setShowNotes] = useState(true)
   const [aiInsight, setAiInsight] = useState<string | null>(null)
   const [loadingInsight, setLoadingInsight] = useState(false)
+  const [recentReflectionInsight, setRecentReflectionInsight] = useState<string | null>(null)
+  const [loadingRecentReflectionInsight, setLoadingRecentReflectionInsight] = useState(false)
+  const [journeyNarrative, setJourneyNarrative] = useState<string | null>(null)
+  const [loadingJourneyNarrative, setLoadingJourneyNarrative] = useState(false)
+  const [milestoneData, setMilestoneData] = useState<MilestoneData | null>(null)
+  const [loadingMilestones, setLoadingMilestones] = useState(false)
 
   // Fetch On This Day entries
   useEffect(() => {
@@ -46,8 +77,17 @@ export default function MemoryTab() {
   useEffect(() => {
     if (isLoaded && user) {
       fetchRecentEntries()
+      fetchRecentReflections()
+      fetchMilestones()
     }
   }, [isLoaded, user])
+
+  // Fetch journey narrative when entries change
+  useEffect(() => {
+    if (isLoaded && user && recentEntries.length > 0 && milestoneData) {
+      fetchJourneyNarrative()
+    }
+  }, [recentEntries.length, milestoneData?.stats.entryCount, isLoaded, user])
 
   const fetchOnThisDay = async () => {
     if (!user || !isLoaded) return
@@ -131,6 +171,147 @@ export default function MemoryTab() {
     }
   }
 
+  const fetchRecentReflections = async () => {
+    if (!user || !isLoaded) return
+    
+    setLoadingRecentReflections(true)
+    try {
+      // Fetch last 14 days of entries with full details
+      const res = await fetch('/api/entries?page=1&pageSize=14')
+      const data = await res.json()
+      if (res.ok && data.entries) {
+        const now = new Date()
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        const recent = data.entries.filter((entry: Entry) => {
+          const entryDate = new Date(entry.date)
+          return entryDate >= sevenDaysAgo
+        })
+        
+        if (recent.length >= 2) {
+          setRecentReflectionEntries(recent)
+          fetchRecentReflectionInsight(recent)
+        } else {
+          setRecentReflectionEntries([])
+          setRecentReflectionInsight(null)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching recent reflections:', error)
+    } finally {
+      setLoadingRecentReflections(false)
+    }
+  }
+
+  const fetchRecentReflectionInsight = async (entries: Entry[]) => {
+    if (entries.length < 2) return
+    
+    setLoadingRecentReflectionInsight(true)
+    try {
+      // Fetch full entry details with metadata from on-this-day endpoint for each entry
+      // We'll use the entries we have and extract what we can
+      const artists = entries.map(e => e.artist)
+      const songs = entries.map(e => e.songTitle)
+      const popularity = entries.map(e => e.popularity).filter((p): p is number => p !== null && p !== undefined)
+      const duration = entries.map(e => e.durationMs).filter((d): d is number => d !== null && d !== undefined)
+      const explicit = entries.map(e => e.explicit || false)
+      const releaseDate = entries.map(e => e.releaseDate).filter((r): r is string => r !== null && r !== undefined)
+      const notes = entries.map(e => e.notes).filter((n): n is string => n !== null && n !== undefined)
+      const people = entries.flatMap(e => e.people?.map(p => p.name) || [])
+      const years = entries.map(e => parseInt(e.date.split('-')[0]))
+      
+      const res = await fetch('/api/ai-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          artists, 
+          songs, 
+          date: new Date().toISOString().split('T')[0],
+          context: 'recent',
+          popularity: popularity.length > 0 ? popularity : undefined,
+          duration: duration.length > 0 ? duration : undefined,
+          explicit: explicit.length > 0 ? explicit : undefined,
+          releaseDate: releaseDate.length > 0 ? releaseDate : undefined,
+          notes: notes.length > 0 ? notes : undefined,
+          people: people.length > 0 ? people : undefined,
+          years: years.length > 0 ? years : undefined,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.insight) {
+        setRecentReflectionInsight(data.insight)
+      }
+    } catch (error) {
+      console.error('Error fetching recent reflection insight:', error)
+    } finally {
+      setLoadingRecentReflectionInsight(false)
+    }
+  }
+
+  const fetchJourneyNarrative = async () => {
+    if (!user || !isLoaded || recentEntries.length === 0 || !milestoneData) return
+    
+    setLoadingJourneyNarrative(true)
+    try {
+      const entryCount = milestoneData.stats.entryCount
+      // For journey narrative, we can use a subset of entries or all entries
+      const entriesToUse = recentEntries.slice(0, Math.min(5, recentEntries.length))
+      
+      const artists = entriesToUse.map(e => e.artist)
+      const songs = entriesToUse.map(e => e.songTitle)
+      const popularity = entriesToUse.map(e => e.popularity).filter((p): p is number => p !== null && p !== undefined)
+      const duration = entriesToUse.map(e => e.durationMs).filter((d): d is number => d !== null && d !== undefined)
+      const explicit = entriesToUse.map(e => e.explicit || false)
+      const releaseDate = entriesToUse.map(e => e.releaseDate).filter((r): r is string => r !== null && r !== undefined)
+      const notes = entriesToUse.map(e => e.notes).filter((n): n is string => n !== null && n !== undefined)
+      const people = entriesToUse.flatMap(e => e.people?.map(p => p.name) || [])
+      const years = entriesToUse.map(e => parseInt(e.date.split('-')[0]))
+      
+      const res = await fetch('/api/ai-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          artists, 
+          songs, 
+          date: new Date().toISOString().split('T')[0],
+          context: 'journey',
+          entryCount,
+          popularity,
+          duration,
+          explicit,
+          releaseDate,
+          notes,
+          people,
+          years,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.insight) {
+        setJourneyNarrative(data.insight)
+      }
+    } catch (error) {
+      console.error('Error fetching journey narrative:', error)
+    } finally {
+      setLoadingJourneyNarrative(false)
+    }
+  }
+
+  const fetchMilestones = async () => {
+    if (!user || !isLoaded) return
+    
+    setLoadingMilestones(true)
+    try {
+      const res = await fetch(`/api/milestones?today=${getLocalDateString()}`)
+      const data = await res.json()
+      if (res.ok) {
+        setMilestoneData(data)
+      }
+    } catch (error) {
+      console.error('Error fetching milestones:', error)
+    } finally {
+      setLoadingMilestones(false)
+    }
+  }
+
   // Extract month/day for date picker (MM-DD format)
   const getMonthDay = (dateStr: string) => {
     return dateStr.substring(5) // MM-DD
@@ -138,7 +319,7 @@ export default function MemoryTab() {
 
   return (
     <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-      {/* On This Day Section - PRIMARY */}
+      {/* On This Day Section - FIRST */}
       <div className="mb-12">
         <h2 className="text-2xl sm:text-3xl font-bold mb-6">On This Day</h2>
         
@@ -218,6 +399,9 @@ export default function MemoryTab() {
                     <div className="text-text/70 mb-3">
                       {entry.artist}
                     </div>
+                    <div className="mb-3">
+                      <SpotifyAttribution variant="minimal" />
+                    </div>
                     {showNotes && (entry.notesPreview || entry.notes) && (
                       <p className="text-text/80 mb-3 text-sm">
                         {entry.notesPreview || entry.notes}
@@ -247,17 +431,109 @@ export default function MemoryTab() {
             <div className="flex justify-center mb-4">
               <ThemeBird size={72} state="curious" />
             </div>
-            <p className="text-text/60 mb-2">
-              No memories from this day yet.
-            </p>
-            <p className="text-text/40 text-sm">
-              Keep logging songs to build your musical timeline!
-            </p>
+            {recentEntries.length === 0 ? (
+              <>
+                <p className="text-text/60 mb-2 text-lg">
+                  Welcome to your musical journal
+                </p>
+                <p className="text-text/70 mb-4 max-w-md mx-auto">
+                  Every song you log becomes a memory. Start your journey by logging your first song—each entry tells a story about who you were and what mattered in that moment.
+                </p>
+                {milestoneData?.nextMilestone?.progress && (
+                  <div className="mt-6 bg-surface rounded-lg p-4 max-w-sm mx-auto">
+                    <p className="text-text/80 text-sm mb-2">{milestoneData.nextMilestone.progress.message}</p>
+                    <div className="w-full bg-bg rounded-full h-2">
+                      <div 
+                        className="bg-accent h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (milestoneData.nextMilestone.progress.current / milestoneData.nextMilestone.progress.target) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-text/60 mb-2">
+                  No memories from this day yet.
+                </p>
+                <p className="text-text/40 text-sm">
+                  Keep logging songs to build your musical timeline!
+                </p>
+                {milestoneData?.nextMilestone?.progress && (
+                  <div className="mt-6 bg-surface rounded-lg p-4 max-w-sm mx-auto">
+                    <p className="text-text/80 text-sm mb-2">{milestoneData.nextMilestone.progress.message}</p>
+                    <div className="w-full bg-bg rounded-full h-2">
+                      <div 
+                        className="bg-accent h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (milestoneData.nextMilestone.progress.current / milestoneData.nextMilestone.progress.target) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {/* Recent Days Section - SECONDARY */}
+      {/* Recent Reflections Section - SECOND */}
+      {recentReflectionEntries.length >= 2 && (
+        <div className="mb-12">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-6">Recent Reflections</h2>
+          
+          {loadingRecentReflectionInsight ? (
+            <div className="bg-surface/50 rounded-xl p-4 mb-6 border border-accent/20">
+              <div className="text-text/60 text-sm">Reflecting on your recent music...</div>
+            </div>
+          ) : recentReflectionInsight ? (
+            <div className="bg-surface/50 rounded-xl p-4 mb-6 border border-accent/20">
+              <div className="text-text/90 text-sm italic">"{recentReflectionInsight}"</div>
+            </div>
+          ) : null}
+
+          <div className="space-y-3 mb-6">
+            {recentReflectionEntries.slice(0, 5).map((entry) => (
+              <div key={entry.id} className="bg-surface rounded-lg p-4 hover:bg-surface/80 transition-colors">
+                <div className="flex gap-3">
+                  {entry.albumArt && (
+                    <div className="flex-shrink-0">
+                      <Image
+                        src={entry.albumArt}
+                        alt={entry.songTitle}
+                        width={60}
+                        height={60}
+                        className="rounded-lg"
+                        style={{ objectFit: 'cover' }}
+                      />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-text/60 mb-1">
+                      {(() => {
+                        const [year, month, day] = entry.date.split('-')
+                        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+                        return date.toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          year: 'numeric' 
+                        })
+                      })()}
+                    </div>
+                    <h4 className="font-semibold text-lg mb-1 truncate">
+                      {entry.songTitle}
+                    </h4>
+                    <div className="text-text/70 text-sm truncate">
+                      {entry.artist}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Days Section - THIRD (segues from Recent Reflections) */}
       <div className="border-t border-surface/50 pt-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl sm:text-2xl font-bold">Recent Days</h2>
@@ -265,7 +541,7 @@ export default function MemoryTab() {
             href="/archive"
             className="text-accent hover:text-accent/80 text-sm font-medium transition-colors"
           >
-            Open Full Archive →
+            Full Archive →
           </Link>
         </div>
 

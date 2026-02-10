@@ -130,8 +130,6 @@ export function getPremiumFeatures(isPremium: boolean) {
   return {
     // Birds: Premium users get all unlocked, free users earn via streaks
     allBirdsUnlocked: isPremium,
-    // B-sides: Only premium can log multiple songs per day
-    bSidesEnabled: isPremium,
     // On This Day: Free = 30 days, Premium = full history
     onThisDayFullHistory: isPremium,
     // Analytics: Free = basic, Premium = full history

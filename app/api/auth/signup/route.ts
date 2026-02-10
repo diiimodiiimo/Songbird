@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -14,6 +15,12 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const { email, password, name } = signupSchema.parse(body)
+
+    // Rate limiting (no userId for signup, use email as identifier)
+    const rateLimitResult = await checkRateLimit(null, 'AUTH')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
 
     const supabase = getSupabase()
 

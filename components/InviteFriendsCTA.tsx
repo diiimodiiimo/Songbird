@@ -27,12 +27,12 @@ export default function InviteFriendsCTA({
     setLoading(true)
 
     try {
-      // Generate invite code
-      const res = await fetch('/api/invites', { method: 'POST' })
-      if (!res.ok) throw new Error('Failed to generate invite')
+      // Get or generate invite code
+      const res = await fetch('/api/invites')
+      if (!res.ok) throw new Error('Failed to get invite')
       
       const data = await res.json()
-      const url = `${window.location.origin}/join/${data.code}`
+      const url = data.inviteUrl || `${window.location.origin}/join/${data.personalCode}`
       
       trackInviteLinkGenerated()
 
@@ -158,6 +158,7 @@ export default function InviteFriendsCTA({
     </div>
   )
 }
+
 
 
 

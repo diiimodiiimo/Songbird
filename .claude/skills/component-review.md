@@ -1,172 +1,231 @@
 # /component-review
 
-Review React components for best practices, code quality, and maintainability. Act like a senior React developer doing a thorough code review.
+Review React components for best practices, patterns, and SongBird conventions. Act like a senior React engineer.
 
-## Component Structure
+## Framework Context
 
-### File Organization
-- [ ] Single responsibility (one main purpose per component)
-- [ ] Reasonable file length (< 300 lines ideally)
-- [ ] Logical code ordering (hooks, handlers, render)
-- [ ] Clean exports
+- **Next.js 14+** with App Router
+- **React 18** with hooks
+- **TypeScript** for type safety
+- **Tailwind CSS** for styling
 
-### Naming
-- [ ] PascalCase for component names
-- [ ] Descriptive, intention-revealing names
-- [ ] Consistent naming with codebase conventions
+## Server vs Client Components
 
-## React Patterns
+### Server Components (Default)
+```tsx
+// No 'use client' directive
+// Can directly fetch data
+// Cannot use hooks or event handlers
 
-### Hooks Usage
-```typescript
-// Good: Hooks at top level, in consistent order
-export default function MyComponent() {
-  const { user, isLoaded } = useUser()
-  const [state, setState] = useState<Type>([])
-  const [loading, setLoading] = useState(false)
-  
-  useEffect(() => {}, [dependencies])
+export default async function ServerComponent() {
+  const data = await fetchData()  // Direct async
+  return <div>{data.title}</div>
 }
 ```
 
-### State Management
-- [ ] Minimal state (avoid derived state)
-- [ ] State lifted appropriately (not too high, not too low)
-- [ ] Loading/error states handled
-- [ ] Initial states are sensible
+### Client Components
+```tsx
+'use client'
 
-### Effects
-- [ ] Dependencies array is complete
-- [ ] Cleanup functions where needed
-- [ ] No effects that should be event handlers
-- [ ] Avoid async effects without cleanup
+// Required for:
+// - useState, useEffect, etc.
+// - Event handlers (onClick, etc.)
+// - Browser APIs
 
-### Event Handlers
-- [ ] Named clearly (handleClick, onSubmit)
-- [ ] Extracted from JSX when complex
-- [ ] useCallback for handlers passed to children (if needed)
+export default function ClientComponent() {
+  const [state, setState] = useState()
+  return <button onClick={() => setState(...)}>Click</button>
+}
+```
 
-## TypeScript
+## Component Patterns
 
-### Types
-- [ ] Props interface defined
-- [ ] No `any` types
-- [ ] Proper generic usage
-- [ ] Event types specified (React.ChangeEvent, etc.)
-
-### Pattern
-```typescript
-interface MyComponentProps {
-  title: string
-  onAction: (id: string) => void
-  optional?: boolean
+### Props Interface
+```tsx
+interface EntryCardProps {
+  entry: Entry
+  onVibe?: (id: string) => void
+  showActions?: boolean
 }
 
-export default function MyComponent({ title, onAction, optional = false }: MyComponentProps) {
+export default function EntryCard({ entry, onVibe, showActions = true }: EntryCardProps) {
   // ...
 }
 ```
 
-## Loading States (SongBird Pattern)
+### Loading State Pattern (CRITICAL)
+```tsx
+const [data, setData] = useState<Entry[]>([])
+const [loading, setLoading] = useState(true)  // Start true!
 
-### Required Pattern
-```typescript
-// ✅ Correct
-{loading ? (
-  <div>Loading...</div>
+useEffect(() => {
+  fetchData()
+    .then(setData)
+    .finally(() => setLoading(false))
+}, [])
+
+// CORRECT order: loading → data → empty
+return loading ? (
+  <Loading />
 ) : data.length > 0 ? (
-  <div>{/* Show data */}</div>
+  <DataList data={data} />
 ) : (
-  <div>No data found</div>
-)}
+  <EmptyState />
+)
+```
 
-// ❌ Wrong - shows empty state while loading
-{data.length > 0 ? (
-  <div>{/* Show data */}</div>
-) : (
-  <div>No data found</div>
+### Error Handling
+```tsx
+const [error, setError] = useState<string | null>(null)
+
+const handleSubmit = async () => {
+  try {
+    setError(null)
+    await submitData()
+  } catch (e) {
+    setError('Something went wrong. Please try again.')
+  }
+}
+
+{error && (
+  <div className="text-red-400 bg-red-400/10 p-3 rounded-lg">
+    {error}
+  </div>
 )}
 ```
 
-## Data Fetching
+### State Collocation
+```tsx
+// BAD: Lifting state unnecessarily
+function Parent() {
+  const [inputValue, setInputValue] = useState('')
+  return <Child value={inputValue} onChange={setInputValue} />
+}
 
-### Pattern
-```typescript
-const fetchData = async () => {
+// GOOD: Keep state where it's used
+function Child() {
+  const [inputValue, setInputValue] = useState('')
+  return <input value={inputValue} onChange={e => setInputValue(e.target.value)} />
+}
+```
+
+## Hooks Usage
+
+### useEffect Dependencies
+```tsx
+// WRONG: Missing dependencies
+useEffect(() => {
+  fetchEntries(userId)
+}, [])  // userId missing!
+
+// CORRECT: Include all dependencies
+useEffect(() => {
+  fetchEntries(userId)
+}, [userId])
+```
+
+### useCallback for Handlers
+```tsx
+// Use when passing to child components
+const handleVibe = useCallback((entryId: string) => {
+  setVibes(prev => [...prev, entryId])
+}, [])
+
+<EntryCard onVibe={handleVibe} />
+```
+
+### useMemo for Expensive Computation
+```tsx
+// Use for expensive calculations
+const sortedEntries = useMemo(() => {
+  return [...entries].sort((a, b) => new Date(b.date) - new Date(a.date))
+}, [entries])
+```
+
+## SongBird-Specific Patterns
+
+### Auth Check
+```tsx
+'use client'
+import { useUser } from '@clerk/nextjs'
+
+export default function ProtectedComponent() {
+  const { isLoaded, isSignedIn, user } = useUser()
+
+  if (!isLoaded) return <Loading />
+  if (!isSignedIn) return <SignInPrompt />
+
+  return <div>Welcome, {user.firstName}</div>
+}
+```
+
+### API Fetching
+```tsx
+const fetchEntries = async () => {
   setLoading(true)
   try {
-    const res = await fetch('/api/endpoint')
+    const res = await fetch('/api/entries')
+    if (!res.ok) throw new Error('Failed to fetch')
     const data = await res.json()
-    if (res.ok) {
-      setData(data.items)
-    } else {
-      setError(data.error)
-    }
+    setEntries(data.entries)
   } catch (error) {
     console.error('Error:', error)
-    setError('Failed to load data')
+    setError('Failed to load entries')
   } finally {
     setLoading(false)
   }
 }
-
-useEffect(() => {
-  fetchData()
-}, [dependency])
 ```
 
-## JSX Quality
+### Theme Colors
+```tsx
+// Always use CSS variables for theming
+<div className="bg-bg text-text">
+  <p className="text-text/60">Secondary text</p>
+  <button className="bg-accent">Primary CTA</button>
+</div>
+```
 
-### Readability
-- [ ] Consistent indentation
-- [ ] Logical grouping of elements
-- [ ] Extracted complex conditionals
-- [ ] Comments for non-obvious logic
+## Review Checklist
+
+### Structure
+- [ ] Single responsibility (one purpose per component)
+- [ ] Props are typed with interface
+- [ ] 'use client' only when necessary
+- [ ] No prop drilling (use context if needed)
+
+### State Management
+- [ ] State colocated where used
+- [ ] Loading state initialized to `true` for fetches
+- [ ] Error states handled
+- [ ] No unnecessary re-renders
+
+### Effects
+- [ ] All dependencies included
+- [ ] Cleanup functions where needed
+- [ ] No missing dependencies warnings
+
+### Performance
+- [ ] useMemo/useCallback for expensive operations
+- [ ] Lists have stable `key` props
+- [ ] Images use Next.js Image component
 
 ### Accessibility
-- [ ] Button for actions, anchor for navigation
-- [ ] Alt text on images
-- [ ] Labels on form inputs
-- [ ] Proper heading structure
+- [ ] Interactive elements are focusable
+- [ ] Proper ARIA attributes
+- [ ] Keyboard navigation works
 
-### Styling
-- [ ] Uses design system classes (bg-bg, text-text, etc.)
-- [ ] Consistent spacing
-- [ ] No hardcoded colors/values
-- [ ] Responsive classes where needed
-
-## Performance
-
-- [ ] No inline object/array creation in JSX
-- [ ] Keys on list items (not index)
-- [ ] Large lists virtualized
-- [ ] Heavy computations memoized
-- [ ] Images optimized (Next.js Image)
-
-## Common Issues to Check
-
-1. **Missing loading state** before empty state
-2. **Hardcoded API URLs** instead of relative paths
-3. **Missing error handling** in fetch calls
-4. **Unused imports** and dead code
-5. **Magic numbers/strings** without constants
-6. **Console.log** left in production code
-7. **Missing TypeScript types**
+### Code Quality
+- [ ] TypeScript types are correct
+- [ ] No `any` types
+- [ ] Consistent naming conventions
+- [ ] Clear, descriptive variable names
 
 ## Output Format
 
-**Rating:** ⭐⭐⭐⭐⭐
+Rate the component:
+- ✅ Well-structured, follows patterns
+- ⚠️ Minor issues, suggestions
+- ❌ Significant problems, must fix
 
-**Strengths:**
-- What the component does well
-
-**Issues:**
-1. [Severity] Issue description
-   - Location
-   - Fix
-
-**Refactor Suggestions:**
-- Optional improvements for maintainability
-
-
-
+Provide specific code improvements.

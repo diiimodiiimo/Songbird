@@ -13,6 +13,7 @@ interface BirdStatus {
     percentage: number
     label: string
   }
+  unlockCondition?: string
 }
 
 interface ThemeSelectorProps {
@@ -47,12 +48,17 @@ export default function ThemeSelector({ compact = false }: ThemeSelectorProps) {
     // If still loading, assume unlocked to avoid flicker
     if (loadingStatuses) return true
     const status = birdStatuses.find(s => s.birdId === themeId)
-    return status?.isUnlocked ?? (themeId === 'american-robin') // Default bird always unlocked
+    return status?.isUnlocked ?? (themeId === 'american-robin' || themeId === 'northern-cardinal') // Default birds always unlocked
   }
 
   const getBirdProgress = (themeId: ThemeId): BirdStatus['progress'] | undefined => {
     const status = birdStatuses.find(s => s.birdId === themeId)
     return status?.progress
+  }
+
+  const getBirdUnlockCondition = (themeId: ThemeId): string | undefined => {
+    const status = birdStatuses.find(s => s.birdId === themeId)
+    return status?.unlockCondition
   }
 
   const handleThemeSelect = async (themeId: ThemeId) => {
@@ -108,6 +114,7 @@ export default function ThemeSelector({ compact = false }: ThemeSelectorProps) {
                 isLoading={isLoading}
                 isUnlocked={isBirdUnlocked(theme.id)}
                 progress={getBirdProgress(theme.id)}
+                unlockCondition={getBirdUnlockCondition(theme.id)}
               />
             ))}
           </div>
@@ -127,6 +134,7 @@ export default function ThemeSelector({ compact = false }: ThemeSelectorProps) {
           isLoading={isLoading}
           isUnlocked={isBirdUnlocked(theme.id)}
           progress={getBirdProgress(theme.id)}
+          unlockCondition={getBirdUnlockCondition(theme.id)}
         />
       ))}
     </div>
@@ -140,6 +148,7 @@ function ThemeOption({
   isLoading,
   isUnlocked,
   progress,
+  unlockCondition,
 }: {
   theme: Theme
   isSelected: boolean
@@ -147,6 +156,7 @@ function ThemeOption({
   isLoading: boolean
   isUnlocked: boolean
   progress?: BirdStatus['progress']
+  unlockCondition?: string
 }) {
   const isLocked = !isUnlocked
 
@@ -177,8 +187,10 @@ function ThemeOption({
       </div>
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm truncate">{theme.name}</div>
-        {isLocked && progress ? (
-          <div className="text-xs text-text-muted truncate">{progress.label}</div>
+        {isLocked ? (
+          <div className="text-xs text-text-muted truncate">
+            {unlockCondition || (progress ? progress.label : theme.description)}
+          </div>
         ) : (
           <div className="text-xs text-text-muted truncate">{theme.description}</div>
         )}
@@ -203,6 +215,7 @@ function ThemeCard({
   isLoading,
   isUnlocked,
   progress,
+  unlockCondition,
 }: {
   theme: Theme
   isSelected: boolean
@@ -210,6 +223,7 @@ function ThemeCard({
   isLoading: boolean
   isUnlocked: boolean
   progress?: BirdStatus['progress']
+  unlockCondition?: string
 }) {
   const isLocked = !isUnlocked
 
@@ -262,6 +276,15 @@ function ThemeCard({
           </div>
           <div className="text-[10px] text-center mt-1 opacity-70" style={{ color: theme.colors.text }}>
             {progress.label}
+          </div>
+        </div>
+      )}
+
+      {/* Unlock condition text for locked birds without progress */}
+      {isLocked && !progress && unlockCondition && (
+        <div className="mb-2">
+          <div className="text-[10px] text-center opacity-70" style={{ color: theme.colors.text }}>
+            {unlockCondition}
           </div>
         </div>
       )}

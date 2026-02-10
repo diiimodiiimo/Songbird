@@ -6,8 +6,10 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/join/(.*)',
+  '/waitlist(.*)',
   '/api/webhooks(.*)',
   '/api/invites/validate(.*)',
+  '/api/waitlist(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req) => {
@@ -16,9 +18,18 @@ export default clerkMiddleware(async (auth, req) => {
   
   // If user is not authenticated and trying to access a protected route
   if (!userId && !isPublic) {
-    // Redirect to home page for sign in/sign up
-    const homeUrl = new URL('/home', req.url)
-    return NextResponse.redirect(homeUrl)
+    // Check if waitlist mode is enabled
+    const waitlistEnabled = process.env.WAITLIST_MODE_ENABLED === 'true'
+    
+    if (waitlistEnabled) {
+      // Redirect to waitlist instead of home
+      const waitlistUrl = new URL('/waitlist', req.url)
+      return NextResponse.redirect(waitlistUrl)
+    } else {
+      // Redirect to home page for sign in/sign up
+      const homeUrl = new URL('/home', req.url)
+      return NextResponse.redirect(homeUrl)
+    }
   }
   
   // Don't auto-redirect from /home - let user choose to sign in/out

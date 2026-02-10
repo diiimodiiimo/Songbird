@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { currentUser } from '@clerk/nextjs/server'
 
 export async function POST() {
   try {
@@ -20,19 +21,51 @@ export async function POST() {
 
     const supabase = getSupabase()
 
-    // Get current user data
+    // Get current user data and email
+    const clerkUser = await currentUser()
+    const email = clerkUser?.emailAddresses?.[0]?.emailAddress
+
     const { data: userData } = await supabase
       .from('users')
-      .select('inviteCode')
+      .select('inviteCode, email')
       .eq('id', userId)
       .single()
 
+    // Check if user is on waitlist and eligible for Founding Flock
+    let shouldGrantPremium = false
+    let stripeCustomerId: string | null = null
+
+    if (email) {
+      const { data: waitlistEntry } = await supabase
+        .from('waitlist_entries')
+        .select('foundingFlockEligible, stripeCustomerId')
+        .eq('email', email)
+        .single()
+
+      if (waitlistEntry?.foundingFlockEligible) {
+        shouldGrantPremium = true
+        stripeCustomerId = waitlistEntry.stripeCustomerId || null
+      }
+    }
+
     // Mark onboarding as complete
+    const updateData: any = {
+      onboardingCompletedAt: new Date().toISOString(),
+    }
+
+    // Grant premium if Founding Flock eligible
+    if (shouldGrantPremium) {
+      updateData.isPremium = true
+      updateData.isFoundingMember = true
+      updateData.premiumSince = new Date().toISOString()
+      if (stripeCustomerId) {
+        updateData.stripeCustomerId = stripeCustomerId
+      }
+    }
+
     await supabase
       .from('users')
-      .update({
-        onboardingCompletedAt: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', userId)
 
     // Generate invite code if not exists
@@ -44,7 +77,10 @@ export async function POST() {
         .eq('id', userId)
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ 
+      success: true,
+      isFoundingMember: shouldGrantPremium,
+    })
   } catch (error) {
     console.error('Error completing onboarding:', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

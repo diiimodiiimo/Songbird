@@ -1,20 +1,63 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 import ThemeBird from '@/components/ThemeBird'
 import ProgressDots from './ProgressDots'
+import { useTheme } from '@/lib/theme'
+import { themes, type ThemeId } from '@/lib/theme'
 
 interface UsernameScreenProps {
-  onContinue: (username: string) => void
+  onContinue: (username: string, selectedBird?: ThemeId) => void
   existingUsername?: string
 }
 
+// Starter birds available during onboarding
+const starterBirds: ThemeId[] = ['american-robin', 'northern-cardinal']
+
 export default function UsernameScreen({ onContinue, existingUsername }: UsernameScreenProps) {
+  const { setTheme } = useTheme()
   const [username, setUsername] = useState(existingUsername || '')
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
+  const [selectedBird, setSelectedBird] = useState<ThemeId>('american-robin')
+  const [showAllBirds, setShowAllBirds] = useState(false)
+  const [birdStatuses, setBirdStatuses] = useState<any[]>([])
+
+  // Fetch bird unlock statuses
+  useEffect(() => {
+    async function fetchBirdStatuses() {
+      try {
+        const res = await fetch('/api/birds/status')
+        if (res.ok) {
+          const data = await res.json()
+          setBirdStatuses(data.birds || [])
+        }
+      } catch (err) {
+        console.error('Error fetching bird statuses:', err)
+      }
+    }
+    fetchBirdStatuses()
+  }, [])
+
+  const getBirdUnlockInfo = (birdId: ThemeId) => {
+    const status = birdStatuses.find(s => s.birdId === birdId)
+    if (!status) return null
+    if (status.isUnlocked) return 'Unlocked'
+    if (status.progress) return status.progress.label
+    if (status.unlockCondition) return status.unlockCondition
+    return 'Locked'
+  }
+
+  const isBirdUnlocked = (birdId: ThemeId): boolean => {
+    const status = birdStatuses.find(s => s.birdId === birdId)
+    return status?.isUnlocked ?? (birdId === 'american-robin' || birdId === 'northern-cardinal')
+  }
+
+  // Get all non-starter birds
+  const otherBirds = themes.filter(t => !starterBirds.includes(t.id))
 
   // Debounced availability check
   const checkAvailability = useCallback(async (value: string) => {
@@ -73,6 +116,11 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
     }
   }
 
+  const handleBirdSelect = (birdId: ThemeId) => {
+    setSelectedBird(birdId)
+    setTheme(birdId)
+  }
+
   const handleSubmit = async () => {
     const validationError = validateUsername(username)
     if (validationError) {
@@ -90,11 +138,17 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
       const res = await fetch('/api/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ username, theme: selectedBird }),
       })
 
       if (res.ok) {
-        onContinue(username)
+        // Track analytics
+        fetch('/api/analytics/event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'onboarding_username_set' }),
+        }).catch(() => {})
+        onContinue(username, selectedBird)
       } else {
         const data = await res.json()
         setError(data.error || 'Failed to save username')
@@ -118,12 +172,8 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
 
         {/* Headline */}
         <h1 className="text-3xl sm:text-4xl font-bold text-text mb-2 text-center font-title">
-          What should we call you?
+          Choose Your Username
         </h1>
-        
-        <p className="text-text/60 mb-8 text-center">
-          Pick a username for your profile
-        </p>
 
         {/* Username input */}
         <div className="w-full mb-6">
@@ -173,6 +223,100 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
             )}
           </div>
         </div>
+
+        {/* Bird Selection */}
+        <div className="w-full mb-6">
+          <label className="block text-text/70 text-sm mb-3">Select your bird</label>
+          <div className="grid grid-cols-2 gap-3">
+            {starterBirds.map((birdId) => {
+              const theme = themes.find(t => t.id === birdId)!
+              return (
+                <button
+                  key={birdId}
+                  onClick={() => handleBirdSelect(birdId)}
+                  className={`p-4 rounded-xl border-2 transition-all ${
+                    selectedBird === birdId
+                      ? 'border-accent bg-accent/10'
+                      : 'border-text/10 bg-surface hover:border-text/20'
+                  }`}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <Image
+                      src={theme.birdLogo}
+                      alt={theme.name}
+                      width={60}
+                      height={60}
+                      className="object-contain"
+                    />
+                    <div className="text-sm font-medium text-text">{theme.shortName}</div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          <div className="text-xs text-text/50 mt-3 text-center space-y-1">
+            <p>Your bird changes the app's theme and colors.</p>
+            <p>You can change this anytime in settings.</p>
+          </div>
+
+          {/* Show all birds button */}
+          <button
+            onClick={() => setShowAllBirds(!showAllBirds)}
+            className="w-full mt-4 py-2 text-sm text-text/60 hover:text-text/80 transition-colors flex items-center justify-center gap-2"
+          >
+            {showAllBirds ? 'Hide' : 'Show'} all birds
+            <svg 
+              className={`w-4 h-4 transition-transform ${showAllBirds ? 'rotate-180' : ''}`} 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {/* All birds preview */}
+          {showAllBirds && (
+            <div className="mt-4 space-y-2 max-h-64 overflow-y-auto">
+              <p className="text-xs text-text/60 mb-2">Other birds you can unlock:</p>
+              {otherBirds.map((theme) => {
+                const unlockInfo = getBirdUnlockInfo(theme.id)
+                const unlocked = isBirdUnlocked(theme.id)
+                return (
+                  <div
+                    key={theme.id}
+                    className={`flex items-center gap-3 p-2 rounded-lg ${
+                      unlocked ? 'bg-accent/10' : 'bg-surface/50 opacity-60'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 relative flex-shrink-0 ${unlocked ? '' : 'grayscale opacity-50'}`}>
+                      <Image
+                        src={theme.birdLogo}
+                        alt={theme.name}
+                        width={40}
+                        height={40}
+                        className="object-contain"
+                      />
+                      {!unlocked && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-text/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-text">{theme.shortName}</div>
+                      <div className="text-xs text-text/60 truncate">
+                        {unlocked ? 'Unlocked' : unlockInfo || 'Locked'}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Continue button */}
@@ -191,10 +335,7 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={6} currentStep={1} className="pb-8" />
+      <ProgressDots totalSteps={13} currentStep={6} className="pb-8" />
     </div>
   )
 }
-
-
-

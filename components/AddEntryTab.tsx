@@ -5,6 +5,10 @@ import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import ThemeBird from './ThemeBird'
+import SpotifyAttribution from './SpotifyAttribution'
+import MilestoneModal from './MilestoneModal'
+import { UpgradePrompt } from './UpgradePrompt'
+import { getLocalDateString, isToday as isTodayLocal, parseLocalDate } from '@/lib/date-utils'
 
 interface Track {
   id: string
@@ -24,7 +28,7 @@ export default function AddEntryTab() {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [showWrappedBanner, setShowWrappedBanner] = useState(true)
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(getLocalDateString())
   const [query, setQuery] = useState('')
   const [tracks, setTracks] = useState<Track[]>([])
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null)
@@ -37,7 +41,13 @@ export default function AddEntryTab() {
   const [peopleSearch, setPeopleSearch] = useState('')
   const [showPeopleFriendPicker, setShowPeopleFriendPicker] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [message, setMessage] = useState<{ 
+    type: 'success' | 'error'; 
+    text: string;
+    upgradeRequired?: boolean;
+    currentCount?: number;
+    limit?: number;
+  } | null>(null)
   const [existingEntry, setExistingEntry] = useState<{ id: string; songTitle: string; artist: string; notes?: string } | null>(null)
   const [checkingEntry, setCheckingEntry] = useState(true) // Start true for initial load
   const [showFlyingAnimation, setShowFlyingAnimation] = useState(false)
@@ -47,14 +57,47 @@ export default function AddEntryTab() {
   const [loadingStreak, setLoadingStreak] = useState(true) // Start true for initial load
   const [selectedMood, setSelectedMood] = useState<string | null>(null)
   const [showMoodPicker, setShowMoodPicker] = useState(false)
-  const [showBSideCTA, setShowBSideCTA] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [initialLoadComplete, setInitialLoadComplete] = useState(false)
+  const [newMilestone, setNewMilestone] = useState<{ type: string; message: string; icon?: string; headline?: string; body?: string; reward?: { icon: string; text: string } | null } | null>(null)
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false)
+  const [showDelighter, setShowDelighter] = useState<{ type: string; message: string; icon: string } | null>(null)
+  const [previousStreak, setPreviousStreak] = useState(0)
+  const [friendsWhoLoggedToday, setFriendsWhoLoggedToday] = useState<Array<{ id: string; name: string; username?: string; image?: string }>>([])
+  const [hoursUntilMidnight, setHoursUntilMidnight] = useState(24)
 
   // Check if it's today's date
-  const isToday = date === new Date().toISOString().split('T')[0]
+  const isToday = isTodayLocal(date)
   const today = new Date()
   const dayName = today.toLocaleDateString('en-US', { weekday: 'long' })
+
+  // Fetch friends who logged today
+  const fetchFriendsWhoLoggedToday = async () => {
+    try {
+      const res = await fetch(`/api/friends/today?date=${getLocalDateString()}`)
+      const data = await res.json()
+      if (res.ok) {
+        setFriendsWhoLoggedToday(data.friends || [])
+      }
+    } catch (error) {
+      console.error('Error fetching friends who logged today:', error)
+    }
+  }
+
+  // Calculate hours until midnight
+  useEffect(() => {
+    if (isToday && !existingEntry && currentStreak > 0) {
+      const updateHours = () => {
+        const now = new Date()
+        const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0)
+        const hours = (midnight.getTime() - now.getTime()) / (1000 * 60 * 60)
+        setHoursUntilMidnight(Math.max(0, Math.floor(hours)))
+      }
+      updateHours()
+      const interval = setInterval(updateHours, 60000) // Update every minute
+      return () => clearInterval(interval)
+    }
+  }, [isToday, existingEntry, currentStreak])
 
   // OPTIMIZED: Fetch all today data in a single API call
   // This replaces 4-5 separate calls (friends, entry, on-this-day, streak)
@@ -67,7 +110,7 @@ export default function AddEntryTab() {
 
     try {
       console.log('[AddEntryTab] Fetching today data for date:', date)
-      const res = await fetch(`/api/today-data?date=${date}`)
+      const res = await fetch(`/api/today-data?date=${date}&today=${getLocalDateString()}`)
       const data = await res.json()
 
       if (!res.ok) {
@@ -80,12 +123,18 @@ export default function AddEntryTab() {
 
       // Set streak
       if (data.currentStreak !== undefined) {
+        setPreviousStreak(currentStreak)
         setCurrentStreak(data.currentStreak)
       }
 
-      // Set friends
+      // Set friends who logged today
       if (data.friends) {
         setFriends(data.friends)
+      }
+
+      // Fetch friends who logged today
+      if (isToday) {
+        fetchFriendsWhoLoggedToday()
       }
 
       // Set On This Day entries
@@ -186,25 +235,81 @@ export default function AddEntryTab() {
 
     return (
       <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-        {/* Top Row: Full date with year + Streak indicator */}
-        <div className="flex justify-between items-center mb-6">
+        {/* STREAK BANNER - Always visible at top */}
+        {loadingStreak ? (
+          <div className="mb-6 bg-surface/50 rounded-xl p-4 text-center">
+            <div className="text-text/60 text-sm">Loading streak...</div>
+          </div>
+        ) : currentStreak > 0 ? (
+          <div className={`mb-6 rounded-xl p-4 border ${
+            !existingEntry && hoursUntilMidnight < 3 && currentStreak > 0
+              ? 'bg-red-900/20 border-red-500/40'
+              : 'bg-gradient-to-r from-accent/20 to-accent/10 border-accent/30'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🔥</span>
+                <div>
+                  <div className="font-bold text-accent text-lg">{currentStreak} day streak</div>
+                  {existingEntry ? (
+                    <div className="text-sm text-text/70">✓ Logged today</div>
+                  ) : !existingEntry && hoursUntilMidnight < 3 && currentStreak > 0 ? (
+                    <div className="text-sm text-red-400 font-medium">
+                      ⚠️ Your {currentStreak}-day streak ends in {hoursUntilMidnight} {hoursUntilMidnight === 1 ? 'hour' : 'hours'}!
+                    </div>
+                  ) : (
+                    <div className="text-sm text-accent/80">Log today to keep your streak!</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Top Row: Full date with year */}
+        <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold text-text">
             {fullDateString}
           </h1>
-          {loadingStreak ? (
-            <div className="text-text/60 text-sm">Loading...</div>
-          ) : currentStreak > 0 ? (
-            <div className="flex items-center gap-1.5 text-accent text-sm sm:text-base font-medium">
-              <span>🔥</span>
-              <span>{currentStreak} {currentStreak === 1 ? 'day' : 'days'}</span>
-            </div>
-          ) : null}
         </div>
 
         {/* Prompt */}
         <p className="text-text/70 text-base sm:text-lg mb-8 text-center">
           {existingEntry ? "Today's song" : "How will we remember today?"}
         </p>
+
+        {/* Social urgency indicator */}
+        {!existingEntry && friendsWhoLoggedToday.length > 0 && (
+          <div className="mb-6 bg-surface/50 rounded-xl p-4 border border-accent/20">
+            <div className="flex items-center gap-3">
+              <div className="flex -space-x-2">
+                {friendsWhoLoggedToday.slice(0, 3).map((friend) => (
+                  <div
+                    key={friend.id}
+                    className="w-8 h-8 rounded-full bg-accent/30 border-2 border-bg overflow-hidden"
+                  >
+                    {friend.image ? (
+                      <Image
+                        src={friend.image}
+                        alt={friend.name}
+                        width={32}
+                        height={32}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs font-bold text-accent">
+                        {friend.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="flex-1 text-sm text-text/70">
+                {friendsWhoLoggedToday[0].name} and {friendsWhoLoggedToday.length - 1} {friendsWhoLoggedToday.length === 2 ? 'other' : 'others'} posted today
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* SongBird CTA - Always show, either to add or to edit */}
         <div className={`flex flex-col items-center mb-8 ${showFlyingAnimation ? 'pointer-events-none' : ''}`}>
@@ -284,88 +389,7 @@ export default function AddEntryTab() {
           )}
         </div>
 
-        {/* On This Day Section - BETWEEN bird and Wrapped banner */}
-        {onThisDayEntries.length > 0 ? (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-text">On This Day</h3>
-              <button
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent('navigateToMemory', { 
-                    detail: { date: new Date().toISOString().split('T')[0] } 
-                  }))
-                }}
-                className="text-sm text-accent hover:text-accent/80 transition-colors"
-              >
-                See all →
-              </button>
-            </div>
-            <div className="space-y-3">
-              {onThisDayEntries.map((entry) => (
-                <button
-                  key={entry.id}
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent('navigateToMemory', { 
-                      detail: { date: entry.date } 
-                    }))
-                  }}
-                  className="w-full flex items-center gap-3 bg-surface/50 hover:bg-surface rounded-lg p-3 transition-colors text-left"
-                >
-                  {entry.albumArt && (
-                    <Image
-                      src={entry.albumArt}
-                      alt={entry.songTitle}
-                      width={60}
-                      height={60}
-                      className="rounded flex-shrink-0"
-                      style={{ aspectRatio: '1/1', objectFit: 'cover' }}
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-text/60 mb-1">{entry.date.split('-')[0]}</div>
-                    <div className="text-sm font-medium truncate">{entry.songTitle}</div>
-                    <div className="text-xs text-text/70 truncate">{entry.artist}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          /* Welcome section for new users with no entries */
-          <div className="mb-8">
-            <div className="bg-surface/50 rounded-xl p-5 text-center">
-              <div className="flex justify-center mb-3">
-                <Image
-                  src="/SongBirdlogo.png"
-                  alt="SongBird"
-                  width={48}
-                  height={48}
-                  className="opacity-80"
-                />
-              </div>
-              <h3 className="text-lg font-semibold text-text mb-2">Welcome to SongBird!</h3>
-              <p className="text-text/60 text-sm mb-4">
-                Log one song each day that captures how you're feeling. Over time, you'll build a beautiful musical autobiography.
-              </p>
-              <div className="grid grid-cols-3 gap-4 text-center mt-4">
-                <div>
-                  <div className="text-xl mb-1">📅</div>
-                  <div className="text-xs text-text/50">Daily logging</div>
-                </div>
-                <div>
-                  <div className="text-xl mb-1">🔙</div>
-                  <div className="text-xs text-text/50">On This Day</div>
-                </div>
-                <div>
-                  <div className="text-xl mb-1">👥</div>
-                  <div className="text-xs text-text/50">Friends</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Wrapped Banner - Secondary, below On This Day */}
+        {/* Wrapped Banner - Secondary, below bird */}
         {showWrappedBanner && (
           <div className="mt-8 bg-gradient-to-r from-primary/20 to-accent/20 border border-primary/30 rounded-xl p-4 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -517,6 +541,7 @@ export default function AddEntryTab() {
             trackId: selectedTrack.id,
             uri: selectedTrack.uri,
             notes, // Preserve notes
+            mood: selectedMood, // Preserve mood
             peopleNames: peopleNames.filter((name) => name.trim().length > 0),
           }),
         })
@@ -551,6 +576,7 @@ export default function AddEntryTab() {
             trackId: selectedTrack.id,
             uri: selectedTrack.uri,
             notes,
+            mood: selectedMood,
             peopleNames: peopleNames.filter((name) => name.trim().length > 0),
           }),
         })
@@ -561,8 +587,40 @@ export default function AddEntryTab() {
           if (data.entry && mentionedUsers.length > 0) {
             await updateMentions(data.entry.id)
           }
+          
+          // Check for new milestones
+          const milestoneRes = await fetch(`/api/milestones?today=${getLocalDateString()}`)
+          const milestoneData = await milestoneRes.json()
+          if (milestoneRes.ok && milestoneData.milestones && milestoneData.milestones.length > 0) {
+            // Check if there's a newly achieved milestone (most recent one)
+            const latestMilestone = milestoneData.milestones[milestoneData.milestones.length - 1]
+            if (latestMilestone.achievedDate) {
+              const achievedDate = parseLocalDate(latestMilestone.achievedDate)
+              const today = getLocalStartOfDay()
+              // If milestone was achieved today, show celebration
+              if (achievedDate.getTime() === today.getTime()) {
+                setNewMilestone(latestMilestone)
+                setShowMilestoneModal(true)
+              }
+            }
+          }
+
+          // Variable rewards (30% chance)
+          if (Math.random() < 0.3) {
+            const delighterTypes = [
+              { type: 'early_bird', message: 'Early bird! You logged earlier than usual today', icon: '🌅' },
+              { type: 'diverse_week', message: 'This is your most diverse week—5 different genres!', icon: '🎨' },
+              { type: 'first_time_artist', message: `First time logging ${selectedTrack.artist}! New territory.`, icon: '✨' },
+              { type: 'throwback', message: `A throwback! You haven't logged ${selectedTrack.artist} in a while`, icon: '⏪' },
+            ]
+            const randomDelighter = delighterTypes[Math.floor(Math.random() * delighterTypes.length)]
+            setTimeout(() => {
+              setShowDelighter(randomDelighter)
+              setTimeout(() => setShowDelighter(null), 4000)
+            }, 2000)
+          }
+          
           setMessage({ type: 'success', text: `🎵 ${selectedTrack.name} by ${selectedTrack.artist} added successfully!` })
-          setShowBSideCTA(true)
           setSelectedTrack(null)
           setQuery('')
           setTracks([])
@@ -573,8 +631,17 @@ export default function AddEntryTab() {
           setSelectedMood(null)
           setShowMoodPicker(false)
           await fetchTodayData() // Refresh to show it now exists
+        } else if (res.status === 403 && data.upgradeRequired) {
+          // Paywall hit - show upgrade message
+          setMessage({ 
+            type: 'error', 
+            text: data.message || 'Entry limit reached. Upgrade to premium for unlimited entries.',
+            upgradeRequired: true,
+            currentCount: data.currentCount,
+            limit: data.limit,
+          })
         } else {
-          setMessage({ type: 'error', text: data.error || 'Failed to save entry' })
+          setMessage({ type: 'error', text: data.error || 'Failed to create entry' })
         }
       }
     } catch (error) {
@@ -586,6 +653,44 @@ export default function AddEntryTab() {
 
   return (
     <div className={`space-y-6 ${animateSwipeIn ? 'animate-swipe-in' : ''}`}>
+      {/* Milestone Celebration Modal */}
+      {showMilestoneModal && newMilestone && (
+        <MilestoneModal
+          milestone={{
+            type: newMilestone.type,
+            headline: newMilestone.headline || newMilestone.message,
+            body: newMilestone.body || newMilestone.message,
+            icon: newMilestone.icon || '🎉',
+            reward: newMilestone.reward || undefined,
+          }}
+          onClose={() => {
+            setShowMilestoneModal(false)
+            setNewMilestone(null)
+          }}
+          onShare={() => {
+            // Share achievement
+            if (navigator.share) {
+              navigator.share({
+                title: newMilestone.headline || newMilestone.message,
+                text: newMilestone.body || newMilestone.message,
+              })
+            }
+          }}
+        />
+      )}
+
+      {/* Variable Reward Delighter */}
+      {showDelighter && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 animate-slide-up">
+          <div className="bg-accent/90 text-bg rounded-xl p-4 shadow-lg border-2 border-accent">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{showDelighter.icon}</span>
+              <p className="font-medium">{showDelighter.message}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div>
         <h3 className="text-xl font-semibold mb-4">➕ Add a New Song of the Day</h3>
         
@@ -699,6 +804,9 @@ export default function AddEntryTab() {
                 <h4 className="text-xl font-bold">{selectedTrack.name}</h4>
                 <p className="text-primary/80">{selectedTrack.artist}</p>
                 <p className="text-sm text-primary/60">{selectedTrack.album}</p>
+                <div className="mt-2">
+                  <SpotifyAttribution variant="minimal" />
+                </div>
               </div>
             </div>
 
@@ -1014,42 +1122,38 @@ export default function AddEntryTab() {
 
         {message && (
           <div className="space-y-3">
-            <div
-              className={`p-4 rounded-xl flex items-center gap-3 ${
-                message.type === 'success'
-                  ? 'bg-green-900/30 text-green-300 border border-green-500/30'
-                  : 'bg-warn-bg text-warn-text border border-red-500/30'
-              }`}
-            >
-              {message.type === 'success' ? (
-                <div className="flex-shrink-0">
-                  <ThemeBird size={40} state="sing" />
-                </div>
-              ) : (
-                <div className="flex-shrink-0">
-                  <ThemeBird size={40} state="curious" />
-                </div>
-              )}
-              <div className="flex-1">
-                <div className="font-medium">{message.text}</div>
-                {message.type === 'success' && (
-                  <div className="text-xs text-green-400/70 mt-1">♪ ♫ ♪</div>
+            {message.upgradeRequired ? (
+              <UpgradePrompt
+                title="Entry Limit Reached"
+                message={message.text}
+                feature="entries"
+                currentCount={message.currentCount}
+                limit={message.limit}
+                compact={true}
+              />
+            ) : (
+              <div
+                className={`p-4 rounded-xl flex items-center gap-3 ${
+                  message.type === 'success'
+                    ? 'bg-green-900/30 text-green-300 border border-green-500/30'
+                    : 'bg-warn-bg text-warn-text border border-red-500/30'
+                }`}
+              >
+                {message.type === 'success' ? (
+                  <div className="flex-shrink-0">
+                    <ThemeBird size={40} state="sing" />
+                  </div>
+                ) : (
+                  <div className="flex-shrink-0">
+                    <ThemeBird size={40} state="curious" />
+                  </div>
                 )}
-              </div>
-            </div>
-            {/* B-side CTA - Subtle, after save success */}
-            {message.type === 'success' && showBSideCTA && (
-              <div className="p-3 bg-surface/50 border border-text/20 rounded-lg">
-                <p className="text-sm text-text/70 mb-2">Want to add a B-side?</p>
-                <button
-                  onClick={() => {
-                    setShowBSideCTA(false)
-                    // TODO: Implement B-side flow
-                  }}
-                  className="text-sm text-accent hover:text-accent/80 transition-colors"
-                >
-                  Add B-side →
-                </button>
+                <div className="flex-1">
+                  <div className="font-medium">{message.text}</div>
+                  {message.type === 'success' && (
+                    <div className="text-xs text-green-400/70 mt-1">♪ ♫ ♪</div>
+                  )}
+                </div>
               </div>
             )}
           </div>

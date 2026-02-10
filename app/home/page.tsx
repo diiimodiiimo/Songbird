@@ -2,6 +2,7 @@
 
 import { useUser, SignOutButton } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import Image from 'next/image'
 import { SignInButton, SignUpButton } from '@clerk/nextjs'
 import { useTheme } from '@/lib/theme'
@@ -11,12 +12,23 @@ export default function HomePage() {
   const router = useRouter()
   const { currentTheme } = useTheme()
 
-  // Don't auto-redirect - let user choose to sign in/out
-  // useEffect(() => {
-  //   if (isLoaded && isSignedIn) {
-  //     router.push('/')
-  //   }
-  // }, [isLoaded, isSignedIn, router])
+  // Check if waitlist mode is enabled and redirect if needed
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      // Check waitlist mode (client-side check via API)
+      fetch('/api/waitlist/check')
+        .then(res => res.json())
+        .then(data => {
+          // If waitlist is required and user doesn't have invite code, redirect
+          if (data.reason === 'waitlist_required') {
+            router.push('/waitlist')
+          }
+        })
+        .catch(() => {
+          // If API fails, continue with normal flow
+        })
+    }
+  }, [isLoaded, isSignedIn, router])
 
   if (!isLoaded) {
     return (
@@ -85,6 +97,3 @@ export default function HomePage() {
     </div>
   )
 }
-
-
-

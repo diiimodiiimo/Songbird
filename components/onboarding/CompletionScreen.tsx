@@ -8,9 +8,10 @@ import ProgressDots from './ProgressDots'
 interface CompletionScreenProps {
   onComplete: () => void
   isTutorialMode?: boolean
+  testMode?: boolean // If true, use onComplete callback instead of redirecting
 }
 
-export default function CompletionScreen({ onComplete, isTutorialMode = false }: CompletionScreenProps) {
+export default function CompletionScreen({ onComplete, isTutorialMode = false, testMode = false }: CompletionScreenProps) {
   const router = useRouter()
   const [showConfetti, setShowConfetti] = useState(false)
   const [completing, setCompleting] = useState(false)
@@ -25,6 +26,15 @@ export default function CompletionScreen({ onComplete, isTutorialMode = false }:
 
   const handleStart = async () => {
     setCompleting(true)
+    
+    // In test mode, just call onComplete callback
+    if (testMode) {
+      setTimeout(() => {
+        onComplete()
+        setCompleting(false)
+      }, 500)
+      return
+    }
     
     try {
       // Only mark onboarding as complete if not in tutorial mode
@@ -119,7 +129,7 @@ export default function CompletionScreen({ onComplete, isTutorialMode = false }:
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={6} currentStep={5} className="pb-8" />
+      <ProgressDots totalSteps={12} currentStep={12} className="pb-8" />
 
       {/* Float up animation style */}
       <style jsx>{`

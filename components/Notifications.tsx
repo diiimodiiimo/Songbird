@@ -19,15 +19,21 @@ export default function Notifications() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // Prevent hydration mismatch by only rendering after mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
-    if (isLoaded && user) {
+    if (isLoaded && user && mounted) {
       fetchNotifications()
       // Poll for new notifications every 30 seconds
       const interval = setInterval(fetchNotifications, 30000)
       return () => clearInterval(interval)
     }
-  }, [isLoaded, user])
+  }, [isLoaded, user, mounted])
 
   const fetchNotifications = async () => {
     if (!user) return
@@ -153,6 +159,22 @@ export default function Notifications() {
     }
   }
 
+  const formatDate = (dateString: string): string => {
+    if (!mounted) return '' // Return empty during SSR to prevent hydration mismatch
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
   return (
     <div className="relative">
       <button
@@ -160,7 +182,7 @@ export default function Notifications() {
         className="relative p-2 sm:px-3 sm:py-2 bg-surface border border-text/20 rounded-lg hover:bg-surface/80 transition-colors"
       >
         <span className="text-sm sm:text-base">🔔</span>
-        {unreadCount > 0 && (
+        {mounted && unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 bg-pink-500 text-white text-[10px] sm:text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
@@ -170,30 +192,43 @@ export default function Notifications() {
       {isOpen && (
         <>
           <div
-            className="fixed inset-0 z-10 bg-black/20"
+            className="fixed inset-0 z-10 bg-black/40 sm:bg-black/20"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-surface border border-text/20 rounded-xl shadow-xl z-20 max-h-80 sm:max-h-96 overflow-hidden">
-            <div className="p-2 sm:p-3 border-b border-text/10 flex justify-between items-center bg-bg/50">
-              <h3 className="font-semibold text-sm sm:text-base">Notifications</h3>
-              {unreadCount > 0 && (
-                <button
-                  onClick={() => {
-                    const unreadIds = notifications
-                      .filter((n) => !n.read)
-                      .map((n) => n.id)
-                    if (unreadIds.length > 0) {
-                      markAsRead(unreadIds)
-                    }
-                  }}
-                  className="text-xs sm:text-sm text-accent hover:text-accent/80 transition-colors"
-                  disabled={loading}
-                >
-                  Clear all
-                </button>
-              )}
+          {/* Mobile: full-width bottom sheet. Desktop: absolute dropdown */}
+          <div className="fixed inset-x-0 bottom-0 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-full sm:w-80 bg-surface border-t sm:border border-text/20 sm:rounded-xl shadow-xl z-20 max-h-[70vh] sm:max-h-96 overflow-hidden rounded-t-2xl sm:rounded-t-xl">
+            {/* Mobile drag handle */}
+            <div className="flex justify-center pt-2 pb-1 sm:hidden">
+              <div className="w-10 h-1 bg-text/20 rounded-full" />
             </div>
-            <div className="divide-y divide-text/5 overflow-y-auto max-h-64 sm:max-h-80">
+            <div className="p-3 sm:p-3 border-b border-text/10 flex justify-between items-center bg-bg/50">
+              <h3 className="font-semibold text-base sm:text-base">Notifications</h3>
+              <div className="flex items-center gap-3">
+                {unreadCount > 0 && (
+                  <button
+                    onClick={() => {
+                      const unreadIds = notifications
+                        .filter((n) => !n.read)
+                        .map((n) => n.id)
+                      if (unreadIds.length > 0) {
+                        markAsRead(unreadIds)
+                      }
+                    }}
+                    className="text-sm text-accent hover:text-accent/80 transition-colors"
+                    disabled={loading}
+                  >
+                    Clear all
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="sm:hidden text-text/50 hover:text-text/80 text-lg p-1"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="divide-y divide-text/5 overflow-y-auto max-h-[55vh] sm:max-h-80">
               {notifications.length === 0 ? (
                 <div className="p-6 text-center">
                   <div className="flex justify-center mb-3">
@@ -224,23 +259,23 @@ export default function Notifications() {
                     <div
                       key={notification.id}
                       onClick={isClickable && notification.type !== 'friend_request' ? handleNotificationClick : undefined}
-                      className={`w-full text-left p-2 sm:p-3 hover:bg-accent/5 transition-colors ${
+                      className={`w-full text-left p-3 hover:bg-accent/5 transition-colors ${
                         !notification.read ? 'bg-accent/10' : ''
-                      } ${isClickable && notification.type !== 'friend_request' ? 'cursor-pointer' : ''}`}
+                      } ${isClickable && notification.type !== 'friend_request' ? 'cursor-pointer active:bg-accent/15' : ''}`}
                     >
-                      <div className="flex items-start gap-2">
-                        <span className="text-sm sm:text-base flex-shrink-0 mt-0.5">
+                      <div className="flex items-start gap-3">
+                        <span className="text-base flex-shrink-0 mt-0.5">
                           {getNotificationIcon(notification.type)}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs sm:text-sm leading-snug line-clamp-2">
+                          <div className="text-sm leading-snug line-clamp-2">
                             {getNotificationText(notification)}
                           </div>
-                          <div className="text-[10px] sm:text-xs text-text/40 mt-0.5">
-                            {new Date(notification.createdAt).toLocaleDateString()}
+                          <div className="text-xs text-text/40 mt-1">
+                            {formatDate(notification.createdAt)}
                           </div>
                           {isClickable && notification.type !== 'friend_request' && (
-                            <div className="text-[10px] sm:text-xs text-accent/70 mt-1">
+                            <div className="text-xs text-accent/70 mt-1">
                               Tap to view in feed →
                             </div>
                           )}

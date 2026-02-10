@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { getThemeById, getBirdLogo } from '@/lib/theme'
+import SpotifyAttribution from '@/components/SpotifyAttribution'
 import type { AviaryBird as AviaryBirdType, SongAssociation } from '@/types/aviary'
 
 interface SongPreviewModalProps {
@@ -181,6 +182,9 @@ function LatestSongTab({
         <p className="text-text-muted text-sm truncate">
           {latestSong.artistName}
         </p>
+        <div className="mt-1">
+          <SpotifyAttribution variant="minimal" />
+        </div>
       </div>
 
       {/* Mentioned people */}

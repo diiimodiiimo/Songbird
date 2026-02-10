@@ -1,194 +1,252 @@
 # /refactor
 
-Refactor code for improved readability, maintainability, and quality without changing functionality. Act like a senior engineer doing a thoughtful cleanup.
+Suggest code refactoring improvements without changing external behavior. Act like a senior engineer improving code quality.
 
 ## Refactoring Principles
 
-### Golden Rules
-1. **Don't change behavior** - Same inputs → same outputs
-2. **Small steps** - One refactor at a time
-3. **Test after each change** - Verify nothing broke
-4. **Leave it better** - Don't gold-plate, just improve
+1. **Preserve behavior** - Don't change what the code does
+2. **Improve readability** - Make it easier to understand
+3. **Reduce complexity** - Simplify where possible
+4. **Eliminate duplication** - DRY (Don't Repeat Yourself)
+5. **Improve maintainability** - Make future changes easier
 
-### When to Refactor
-- Duplicated code
-- Long functions (> 50 lines)
-- Deeply nested logic
-- Unclear naming
-- Magic numbers/strings
-- Mixed concerns
-- Outdated patterns
-
-### When NOT to Refactor
-- Working code under time pressure
-- Code you don't understand yet
-- Without tests/verification ability
-- Just for style preferences
-
-## Common Refactors
+## Common Refactoring Patterns
 
 ### Extract Function
+Before:
 ```typescript
-// Before
 async function handleSubmit() {
-  const entry = await prisma.entry.create({...})
-  await fetch('/api/notify', { body: JSON.stringify({...}) })
-  // ...20 more lines
-}
+  // 15 lines of validation
+  if (!title) return setError('Title required')
+  if (title.length > 100) return setError('Title too long')
+  // ... more validation
 
-// After
+  // 10 lines of API call
+  const response = await fetch('/api/entries', { ... })
+  const data = await response.json()
+  
+  // 10 lines of success handling
+  setEntries([...entries, data])
+  setSuccess(true)
+}
+```
+
+After:
+```typescript
 async function handleSubmit() {
-  const entry = await createEntry(data)
-  await notifyFriends(entry)
-  await updateUI(entry)
+  const validationError = validateEntry({ title, notes })
+  if (validationError) return setError(validationError)
+
+  const data = await createEntry({ title, notes })
+  handleSuccess(data)
+}
+
+function validateEntry({ title, notes }) {
+  if (!title) return 'Title required'
+  if (title.length > 100) return 'Title too long'
+  return null
 }
 ```
 
-### Extract Constant
+### Consolidate Conditional
+Before:
 ```typescript
-// Before
-if (entries.length > 100) { /* paginate */ }
-
-// After
-const PAGE_SIZE = 100
-if (entries.length > PAGE_SIZE) { /* paginate */ }
-```
-
-### Simplify Conditionals
-```typescript
-// Before
-if (user && user.friends && user.friends.length > 0) {
-  return true
-} else {
-  return false
+if (user.isPremium) {
+  showPremiumFeature()
 }
-
-// After
-return (user?.friends?.length ?? 0) > 0
-```
-
-### Remove Duplication (DRY)
-```typescript
-// Before
-// Same fetch pattern in 5 components
-
-// After
-// Shared hook
-function useEntries() {
-  const [entries, setEntries] = useState([])
-  const [loading, setLoading] = useState(false)
-  // ... shared logic
-  return { entries, loading, refresh }
+if (user.isFoundingMember) {
+  showPremiumFeature()
 }
 ```
 
-### Early Returns
+After:
 ```typescript
-// Before
-function process(data) {
-  if (data) {
-    if (data.valid) {
-      // ... actual logic
-    }
-  }
-}
-
-// After
-function process(data) {
-  if (!data) return
-  if (!data.valid) return
-  // ... actual logic
+const hasPremiumAccess = user.isPremium || user.isFoundingMember
+if (hasPremiumAccess) {
+  showPremiumFeature()
 }
 ```
 
-### Named Booleans
+### Replace Magic Numbers
+Before:
 ```typescript
-// Before
-if (user.role === 'admin' && user.verified && !user.suspended) {
-  // ...
-}
-
-// After
-const isActiveAdmin = user.role === 'admin' && user.verified && !user.suspended
-if (isActiveAdmin) {
-  // ...
+if (entries.length >= 365) {
+  unlockBird('painted-bunting')
 }
 ```
 
-## SongBird-Specific Patterns
-
-### Consistent Data Fetching
+After:
 ```typescript
-const [data, setData] = useState<Type[]>([])
-const [loading, setLoading] = useState(false)
-const [error, setError] = useState<string | null>(null)
+const LEGENDARY_BIRD_STREAK = 365
 
-const fetchData = async () => {
-  setLoading(true)
-  setError(null)
-  try {
-    const res = await fetch('/api/endpoint')
-    const json = await res.json()
-    if (res.ok) {
-      setData(json.data)
+if (entries.length >= LEGENDARY_BIRD_STREAK) {
+  unlockBird('painted-bunting')
+}
+```
+
+### Replace Nested Conditionals with Early Return
+Before:
+```typescript
+async function getEntries(userId: string) {
+  if (userId) {
+    const user = await getUser(userId)
+    if (user) {
+      const entries = await fetchEntries(user.id)
+      if (entries.length > 0) {
+        return entries
+      } else {
+        return []
+      }
     } else {
-      setError(json.error || 'Failed to fetch')
+      throw new Error('User not found')
     }
-  } catch (err) {
-    setError('Network error')
-    console.error('Fetch error:', err)
-  } finally {
-    setLoading(false)
+  } else {
+    throw new Error('User ID required')
   }
 }
 ```
 
-### API Route Structure
+After:
 ```typescript
-export async function GET(request: Request) {
-  // 1. Auth check
-  const { userId } = await auth()
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+async function getEntries(userId: string) {
+  if (!userId) throw new Error('User ID required')
+  
+  const user = await getUser(userId)
+  if (!user) throw new Error('User not found')
+  
+  return await fetchEntries(user.id)
+}
+```
 
-  // 2. Parse input
-  const { searchParams } = new URL(request.url)
-  const param = searchParams.get('param')
+### Extract Component
+Before:
+```tsx
+function Dashboard() {
+  return (
+    <div>
+      {/* 50 lines of header JSX */}
+      <nav>...</nav>
+      
+      {/* 100 lines of main content */}
+      <main>...</main>
+      
+      {/* 50 lines of footer JSX */}
+      <footer>...</footer>
+    </div>
+  )
+}
+```
 
-  // 3. Execute logic
-  try {
-    const result = await doSomething(userId, param)
-    return NextResponse.json({ data: result })
-  } catch (error) {
-    console.error('API error:', error)
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+After:
+```tsx
+function Dashboard() {
+  return (
+    <div>
+      <Header />
+      <MainContent />
+      <Footer />
+    </div>
+  )
+}
+```
+
+### Use Map for Switch Statements
+Before:
+```typescript
+function getBirdColor(birdId: string) {
+  switch (birdId) {
+    case 'cardinal':
+      return '#c41e3a'
+    case 'bluebird':
+      return '#1e90ff'
+    case 'goldfinch':
+      return '#ffd700'
+    default:
+      return '#e07b53'
   }
 }
 ```
+
+After:
+```typescript
+const BIRD_COLORS: Record<string, string> = {
+  'cardinal': '#c41e3a',
+  'bluebird': '#1e90ff',
+  'goldfinch': '#ffd700',
+}
+
+function getBirdColor(birdId: string) {
+  return BIRD_COLORS[birdId] ?? '#e07b53'
+}
+```
+
+### Compose Hooks
+Before:
+```tsx
+function EntryForm() {
+  const [title, setTitle] = useState('')
+  const [artist, setArtist] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  
+  const handleSubmit = async () => {
+    setLoading(true)
+    setError('')
+    try { ... }
+    catch (e) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+}
+```
+
+After:
+```tsx
+function useEntryForm() {
+  const [formData, setFormData] = useState({ title: '', artist: '' })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async () => { ... }
+
+  return { formData, setFormData, loading, error, submit }
+}
+
+function EntryForm() {
+  const { formData, setFormData, loading, error, submit } = useEntryForm()
+  // Much cleaner component
+}
+```
+
+## When NOT to Refactor
+
+- Don't refactor working code without reason
+- Don't refactor during a critical fix
+- Don't refactor if you don't understand the code
+- Don't over-abstract for hypothetical future needs
+
+## Refactoring Checklist
+
+- [ ] Understand current behavior completely
+- [ ] Have tests or verification method
+- [ ] Make small, incremental changes
+- [ ] Verify behavior after each change
+- [ ] Improve naming along the way
+- [ ] Remove unused code
 
 ## Output Format
 
-### Proposed Refactors
+```markdown
+## Refactoring Suggestions
 
-1. **[Refactor Name]**
-   - Location: `file:line`
-   - Reason: Why this improves the code
-   - Before:
-   ```typescript
-   // old code
-   ```
-   - After:
-   ```typescript
-   // new code
-   ```
-   - Risk: Low/Med (breaking change potential)
+### High Impact
+1. **[Pattern Name]** in `file.ts`
+   - Current: [description]
+   - Suggested: [description]
+   - Benefit: [why it's better]
 
-2. **[Next Refactor]**
-   ...
+### Medium Impact
+...
 
-### Not Recommending Changes To
-- List any code that looks messy but shouldn't be touched (and why)
-
-
-
+### Low Impact
+...
+```

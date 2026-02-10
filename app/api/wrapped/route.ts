@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import SpotifyWebApi from 'spotify-web-api-node'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { canAccessWrapped } from '@/lib/paywall'
 
 const spotifyApi = new SpotifyWebApi({
   clientId: process.env.SPOTIFY_CLIENT_ID!,
@@ -33,6 +34,19 @@ export async function GET(request: Request) {
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
+    }
+
+    // Check paywall: Wrapped is premium only
+    const wrappedCheck = await canAccessWrapped(clerkUserId)
+    if (!wrappedCheck.allowed) {
+      return NextResponse.json(
+        { 
+          error: 'Premium feature',
+          message: wrappedCheck.reason,
+          upgradeRequired: true,
+        },
+        { status: 403 }
+      )
     }
 
     const { searchParams } = new URL(request.url)

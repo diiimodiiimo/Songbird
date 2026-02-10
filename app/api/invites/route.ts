@@ -10,7 +10,7 @@ function generateId(): string {
   return `c${timestamp}${randomPart}`
 }
 
-// Generate a new invite link (simplified - uses username as invite code)
+// Generate a new invite link
 export async function POST() {
   try {
     const { userId: clerkId } = await auth()
@@ -27,26 +27,37 @@ export async function POST() {
 
     const supabase = getSupabase()
 
-    // Get user's username to use as their invite code
+    // Get user's invite code (should already exist from user creation)
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('username')
+      .select('inviteCode, username')
       .eq('id', userId)
       .single()
 
     if (userError) throw userError
 
-    // Use username as the invite code, or generate one if no username
-    const code = userData?.username || generateInviteCode()
+    // If user doesn't have an invite code, generate one
+    let code = userData?.inviteCode
+    if (!code) {
+      code = generateInviteCode()
+      // Update user with invite code
+      await supabase
+        .from('users')
+        .update({ inviteCode: code })
+        .eq('id', userId)
+    }
 
-    return NextResponse.json({ code, id: null })
+    return NextResponse.json({ 
+      code,
+      url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/join/${code}`,
+    })
   } catch (error) {
     console.error('Error creating invite:', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
 
-// Get user's invite code (simplified)
+// Get user's invite code and link
 export async function GET() {
   try {
     const { userId: clerkId } = await auth()
@@ -63,16 +74,31 @@ export async function GET() {
 
     const supabase = getSupabase()
 
-    // Get user's username as their invite code
-    const { data: userData } = await supabase
+    // Get user's invite code
+    const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('username')
+      .select('inviteCode, username')
       .eq('id', userId)
       .single()
 
+    if (userError) throw userError
+
+    // If user doesn't have an invite code, generate one
+    let code = userData?.inviteCode
+    if (!code) {
+      code = generateInviteCode()
+      await supabase
+        .from('users')
+        .update({ inviteCode: code })
+        .eq('id', userId)
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
     return NextResponse.json({ 
       invites: [],
-      personalCode: userData?.username || null,
+      personalCode: code,
+      inviteUrl: `${baseUrl}/join/${code}`,
     })
   } catch (error) {
     console.error('Error fetching invites:', error)

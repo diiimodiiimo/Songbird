@@ -14,16 +14,48 @@ export async function GET(
     }
 
     const { username } = await params
+    const decodedUsername = decodeURIComponent(username)
     const supabase = getSupabase()
 
-    // Find user by username or email
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, username, name, email, image, bio, favoriteArtists, favoriteSongs')
-      .or(`username.eq.${username},email.eq.${username}`)
-      .maybeSingle()
-
-    if (error) throw error
+    // Find user by username or email or ID
+    // Handle cases where username might be null/undefined or the param might be an email or ID
+    let user = null
+    
+    // Try username first (if it's not null/undefined)
+    if (decodedUsername && decodedUsername !== 'null' && decodedUsername !== 'undefined') {
+      const { data: userByUsername, error: usernameError } = await supabase
+        .from('users')
+        .select('id, username, name, email, image, bio, favoriteArtists, favoriteSongs')
+        .eq('username', decodedUsername)
+        .maybeSingle()
+      
+      if (usernameError) throw usernameError
+      user = userByUsername
+    }
+    
+    // If not found by username, try email
+    if (!user && decodedUsername && decodedUsername.includes('@')) {
+      const { data: userByEmail, error: emailError } = await supabase
+        .from('users')
+        .select('id, username, name, email, image, bio, favoriteArtists, favoriteSongs')
+        .eq('email', decodedUsername)
+        .maybeSingle()
+      
+      if (emailError) throw emailError
+      user = userByEmail
+    }
+    
+    // If still not found, try by ID (fallback)
+    if (!user && decodedUsername) {
+      const { data: userById, error: idError } = await supabase
+        .from('users')
+        .select('id, username, name, email, image, bio, favoriteArtists, favoriteSongs')
+        .eq('id', decodedUsername)
+        .maybeSingle()
+      
+      if (idError) throw idError
+      user = userById
+    }
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })

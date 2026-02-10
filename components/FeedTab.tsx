@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useUser } from '@clerk/nextjs'
+import { getLocalDateString } from '@/lib/date-utils'
 import Image from 'next/image'
 import Link from 'next/link'
 import ThemeBird from './ThemeBird'
 import InviteFriendsCTA from './InviteFriendsCTA'
+import SpotifyAttribution from './SpotifyAttribution'
 import { trackTabView } from '@/lib/analytics-client'
 
 interface Comment {
@@ -83,6 +85,18 @@ const SpotifyIcon = () => (
   </svg>
 )
 
+// Apple Music icon
+const AppleMusicIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className="w-5 h-5"
+  >
+    <path d="M23.994 6.124a9.23 9.23 0 00-.24-2.19c-.317-1.31-1.062-2.31-2.18-3.043a5.022 5.022 0 00-1.877-.726 10.496 10.496 0 00-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026-.747.043-1.49.123-2.193.4-1.336.53-2.3 1.452-2.865 2.78-.192.448-.292.925-.363 1.408-.056.392-.088.785-.1 1.18 0 .032-.007.062-.01.093v12.223c.01.14.017.283.027.424.05.815.154 1.624.497 2.373.65 1.42 1.738 2.353 3.234 2.801.42.127.856.187 1.293.228.555.053 1.11.06 1.667.06h11.03a12.5 12.5 0 001.57-.1c.822-.106 1.596-.35 2.295-.81a5.046 5.046 0 001.88-2.207c.186-.42.293-.87.37-1.324.113-.675.138-1.358.137-2.04-.002-3.8 0-7.595-.003-11.393zm-6.423 3.99v5.712c0 .417-.058.827-.244 1.206-.29.59-.76.962-1.388 1.14-.35.1-.706.157-1.07.173-.95.042-1.8-.335-2.22-1.18-.26-.52-.246-1.075-.046-1.606.303-.804.93-1.26 1.705-1.504.352-.11.71-.184 1.066-.273.305-.076.61-.152.91-.24.18-.055.296-.178.334-.37a.96.96 0 00.014-.18V8.374c0-.266-.07-.35-.334-.296l-5.353 1.208c-.022.005-.044.013-.066.017-.26.06-.37.18-.385.447-.002.04-.002.078-.002.118v7.606c0 .38-.044.755-.197 1.107-.26.6-.722 1-1.345 1.2-.345.11-.7.176-1.064.2-.96.065-1.84-.283-2.28-1.16-.26-.515-.258-1.067-.06-1.6.295-.793.908-1.253 1.678-1.503.37-.12.744-.193 1.12-.29.272-.07.54-.148.804-.234.2-.066.32-.2.357-.41a.95.95 0 00.012-.16V7.39c0-.158.028-.31.1-.453.123-.24.32-.37.567-.42.1-.02.196-.04.295-.057L17 5.274c.086-.016.172-.04.26-.045.206-.01.345.12.373.327.01.065.013.13.013.196v4.362h-.075z"/>
+  </svg>
+)
+
 // Comment icon
 const CommentIcon = () => (
   <svg
@@ -105,39 +119,170 @@ export default function FeedTab() {
   const { isLoaded, isSignedIn } = useUser()
   const [entries, setEntries] = useState<FeedEntry[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const [cursor, setCursor] = useState<string | null>(null)
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
   const [comments, setComments] = useState<Record<string, Comment[]>>({})
   const [newComment, setNewComment] = useState<Record<string, string>>({})
   const [submittingComment, setSubmittingComment] = useState<string | null>(null)
   const [vibing, setVibing] = useState<string | null>(null)
+  const [loadMoreRef, setLoadMoreRef] = useState<HTMLDivElement | null>(null)
+  const fetchFeedRef = useRef<((initialLoad: boolean) => Promise<void>) | null>(null)
+  const initialLoadDoneRef = useRef(false)
+  const [hasLoggedToday, setHasLoggedToday] = useState(false)
+  const [friendsWhoLoggedToday, setFriendsWhoLoggedToday] = useState(0)
+  const [unreadFeedItems, setUnreadFeedItems] = useState(0)
+  const [seenEntryIds, setSeenEntryIds] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    fetchFeed()
-    trackTabView('feed')
-  }, [isLoaded, isSignedIn])
-
-  const fetchFeed = async () => {
+  const fetchFeed = useCallback(async (initialLoad: boolean = false) => {
     if (!isLoaded || !isSignedIn) {
       setLoading(false)
+      setLoadingMore(false)
       return
     }
 
-    setLoading(true)
+    // Prevent duplicate calls
+    if (initialLoad && loading) return
+    if (!initialLoad && (loadingMore || !cursor)) return
+
+    if (initialLoad) {
+      setLoading(true)
+      setEntries([])
+      setCursor(null)
+      setHasMore(true)
+    } else {
+      setLoadingMore(true)
+    }
+
     try {
-      const res = await fetch('/api/feed')
-      const data = await res.json()
-      if (res.ok) {
-        setEntries(data.entries)
-      } else if (res.status === 401) {
-        console.error('Unauthorized - please sign in')
-        window.location.href = '/home'
+      // Build query params - NO date filtering, just pagination
+      const params = new URLSearchParams()
+      if (!initialLoad && cursor) {
+        params.append('cursor', cursor)
       }
+      params.append('limit', '20')
+
+      const res = await fetch(`/api/feed?${params.toString()}`)
+      
+      if (!res.ok) {
+        if (res.status === 401) {
+          console.error('Unauthorized - please sign in')
+          window.location.href = '/home'
+          return
+        }
+        const errorData = await res.json().catch(() => ({}))
+        console.error('Error fetching feed:', res.status, errorData)
+        throw new Error(`Failed to fetch feed: ${res.status}`)
+      }
+
+      const data = await res.json()
+      const newEntries = data.entries || []
+      
+      if (initialLoad) {
+        // Deduplicate by entry ID
+        const uniqueEntries = Array.from(
+          new Map(newEntries.map((e: FeedEntry) => [e.id, e])).values()
+        )
+        setEntries(uniqueEntries)
+        // Mark entries as seen when loaded
+        const entryIds = new Set(uniqueEntries.map((e: FeedEntry) => e.id))
+        setSeenEntryIds(entryIds)
+      } else {
+        // Deduplicate when appending - filter out entries we already have
+        setEntries(prev => {
+          const existingIds = new Set(prev.map(e => e.id))
+          const uniqueNewEntries = newEntries.filter((e: FeedEntry) => !existingIds.has(e.id))
+          return [...prev, ...uniqueNewEntries]
+        })
+      }
+      setHasMore(data.hasMore === true)
+      setCursor(data.cursor || null)
+
+      // Check if user has logged today and count friends who logged
+      const today = getLocalDateString()
+      const userHasLogged = (data.entries || []).some((e: FeedEntry) => 
+        e.isOwnEntry && e.date.startsWith(today)
+      )
+      setHasLoggedToday(userHasLogged)
+
+      // Count friends who logged today
+      const friendsLogged = (data.entries || []).filter((e: FeedEntry) => 
+        !e.isOwnEntry && e.date.startsWith(today)
+      ).length
+      setFriendsWhoLoggedToday(friendsLogged)
     } catch (error) {
       console.error('Error fetching feed:', error)
+      // On error, at least clear loading state
+      if (initialLoad) {
+        setEntries([])
+      }
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
-  }
+  }, [isLoaded, isSignedIn, cursor, loading, loadingMore])
+
+  // Store fetchFeed in ref so we can use it without causing re-renders
+  useEffect(() => {
+    fetchFeedRef.current = fetchFeed
+  }, [fetchFeed])
+
+  // Initial load - only run once when auth is ready
+  useEffect(() => {
+    if (isLoaded && isSignedIn && !initialLoadDoneRef.current && fetchFeedRef.current) {
+      initialLoadDoneRef.current = true
+      fetchFeedRef.current(true).catch(console.error)
+      trackTabView('feed')
+    }
+  }, [isLoaded, isSignedIn])
+
+  // Set up intersection observer for infinite scroll
+  useEffect(() => {
+    if (!loadMoreRef || !hasMore || loadingMore || !cursor) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && cursor && fetchFeedRef.current) {
+          fetchFeedRef.current(false)
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    observer.observe(loadMoreRef)
+    return () => observer.disconnect()
+  }, [loadMoreRef, hasMore, loadingMore, cursor])
+
+  // Calculate unread items
+  useEffect(() => {
+    const unread = entries.filter(e => !seenEntryIds.has(e.id) && !e.isOwnEntry).length
+    setUnreadFeedItems(unread)
+  }, [entries, seenEntryIds])
+
+  // Mark entry as seen when scrolled into view
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const entryId = entry.target.getAttribute('data-entry-id')
+            if (entryId) {
+              setSeenEntryIds(prev => new Set([...prev, entryId]))
+            }
+          }
+        })
+      },
+      { threshold: 0.5 }
+    )
+
+    entries.forEach(entry => {
+      const element = document.querySelector(`[data-entry-id="${entry.id}"]`)
+      if (element) observer.observe(element)
+    })
+
+    return () => observer.disconnect()
+  }, [entries])
 
   const handleVibe = async (entryId: string) => {
     if (vibing) return
@@ -266,19 +411,61 @@ export default function FeedTab() {
     <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
       <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Your Feed</h3>
 
+      {/* Urgency banner - Log prompt if user hasn't logged today */}
+      {!hasLoggedToday && friendsWhoLoggedToday > 0 && (
+        <div className="bg-accent/20 border border-accent/40 rounded-xl p-4 mb-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 flex-1">
+            <ThemeBird size={32} state="curious" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-text">
+                {friendsWhoLoggedToday} {friendsWhoLoggedToday === 1 ? 'friend' : 'friends'} posted today. Log your song to join!
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('navigateToAddEntry'))
+            }}
+            className="px-4 py-2 bg-accent text-bg font-semibold rounded-lg hover:bg-accent/90 transition-all text-sm whitespace-nowrap"
+          >
+            Log Song
+          </button>
+        </div>
+      )}
+
+      {/* Unread indicator */}
+      {unreadFeedItems > 0 && (
+        <div className="bg-surface/80 border border-accent/30 rounded-lg p-3 mb-4 flex items-center justify-between">
+          <p className="text-sm text-text/70">
+            {unreadFeedItems} new {unreadFeedItems === 1 ? 'post' : 'posts'}
+          </p>
+          <button
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+            className="text-sm text-accent hover:text-accent/80 transition-colors font-medium"
+          >
+            Jump to top
+          </button>
+        </div>
+      )}
+
       <div className="space-y-3 sm:space-y-4">
         {entries.map((entry) => (
           <div
             key={entry.id}
+            data-entry-id={entry.id}
             className={`bg-surface rounded-xl overflow-hidden border-2 transition-all ${
               entry.isOwnEntry 
                 ? 'border-accent/40 ring-1 ring-accent/20' 
+                : !seenEntryIds.has(entry.id)
+                ? 'border-accent/30 ring-1 ring-accent/10'
                 : 'border-transparent hover:border-accent/30'
             }`}
           >
             {/* User Header - with "You" indicator for own entries */}
             <Link
-              href={`/user/${entry.user.username || entry.user.email}`}
+              href={`/user/${encodeURIComponent(entry.user.username || entry.user.email || entry.user.id)}`}
               className={`block border-b p-3 sm:p-4 transition-colors cursor-pointer ${
                 entry.isOwnEntry 
                   ? 'bg-accent/20 border-accent/30 hover:bg-accent/25' 
@@ -309,6 +496,9 @@ export default function FeedTab() {
                       <span className="text-xs bg-accent/30 text-accent px-2 py-0.5 rounded-full">
                         Your post
                       </span>
+                    )}
+                    {!seenEntryIds.has(entry.id) && !entry.isOwnEntry && (
+                      <span className="w-2 h-2 bg-accent rounded-full animate-pulse" />
                     )}
                   </div>
                   <div className="text-xs sm:text-sm text-text/70">
@@ -346,6 +536,7 @@ export default function FeedTab() {
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-base sm:text-lg mb-1 truncate">{entry.songTitle}</div>
                   <div className="text-text/70 text-sm sm:text-base mb-2 truncate">by {entry.artist}</div>
+                  <SpotifyAttribution variant="minimal" className="mt-1" />
                 </div>
               </div>
 
@@ -382,16 +573,31 @@ export default function FeedTab() {
                   </span>
                 </button>
 
-                {/* Listen on Spotify Button */}
-                <a
-                  href={`https://open.spotify.com/track/${entry.trackId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1DB954]/20 text-[#1DB954] hover:bg-[#1DB954]/30 transition-all ml-auto"
-                >
-                  <SpotifyIcon />
-                  <span className="text-sm font-medium hidden sm:inline">Listen</span>
-                </a>
+                {/* Listen Buttons */}
+                <div className="flex items-center gap-2 ml-auto">
+                  {/* Spotify */}
+                  <a
+                    href={`https://open.spotify.com/track/${entry.trackId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#1DB954]/20 text-[#1DB954] hover:bg-[#1DB954]/30 transition-all"
+                    title="Listen on Spotify"
+                  >
+                    <SpotifyIcon />
+                    <span className="text-sm font-medium hidden sm:inline">Spotify</span>
+                  </a>
+                  {/* Apple Music */}
+                  <a
+                    href={`https://music.apple.com/us/search?term=${encodeURIComponent(`${entry.songTitle} ${entry.artist}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#FC3C44]/20 text-[#FC3C44] hover:bg-[#FC3C44]/30 transition-all"
+                    title="Listen on Apple Music"
+                  >
+                    <AppleMusicIcon />
+                    <span className="text-sm font-medium hidden sm:inline">Apple</span>
+                  </a>
+                </div>
               </div>
 
               {/* Comments Section */}
@@ -461,12 +667,37 @@ export default function FeedTab() {
 
               {entry.mentions.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-surface">
-                  <div className="text-sm text-text/60 mb-2">Mentioned:</div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-base">📣</span>
+                    <span className="text-sm text-text/60">
+                      {entry.isOwnEntry ? 'You mentioned' : `${entry.user.username || entry.user.name || entry.user.email.split('@')[0]} mentioned`}
+                    </span>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {entry.mentions.map((mention) => (
-                      <span key={mention.id} className="text-accent text-sm">
-                        @{mention.user.username || mention.user.name || mention.user.email.split('@')[0]}
-                      </span>
+                      <Link
+                        key={mention.id}
+                        href={`/user/${encodeURIComponent(mention.user.username || mention.user.email || mention.user.id)}`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-accent/15 hover:bg-accent/25 rounded-full transition-colors"
+                      >
+                        {mention.user.image ? (
+                          <Image
+                            src={mention.user.image}
+                            alt={mention.user.username || mention.user.name || ''}
+                            width={18}
+                            height={18}
+                            className="rounded-full"
+                            style={{ aspectRatio: '1/1', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <div className="w-[18px] h-[18px] rounded-full bg-accent/30 flex items-center justify-center text-[10px] font-bold text-accent">
+                            {(mention.user.username || mention.user.name || mention.user.email).charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="text-accent text-sm font-medium">
+                          @{mention.user.username || mention.user.name || mention.user.email.split('@')[0]}
+                        </span>
+                      </Link>
                     ))}
                   </div>
                 </div>
@@ -475,6 +706,26 @@ export default function FeedTab() {
           </div>
         ))}
       </div>
+
+      {/* Infinite scroll trigger */}
+      {hasMore && (
+        <div ref={setLoadMoreRef} className="py-8 flex justify-center">
+          {loadingMore ? (
+            <div className="flex flex-col items-center gap-2">
+              <ThemeBird size={48} state="bounce" className="animate-bounce" />
+              <p className="text-text/60 text-sm">Loading more...</p>
+            </div>
+          ) : (
+            <div className="h-4" /> // Spacer for intersection observer
+          )}
+        </div>
+      )}
+
+      {!hasMore && entries.length > 0 && (
+        <div className="py-8 text-center">
+          <p className="text-text/40 text-sm">You've reached the end of your feed</p>
+        </div>
+      )}
     </div>
   )
 }

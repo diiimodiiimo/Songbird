@@ -1,133 +1,180 @@
 # /deploy-check
 
-Verify the project is ready for production deployment. Act like a DevOps engineer doing a pre-deployment checklist.
+Pre-deployment verification for Vercel. Act like a release engineer ensuring production readiness.
 
-## Environment Variables
+## Pre-Deploy Checklist
 
-### Required Variables (Verify in Vercel)
-- [ ] `DATABASE_URL` - PostgreSQL connection (use pooler for Vercel)
-- [ ] `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-- [ ] `CLERK_SECRET_KEY`
-- [ ] `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in`
-- [ ] `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`
-- [ ] `SPOTIPY_CLIENT_ID`
-- [ ] `SPOTIPY_CLIENT_SECRET`
+### Build Verification
+- [ ] `npm run build` succeeds locally
+- [ ] `npm run typecheck` passes
+- [ ] `npm run lint` passes
+- [ ] No TypeScript errors
 
-### Database URL Format
-```
-# For Vercel (use pooler connection)
-postgresql://postgres.[ref]:[password]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
-```
-
-## Build Verification
-
-### Pre-Deploy Commands
 ```bash
-# Must pass without errors
-npm run build
-
-# Check for TypeScript errors
-npx tsc --noEmit
-
-# Check for linting errors
-npm run lint
+# Run all checks
+npm run build && npm run typecheck && npm run lint
 ```
 
-### Common Build Issues
-- TypeScript errors
-- Missing imports
-- Unused variables (lint errors)
-- Invalid Tailwind classes
+### Environment Variables
 
-## Database Readiness
+#### Required for Production
+```
+# Database
+DATABASE_URL=postgresql://...
 
-- [ ] Schema is up to date (`npx prisma db push`)
-- [ ] Migrations applied (if using migrate)
-- [ ] Required seed data exists
-- [ ] Connection pooling configured for serverless
+# Authentication (Clerk)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxx
+CLERK_SECRET_KEY=sk_live_xxx
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 
-## API Routes Check
+# Spotify
+SPOTIFY_CLIENT_ID=xxx
+SPOTIFY_CLIENT_SECRET=xxx
 
-### Authentication
-- [ ] All routes check `auth()` before processing
-- [ ] 401 returned for unauthenticated requests
-- [ ] No sensitive data in public responses
+# Push Notifications
+VAPID_PUBLIC_KEY=xxx
+VAPID_PRIVATE_KEY=xxx
+NEXT_PUBLIC_VAPID_KEY=xxx
 
-### Error Handling
-- [ ] All routes have try/catch
-- [ ] Proper error status codes
-- [ ] No stack traces in responses
+# Stripe (if enabled)
+STRIPE_SECRET_KEY=sk_live_xxx
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+```
 
-## Security Checklist
+#### Verify in Vercel Dashboard
+1. Go to Project Settings → Environment Variables
+2. Check all required vars are set for Production
+3. Verify no test/development values leaked
 
-- [ ] No hardcoded secrets in code
-- [ ] `.env` / `.env.local` in `.gitignore`
-- [ ] No debug endpoints in production
-- [ ] HTTPS enforced (Vercel handles this)
-- [ ] Secure headers configured
+### Database
 
-## Performance
+#### Schema Sync
+```bash
+# Check schema is up to date
+npx prisma db pull  # Pull current state
+npx prisma generate # Regenerate client
+```
 
-- [ ] Images optimized (Next.js Image)
-- [ ] No console.log in production paths
-- [ ] Database queries optimized
-- [ ] Response sizes reasonable
+#### Migrations Applied
+Check `migrations/` folder for any pending migrations to run in Supabase.
 
-## Vercel-Specific
+#### Connection Pool
+- Supabase uses connection pooler by default
+- Verify `DATABASE_URL` uses pooler URL (port 6543)
 
-### Function Configuration (vercel.json)
+### API Routes Check
+
+#### Critical Endpoints
+Test these work in preview deployment:
+- [ ] `/api/auth/[...]` - Auth callbacks
+- [ ] `/api/entries` - Entry CRUD
+- [ ] `/api/today-data` - Dashboard data
+- [ ] `/api/feed` - Social feed
+- [ ] `/api/songs` - Spotify search
+
+#### Rate Limiting
+- Verify rate limits are appropriate for production load
+- Check in-memory store resets on deploy (expected)
+
+### Frontend Check
+
+#### Build Output
+- [ ] No "use server" / "use client" conflicts
+- [ ] All dynamic imports work
+- [ ] Static pages generate successfully
+
+#### Assets
+- [ ] Images load correctly
+- [ ] Fonts load correctly  
+- [ ] manifest.json is valid
+- [ ] Service worker (sw.js) is functional
+
+### Webhook Endpoints
+
+#### Stripe (if enabled)
+1. Update webhook URL in Stripe Dashboard
+2. Verify webhook secret matches
+3. Test webhook with Stripe CLI
+
+#### Clerk
+1. Clerk webhooks auto-configured
+2. Verify JWT verification works
+
+### Vercel Configuration
+
+#### vercel.json
 ```json
 {
   "functions": {
     "app/api/**/*.ts": {
-      "maxDuration": 10
+      "maxDuration": 30
     }
   }
 }
 ```
 
-### Known Issues
-- Cold starts on serverless functions
-- 10s timeout on Hobby, 60s on Pro
-- Database connection limits
+#### Build Settings
+- Framework: Next.js (auto-detected)
+- Build Command: `npm run build`
+- Output Directory: `.next`
+- Install Command: `npm install`
 
-## Post-Deploy Verification
+### Post-Deploy Verification
 
-### Test These Endpoints
-1. `/` - Home page loads
-2. `/sign-in` - Auth works
-3. `/api/entries` - API responds (with auth)
-4. Database operations work
+#### Smoke Tests
+1. [ ] Homepage loads
+2. [ ] Sign in works
+3. [ ] Create entry works
+4. [ ] Feed loads
+5. [ ] Push notification subscription works
 
-### Monitor For
-- Function errors in Vercel dashboard
-- Database connection issues
-- Auth failures
-- Slow response times
+#### Monitoring
+- [ ] Vercel Analytics enabled
+- [ ] Error tracking configured
+- [ ] Function logs accessible
 
-## Rollback Plan
+### Rollback Plan
 
-- [ ] Previous working deployment identified
-- [ ] Know how to rollback in Vercel
-- [ ] Database migration rollback ready (if applicable)
+If issues arise:
+1. **Immediate**: Use Vercel's instant rollback
+2. **Gradual**: Promote previous deployment
+3. **Database**: No automatic rollback (manual required)
 
-## Output Format
-
-**Ready to Deploy:** ✅ / ⚠️ / ❌
-
-**Blockers (Must Fix):**
-- List any deployment blockers
-
-**Warnings (Should Fix):**
-- List non-critical issues
-
-**Post-Deploy Tasks:**
-- List verification steps
-
-**Commands to Run:**
 ```bash
-# Provide specific commands
+# Vercel CLI rollback
+vercel rollback [deployment-url]
 ```
 
+### Common Deploy Issues
 
+#### "Build Failed: Module not found"
+- Check import paths (case-sensitive on Linux)
+- Verify all dependencies in package.json
 
+#### "Function timeout"
+- Increase `maxDuration` in vercel.json
+- Optimize slow database queries
+
+#### "Database connection failed"
+- Check DATABASE_URL is correct
+- Verify IP allowlist in Supabase
+- Check connection pool limits
+
+#### "Auth not working"
+- Verify Clerk keys are production keys
+- Check redirect URLs in Clerk Dashboard
+
+## Deploy Commands
+
+```bash
+# Deploy to preview
+vercel
+
+# Deploy to production
+vercel --prod
+
+# Check deployment status
+vercel ls
+```

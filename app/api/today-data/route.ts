@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getOnThisDayDateLimit } from '@/lib/paywall'
 
 /**
  * OPTIMIZED: Combined endpoint for Today page data
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const dateParam = searchParams.get('date')
+    const todayParam = searchParams.get('today') // Client's local "today" date
 
     if (!dateParam || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
       return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, { status: 400 })
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
     const monthNum = parseInt(month)
     const dayNum = parseInt(day)
 
-    console.log('[today-data] Fetching data for date:', dateParam)
+    console.log('[today-data] Fetching data for date:', dateParam, 'today:', todayParam)
 
     // Run queries in parallel using Supabase
     const [entriesResult, existingEntryResult, friendsResult] = await Promise.all([
@@ -95,17 +97,20 @@ export async function GET(request: Request) {
     const allEntries = entriesResult.data || []
     console.log('[today-data] Found entries:', allEntries.length)
 
-    // Calculate streak
+    // Calculate streak - use todayParam if provided (client's local today), otherwise use server date
     let currentStreak = 0
     if (allEntries.length > 0) {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      // Parse the "today" date from client (in YYYY-MM-DD format)
+      const todayDateStr = todayParam || new Date().toISOString().split('T')[0]
+      const [todayYear, todayMonth, todayDay] = todayDateStr.split('-').map(Number)
+      const today = new Date(todayYear, todayMonth - 1, todayDay, 0, 0, 0, 0)
 
       const entryDates = new Set(
         allEntries.map((entry) => {
-          const date = new Date(entry.date)
-          date.setHours(0, 0, 0, 0)
-          return date.getTime()
+          const entryDate = new Date(entry.date)
+          // Normalize entry date to midnight local time
+          const normalizedDate = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate(), 0, 0, 0, 0)
+          return normalizedDate.getTime()
         })
       )
 
@@ -120,11 +125,18 @@ export async function GET(request: Request) {
       }
     }
 
-    // Filter on-this-day entries - show ALL years
+    // Filter on-this-day entries - apply date limit for free users
+    const dateLimit = await getOnThisDayDateLimit(clerkUserId)
     const onThisDayEntries = allEntries
       .filter((entry) => {
         const entryDate = new Date(entry.date)
         const entryYear = entryDate.getFullYear()
+        
+        // Check date limit for free users
+        if (dateLimit && entryDate < dateLimit) {
+          return false
+        }
+        
         return (
           entryDate.getMonth() + 1 === monthNum &&
           entryDate.getDate() === dayNum &&

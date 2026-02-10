@@ -4,6 +4,7 @@ import { sendPushToUser } from '@/lib/sendPushToUser'
 
 // POST - Send SOTD reminders to users who haven't logged today
 // This should be called by a cron job (e.g., Vercel Cron at 6pm, 8pm)
+// Respects user notification preferences
 export async function POST(request: Request) {
   try {
     // Verify the request is authorized (cron secret or internal API key)
@@ -20,12 +21,16 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase()
 
+    // Get current hour in UTC
+    const now = new Date()
+    const currentHourUTC = now.getUTCHours()
+
     // Get today's date range (in UTC)
     const today = new Date()
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0)
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999)
 
-    // Get all users who have push subscriptions
+    // Get all users who have push subscriptions AND want reminders
     const { data: usersWithPush, error: usersError } = await supabase
       .from('push_subscriptions')
       .select('userId')
@@ -46,11 +51,41 @@ export async function POST(request: Request) {
       })
     }
 
+    // Get user preferences for reminder time and enabled status
+    const { data: userPreferences, error: prefsError } = await supabase
+      .from('users')
+      .select('id, reminderTime, reminderEnabled, notificationsEnabled, pushNotificationsEnabled')
+      .in('id', userIds)
+
+    if (prefsError) {
+      console.error('[push/reminder] Error fetching preferences:', prefsError)
+      throw prefsError
+    }
+
+    // Filter users who want reminders at this hour
+    const usersWantingReminder = (userPreferences || []).filter(user => {
+      // Check if notifications are enabled
+      if (!user.notificationsEnabled || !user.pushNotificationsEnabled || !user.reminderEnabled) {
+        return false
+      }
+      // Check if reminder time matches current hour (or within 1 hour window)
+      const reminderHour = user.reminderTime ?? 20 // Default 8 PM
+      return reminderHour === currentHourUTC || reminderHour === currentHourUTC - 1
+    }).map(u => u.id)
+
+    if (usersWantingReminder.length === 0) {
+      return NextResponse.json({ 
+        message: `No users want reminders at ${currentHourUTC}:00 UTC`,
+        reminders_sent: 0,
+        current_hour_utc: currentHourUTC
+      })
+    }
+
     // Get entries for today for these users
     const { data: todayEntries, error: entriesError } = await supabase
       .from('entries')
       .select('userId')
-      .in('userId', userIds)
+      .in('userId', usersWantingReminder)
       .gte('date', startOfDay.toISOString())
       .lte('date', endOfDay.toISOString())
 
@@ -61,7 +96,7 @@ export async function POST(request: Request) {
 
     // Find users who HAVEN'T logged today
     const usersWithEntries = new Set((todayEntries || []).map(e => e.userId))
-    const usersNeedingReminder = userIds.filter(id => !usersWithEntries.has(id))
+    const usersNeedingReminder = usersWantingReminder.filter(id => !usersWithEntries.has(id))
 
     if (usersNeedingReminder.length === 0) {
       return NextResponse.json({ 
@@ -70,7 +105,7 @@ export async function POST(request: Request) {
       })
     }
 
-    console.log(`[push/reminder] Sending reminders to ${usersNeedingReminder.length} users`)
+    console.log(`[push/reminder] Sending reminders to ${usersNeedingReminder.length} users at ${currentHourUTC}:00 UTC`)
 
     // Send reminders to all users who haven't logged
     const results = await Promise.all(
@@ -90,7 +125,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ 
       message: `Sent ${successCount} SOTD reminders`,
       reminders_sent: successCount,
-      total_users_needing_reminder: usersNeedingReminder.length
+      total_users_needing_reminder: usersNeedingReminder.length,
+      current_hour_utc: currentHourUTC
     })
   } catch (error: any) {
     console.error('Error sending SOTD reminders:', error?.message || error)

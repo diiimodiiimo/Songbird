@@ -2,13 +2,21 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 // GET - List all friends (accepted friend requests)
 export async function GET() {
   try {
     const { userId: clerkUserId } = await auth()
+    
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    // Rate limiting - check after auth
+    const rateLimitResult = await checkRateLimit(clerkUserId, 'READ')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
     }
 
     const userId = await getPrismaUserIdFromClerk(clerkUserId)

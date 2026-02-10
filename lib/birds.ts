@@ -43,21 +43,21 @@ export const BIRD_UNLOCK_REQUIREMENTS: BirdUnlockRequirement[] = [
     isPremiumExclusive: false,
   },
   {
+    birdId: 'northern-cardinal',
+    name: 'Northern Cardinal',
+    shortName: 'Cardinal',
+    unlockCondition: 'Default bird (everyone starts with this)',
+    unlockType: 'default',
+    requirement: null,
+    isPremiumExclusive: false,
+  },
+  {
     birdId: 'eastern-bluebird',
     name: 'Eastern Bluebird',
     shortName: 'Bluebird',
     unlockCondition: '7-day streak',
     unlockType: 'streak',
     requirement: { type: 'streak', value: 7 },
-    isPremiumExclusive: false,
-  },
-  {
-    birdId: 'northern-cardinal',
-    name: 'Northern Cardinal',
-    shortName: 'Cardinal',
-    unlockCondition: '30 entries total',
-    unlockType: 'entries',
-    requirement: { type: 'entries', value: 30 },
     isPremiumExclusive: false,
   },
   {
@@ -73,36 +73,36 @@ export const BIRD_UNLOCK_REQUIREMENTS: BirdUnlockRequirement[] = [
     birdId: 'black-capped-chickadee',
     name: 'Black-capped Chickadee',
     shortName: 'Chickadee',
-    unlockCondition: '100 entries total',
+    unlockCondition: '50 entries total',
     unlockType: 'entries',
-    requirement: { type: 'entries', value: 100 },
+    requirement: { type: 'entries', value: 50 },
     isPremiumExclusive: false,
   },
   {
     birdId: 'baltimore-oriole',
     name: 'Baltimore Oriole',
     shortName: 'Oriole',
-    unlockCondition: '100-day streak',
+    unlockCondition: '50-day streak',
     unlockType: 'streak',
-    requirement: { type: 'streak', value: 100 },
+    requirement: { type: 'streak', value: 50 },
     isPremiumExclusive: false,
   },
   {
     birdId: 'house-finch',
     name: 'House Finch',
     shortName: 'Finch',
-    unlockCondition: '200 entries total',
+    unlockCondition: '100 entries total',
     unlockType: 'entries',
-    requirement: { type: 'entries', value: 200 },
+    requirement: { type: 'entries', value: 100 },
     isPremiumExclusive: false,
   },
   {
     birdId: 'indigo-bunting',
     name: 'Indigo Bunting',
     shortName: 'Bunting',
-    unlockCondition: 'Premium member or 50-day streak',
+    unlockCondition: 'Premium member or 30-day streak',
     unlockType: 'streak',
-    requirement: { type: 'streak', value: 50 },
+    requirement: { type: 'streak', value: 30 },
     isPremiumExclusive: false,
     purchasePrice: 299, // $2.99
   },
@@ -145,6 +145,7 @@ export interface BirdUnlockStatus {
   }
   canPurchase: boolean
   purchasePrice?: number
+  unlockCondition: string // Human-readable unlock requirement
 }
 
 // ==========================================
@@ -160,7 +161,7 @@ export async function getUnlockedBirds(userId: string): Promise<string[]> {
     return statuses.filter(s => s.isUnlocked).map(s => s.birdId)
   } catch (error) {
     console.error('[birds] Error getting unlocked birds:', error)
-    return ['american-robin'] // Default bird
+    return ['american-robin', 'northern-cardinal'] // Default birds
   }
 }
 
@@ -171,10 +172,10 @@ export async function isBirdUnlocked(userId: string, birdId: string): Promise<bo
   try {
     const statuses = await getBirdUnlockStatuses(userId)
     const status = statuses.find(s => s.birdId === birdId)
-    return status?.isUnlocked ?? (birdId === 'american-robin')
+    return status?.isUnlocked ?? (birdId === 'american-robin' || birdId === 'northern-cardinal')
   } catch (error) {
     console.error('[birds] Error checking bird unlock:', error)
-    return birdId === 'american-robin' // Default is always unlocked
+    return birdId === 'american-robin' || birdId === 'northern-cardinal' // Default birds always unlocked
   }
 }
 
@@ -191,29 +192,148 @@ export async function unlockBird(
 }
 
 /**
+ * Calculate streak from entries (fallback when column doesn't exist)
+ */
+async function calculateStreakFromEntries(userId: string): Promise<number> {
+  try {
+    const supabase = getSupabase()
+    const { data: entries, error } = await supabase
+      .from('entries')
+      .select('date, createdAt')
+      .eq('userId', userId)
+      .order('date', { ascending: false })
+      .limit(365)
+
+    if (error || !entries || entries.length === 0) return 0
+
+    // Filter to same-day entries (entry logged on the same day as entry.date)
+    const sameDayEntries = entries.filter((e: any) => {
+      const entryDate = new Date(e.date).toISOString().split('T')[0]
+      const createdDate = new Date(e.createdAt).toISOString().split('T')[0]
+      return entryDate === createdDate
+    })
+
+    if (sameDayEntries.length === 0) return 0
+
+    let streak = 0
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    for (let i = 0; i < sameDayEntries.length; i++) {
+      const entryDate = new Date(sameDayEntries[i].date)
+      entryDate.setHours(0, 0, 0, 0)
+
+      const expectedDate = new Date(today)
+      expectedDate.setDate(expectedDate.getDate() - i)
+
+      if (entryDate.getTime() === expectedDate.getTime()) {
+        streak++
+      } else {
+        break
+      }
+    }
+
+    return streak
+  } catch (error) {
+    console.error('[birds] Error calculating streak from entries:', error)
+    return 0
+  }
+}
+
+/**
  * Get the full unlock status for all birds for a user
- * Simplified version that doesn't require extra database tables
+ * userId MUST be the database users.id (from Supabase)
  */
 export async function getBirdUnlockStatuses(userId: string): Promise<BirdUnlockStatus[]> {
   try {
     const supabase = getSupabase()
     
-    // Get user data including premium status
+    console.log('[birds] Getting unlock statuses for database userId:', userId)
+    
+    // Query user - only select columns that exist (don't select currentStreak/longestStreak if they don't exist)
+    // Try to get all columns, but handle gracefully if some don't exist
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('createdAt, isPremium, isFoundingMember')
+      .select('id, createdAt, isPremium, isFoundingMember')
       .eq('id', userId)
-      .single()
-
-    if (userError || !user) {
-      throw new Error('User not found')
+      .maybeSingle()
+    
+    if (userError) {
+      console.error('[birds] User query error:', {
+        userId,
+        error: userError.message,
+        code: userError.code,
+        details: userError.details,
+      })
+      throw new Error(`Failed to query user: ${userError.message}`)
+    }
+    
+    if (!user) {
+      console.error('[birds] User not found in database:', userId)
+      throw new Error(`User not found: ${userId}`)
     }
 
-    // Get entry count
-    const { count: entriesCount } = await supabase
+    // Check premium status FIRST - premium users get all birds
+    const isPremium = Boolean(user.isPremium) || Boolean(user.isFoundingMember)
+    
+    console.log('[birds] Found user:', {
+      id: user.id,
+      createdAt: user.createdAt,
+      isPremium,
+      isFoundingMember: user.isFoundingMember,
+    })
+    
+    // Premium/Founding Flock users get all birds unlocked - check this FIRST
+    if (isPremium) {
+      console.log('[birds] User is premium/founding member - unlocking all birds')
+      return BIRD_UNLOCK_REQUIREMENTS.map((bird): BirdUnlockStatus => ({
+        birdId: bird.birdId,
+        name: bird.name,
+        shortName: bird.shortName,
+        isUnlocked: true,
+        unlockMethod: 'premium',
+        canPurchase: false,
+        unlockCondition: bird.unlockCondition,
+      }))
+    }
+
+    // Get entry count using the database user id
+    const { count: entriesCount, error: countError } = await supabase
       .from('entries')
       .select('id', { count: 'exact', head: true })
-      .eq('userId', userId)
+      .eq('userId', user.id)
+    
+    if (countError) {
+      console.error('[birds] Entry count error:', countError)
+      // Don't throw - continue with 0 entries
+    }
+
+    // Try to get streak from column, fallback to calculating from entries
+    let currentStreak = 0
+    try {
+      const { data: streakData, error: streakError } = await supabase
+        .from('users')
+        .select('currentStreak')
+        .eq('id', userId)
+        .maybeSingle()
+      
+      if (!streakError && streakData?.currentStreak != null) {
+        currentStreak = streakData.currentStreak || 0
+      } else {
+        // Column doesn't exist or is null - calculate from entries
+        console.log('[birds] Streak column missing or null, calculating from entries')
+        currentStreak = await calculateStreakFromEntries(userId)
+      }
+    } catch (streakErr: any) {
+      // Column doesn't exist - calculate from entries
+      if (streakErr?.code === '42703' || streakErr?.message?.includes('does not exist')) {
+        console.log('[birds] Streak column does not exist, calculating from entries')
+        currentStreak = await calculateStreakFromEntries(userId)
+      } else {
+        console.error('[birds] Error getting streak:', streakErr)
+        currentStreak = await calculateStreakFromEntries(userId)
+      }
+    }
 
     const now = new Date()
     const createdAt = new Date(user.createdAt)
@@ -222,24 +342,19 @@ export async function getBirdUnlockStatuses(userId: string): Promise<BirdUnlockS
     )
 
     const totalEntries = entriesCount || 0
-
-    // FOUNDING FLOCK CUTOFF DATE
-    // Anyone who signed up before this date is automatically a founding member
-    // and gets all birds unlocked. New users after this date must earn birds
-    // via streaks or purchase premium.
-    const FOUNDING_CUTOFF_DATE = new Date('2026-01-27T00:00:00Z')
-    const isFoundingMember =
-      user.isPremium ||
-      user.isFoundingMember ||
-      createdAt < FOUNDING_CUTOFF_DATE
-
-    // Calculate a "virtual streak" based on entries (since we don't have streak data)
-    // Assume average of 1 entry per day = streak
-    const virtualStreak = Math.min(totalEntries, daysSinceSignup)
+    
+    console.log('[birds] User stats for unlock calculation:', {
+      userId: user.id,
+      totalEntries,
+      currentStreak,
+      isPremium,
+      isFoundingMember: user.isFoundingMember,
+      daysSinceSignup,
+    })
 
     // Build status for each bird
-    return BIRD_UNLOCK_REQUIREMENTS.map((bird): BirdUnlockStatus => {
-      // Default bird is always unlocked
+    const statuses = BIRD_UNLOCK_REQUIREMENTS.map((bird): BirdUnlockStatus => {
+      // Default birds are always unlocked
       if (bird.unlockType === 'default') {
         return {
           birdId: bird.birdId,
@@ -248,18 +363,7 @@ export async function getBirdUnlockStatuses(userId: string): Promise<BirdUnlockS
           isUnlocked: true,
           unlockMethod: 'default',
           canPurchase: false,
-        }
-      }
-
-      // Founding members (50+ entries) get ALL birds
-      if (isFoundingMember) {
-        return {
-          birdId: bird.birdId,
-          name: bird.name,
-          shortName: bird.shortName,
-          isUnlocked: true,
-          unlockMethod: 'milestone',
-          canPurchase: false,
+          unlockCondition: bird.unlockCondition,
         }
       }
 
@@ -271,12 +375,12 @@ export async function getBirdUnlockStatuses(userId: string): Promise<BirdUnlockS
         switch (bird.requirement.type) {
           case 'streak':
           case 'streak_rare':
-            isUnlocked = virtualStreak >= bird.requirement.value
+            isUnlocked = currentStreak >= bird.requirement.value
             progress = {
-              current: virtualStreak,
+              current: currentStreak,
               required: bird.requirement.value,
-              percentage: Math.min(100, (virtualStreak / bird.requirement.value) * 100),
-              label: `${virtualStreak}/${bird.requirement.value} day streak`,
+              percentage: Math.min(100, (currentStreak / bird.requirement.value) * 100),
+              label: `${currentStreak}/${bird.requirement.value} day streak`,
             }
             break
           case 'entries':
@@ -300,39 +404,69 @@ export async function getBirdUnlockStatuses(userId: string): Promise<BirdUnlockS
         }
       }
 
+      // Premium exclusive birds are unlocked for premium users
+      if (bird.isPremiumExclusive && isPremium) {
+        isUnlocked = true
+      }
+
       return {
         birdId: bird.birdId,
         name: bird.name,
         shortName: bird.shortName,
         isUnlocked,
-        unlockMethod: isUnlocked ? 'milestone' : undefined,
+        unlockMethod: isUnlocked ? (isPremium ? 'premium' : 'milestone') : undefined,
         progress: isUnlocked ? undefined : progress,
-        canPurchase: !isUnlocked && !!bird.purchasePrice,
+        canPurchase: !isUnlocked && !!bird.purchasePrice && !isPremium,
         purchasePrice: bird.purchasePrice,
+        unlockCondition: bird.unlockCondition,
       }
     })
+    
+    console.log('[birds] Calculated bird statuses:', {
+      total: statuses.length,
+      unlocked: statuses.filter(s => s.isUnlocked).length,
+      defaultBirds: statuses.filter(s => s.unlockMethod === 'default').length,
+    })
+    
+    return statuses
   } catch (error) {
     console.error('[birds] Error getting bird unlock statuses:', error)
     // Return default bird as unlocked
-    return BIRD_UNLOCK_REQUIREMENTS.map((bird) => ({
+    const fallbackStatuses = BIRD_UNLOCK_REQUIREMENTS.map((bird) => ({
       birdId: bird.birdId,
       name: bird.name,
       shortName: bird.shortName,
       isUnlocked: bird.unlockType === 'default',
       unlockMethod: bird.unlockType === 'default' ? 'default' : undefined,
       canPurchase: false,
+      unlockCondition: bird.unlockCondition,
     }))
+    console.log('[birds] Returning fallback statuses (default birds only):', {
+      total: fallbackStatuses.length,
+      unlocked: fallbackStatuses.filter(s => s.isUnlocked).length,
+    })
+    return fallbackStatuses
   }
 }
 
 /**
  * Check and unlock any birds the user has earned
- * Simplified - returns list of newly unlocked birds (calculated)
+ * Returns list of newly unlocked birds based on current stats
  */
 export async function checkAndUnlockBirds(userId: string): Promise<string[]> {
-  // In simplified version, all unlocks are calculated dynamically
-  // Just return empty - we don't track "new" unlocks without a DB table
-  return []
+  try {
+    const statuses = await getBirdUnlockStatuses(userId)
+    const newlyUnlocked = statuses
+      .filter(s => s.isUnlocked && s.unlockMethod === 'milestone')
+      .map(s => s.birdId)
+    
+    // In a full implementation, you'd track which birds were just unlocked
+    // For now, we return empty since unlocks are calculated dynamically
+    return []
+  } catch (error) {
+    console.error('[birds] Error checking bird unlocks:', error)
+    return []
+  }
 }
 
 /**

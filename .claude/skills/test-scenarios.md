@@ -1,174 +1,187 @@
 # /test-scenarios
 
-Generate comprehensive test scenarios for a feature or component. Act like a QA engineer who thinks about edge cases and user behaviors.
+Generate comprehensive test scenarios for features and components. Act like a QA engineer.
 
-## Test Coverage Areas
+## Test Categories
 
-### Happy Path
-- Expected user flow works correctly
-- All success states display properly
-- Data is saved/retrieved correctly
+### 1. Happy Path
+- Normal, expected user flows
+- Valid inputs, successful operations
 
-### Error Handling
-- Network errors handled gracefully
-- Invalid input rejected with helpful message
-- Server errors don't crash the app
+### 2. Edge Cases
+- Boundary conditions
+- Empty states, max values
+- First-time vs returning users
 
-### Edge Cases
-- Empty states (no data)
-- Single item
-- Maximum items/limits
-- Boundary values (dates, numbers)
+### 3. Error Conditions
+- Invalid inputs
+- Network failures
+- Auth failures
 
-### User Variations
-- New user (no history)
-- Power user (lots of data)
-- User with special characters in data
+### 4. Security
+- Unauthorized access attempts
+- Data isolation
+- Input manipulation
 
-### Authentication States
-- Logged out user
-- Session expired
-- Clerk sync issues
-
-## SongBird-Specific Scenarios
-
-### Entry Management
-- [ ] Add entry for today (first time)
-- [ ] Add entry for today (replacing existing)
-- [ ] Add entry for past date
-- [ ] Add entry with long notes (character limit)
-- [ ] Add entry with special characters (emojis, unicode)
-- [ ] View entry with missing album art
-- [ ] Edit existing entry
-- [ ] Delete entry
-
-### Song Search
-- [ ] Search returns results
-- [ ] Search with no results
-- [ ] Search with special characters
-- [ ] Search rate limit handling
-- [ ] Select song from results
-- [ ] Spotify API error handling
-
-### Social Features
-- [ ] View friend's entries
-- [ ] Tag friend in entry
-- [ ] Mention user in notes
-- [ ] Send friend request
-- [ ] Accept friend request
-- [ ] Decline friend request
-- [ ] Block user (if implemented)
-
-### Feed
-- [ ] Feed with entries
-- [ ] Empty feed (no friends)
-- [ ] Feed pagination (many entries)
-- [ ] Feed refresh after new entry
-
-### Analytics
-- [ ] Analytics with data
-- [ ] Analytics with no entries
-- [ ] Time filter changes
-- [ ] Artist/song ranking ties
-
-### On This Day
-- [ ] Has memories for today
-- [ ] No memories for today
-- [ ] Memory from 1 year ago
-- [ ] Multiple memories (different years)
-
-### Wrapped
-- [ ] Year with entries
-- [ ] Year with insufficient entries
-- [ ] Year boundary (Jan 1 vs Dec 31)
+### 5. Performance
+- Large datasets
+- Concurrent operations
+- Load testing
 
 ## Test Scenario Template
 
-### Scenario: [Name]
+```markdown
+## Feature: [Name]
 
-**Given:** Initial state/preconditions
-**When:** User action(s)
-**Then:** Expected result
+### Happy Path
+| Scenario | Steps | Expected Result |
+|----------|-------|-----------------|
+| [Name] | 1. Do X<br>2. Do Y | [Expected] |
 
-**Example:**
+### Edge Cases
+| Scenario | Condition | Expected Result |
+|----------|-----------|-----------------|
+| [Name] | [Edge case] | [Expected] |
+
+### Error Conditions
+| Scenario | Trigger | Expected Result |
+|----------|---------|-----------------|
+| [Name] | [Error cause] | [Expected error handling] |
+
+### Security
+| Scenario | Attack Vector | Expected Result |
+|----------|---------------|-----------------|
+| [Name] | [Attack type] | [Expected protection] |
 ```
-Scenario: Add entry for today
 
-Given: User is logged in and has no entry for today
-When: User searches for "Yesterday" by Beatles
-  And: User selects the song
-  And: User adds notes "Great song for a rainy day"
-  And: User clicks "Save Entry"
-Then: Entry is saved successfully
-  And: "Today" tab shows the new entry
-  And: User sees success message
+## SongBird Feature Examples
+
+### Entry Creation
+
+#### Happy Path
+| Scenario | Steps | Expected |
+|----------|-------|----------|
+| Create entry | 1. Search song<br>2. Select song<br>3. Add notes<br>4. Submit | Entry saved, streak updated, UI refreshed |
+| Edit entry | 1. Open today's entry<br>2. Search new song<br>3. Submit | Entry updated, notes preserved |
+
+#### Edge Cases
+| Scenario | Condition | Expected |
+|----------|-----------|----------|
+| Duplicate entry | User already has entry for today | Update existing entry, don't create new |
+| Very long notes | Notes > 5000 chars | Truncate or show validation error |
+| Empty search | Submit empty search | Show "Enter a song name" message |
+| Special characters | Song with emojis/unicode | Handle correctly, display properly |
+| Past date entry | Create entry for yesterday | Entry created with correct date (if allowed) |
+
+#### Error Conditions
+| Scenario | Trigger | Expected |
+|----------|---------|----------|
+| Network failure | API request fails | Show error message, allow retry |
+| Spotify API down | Search returns 500 | Show fallback message, not blank results |
+| Session expired | Auth token invalid | Redirect to login |
+
+#### Security
+| Scenario | Attack Vector | Expected |
+|----------|---------------|----------|
+| Cross-user access | Try to create entry for other user | Reject, 403 error |
+| XSS in notes | Script tags in notes field | Sanitize/escape output |
+
+---
+
+### Friend Request
+
+#### Happy Path
+| Scenario | Steps | Expected |
+|----------|-------|----------|
+| Send request | 1. Search user<br>2. Click Add Friend | Request sent, pending shown |
+| Accept request | 1. View notifications<br>2. Accept request | Friends added, feed access |
+| Decline request | 1. View notifications<br>2. Decline | Request removed, no friendship |
+
+#### Edge Cases
+| Scenario | Condition | Expected |
+|----------|-----------|----------|
+| Already friends | Send request to friend | Show "Already friends" |
+| Self-request | Try to add yourself | Prevent, show message |
+| Pending request | Request already sent | Show "Request pending" |
+| Max friends (free) | At 20 friends limit | Show upgrade prompt |
+
+#### Security
+| Scenario | Attack Vector | Expected |
+|----------|---------------|----------|
+| Blocked user request | Blocked user sends request | Silently reject |
+| Request spam | Rapid-fire requests | Rate limit (30/min) |
+
+---
+
+### Streak System
+
+#### Happy Path
+| Scenario | Steps | Expected |
+|----------|-------|----------|
+| Continue streak | Log entry same day | Streak +1 |
+| Freeze activates | Miss 1 day, have freeze | Streak preserved, freeze used |
+
+#### Edge Cases
+| Scenario | Condition | Expected |
+|----------|-----------|----------|
+| Timezone boundary | Entry at 11:59pm | Counts for current day |
+| Server timezone | User in different TZ | Use user's local date |
+| First entry | No previous entries | Streak starts at 1 |
+| Backdated entry | Log for yesterday | Doesn't count (same-day rule) |
+
+#### Error Conditions
+| Scenario | Trigger | Expected |
+|----------|---------|----------|
+| Streak breaks | Miss 2+ days | Streak resets, offer restore |
+| Restore limit | Used restore < 30 days ago | Show "Try again in X days" |
+
+---
+
+### Feed & Social
+
+#### Happy Path
+| Scenario | Steps | Expected |
+|----------|-------|----------|
+| View feed | Open Feed tab | Friends' entries shown |
+| Vibe entry | Click vibe button | Vibe count +1, notification sent |
+| Comment | Type comment, submit | Comment shown, notification sent |
+
+#### Edge Cases
+| Scenario | Condition | Expected |
+|----------|-----------|----------|
+| Empty feed | No friends | Show "Add friends" CTA |
+| No entries | Friends have no entries | Show "Friends haven't posted" |
+| Own entry | View own entry in feed | Don't show vibe button on self |
+
+#### Security
+| Scenario | Attack Vector | Expected |
+|----------|---------------|----------|
+| Non-friend access | Try to view non-friend entry | 403 or hidden |
+| Blocked user | Blocked user's entries | Not shown in feed |
+| Comment spam | Many comments rapidly | Rate limited |
+
+## Generating Test Data
+
+```typescript
+// Test users
+const testUsers = [
+  { email: 'test@example.com', username: 'testuser' },
+  { email: 'friend@example.com', username: 'friend1' },
+]
+
+// Test entries
+const testEntries = [
+  { date: today, songTitle: 'Test Song', artist: 'Test Artist' },
+  { date: yesterday, songTitle: 'Yesterday Song', artist: 'Artist 2' },
+]
 ```
-
-## API Test Scenarios
-
-### GET Endpoint
-- [ ] Returns data for authenticated user
-- [ ] Returns 401 for unauthenticated request
-- [ ] Returns empty array when no data
-- [ ] Pagination works correctly
-- [ ] Filters work correctly
-
-### POST Endpoint
-- [ ] Creates resource with valid data
-- [ ] Returns 400 for invalid data
-- [ ] Returns 401 for unauthenticated request
-- [ ] Handles duplicate prevention (unique constraints)
-- [ ] Returns created resource
-
-### PUT/PATCH Endpoint
-- [ ] Updates resource with valid data
-- [ ] Returns 404 for non-existent resource
-- [ ] Returns 403 when updating others' data
-- [ ] Partial updates work correctly
-
-### DELETE Endpoint
-- [ ] Deletes owned resource
-- [ ] Returns 403 for others' resources
-- [ ] Returns 404 for non-existent resource
-- [ ] Cascading deletes work correctly
 
 ## Manual Testing Checklist
 
-### Before Deploying
+### Before Release
 - [ ] All happy paths work
-- [ ] Error messages are user-friendly
-- [ ] Loading states appear correctly
+- [ ] Key edge cases handled
+- [ ] Error messages are helpful
+- [ ] Loading states show correctly
 - [ ] Mobile responsive
-- [ ] Keyboard navigation works
-- [ ] Data persists correctly
-
-### Browser Testing
-- [ ] Chrome
-- [ ] Firefox
-- [ ] Safari
-- [ ] Mobile browsers
-
-## Output Format
-
-### Feature: [Name]
-
-**Critical Scenarios** (must pass):
-1. Scenario name - brief description
-2. ...
-
-**Important Scenarios** (should pass):
-1. ...
-
-**Edge Cases** (nice to test):
-1. ...
-
-**Not Testing** (out of scope):
-1. ...
-
-For each scenario, provide:
-- Steps to reproduce
-- Expected outcome
-- Data requirements (if any)
-
-
-
+- [ ] Different browsers work

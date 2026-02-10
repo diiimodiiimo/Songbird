@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { createFoundingFlockYearlyCheckout, stripe, FOUNDING_FLOCK_LIMIT } from '@/lib/stripe'
+import { getSupabase } from '@/lib/supabase'
+import { getFoundingMemberCount } from '@/lib/premium'
 
-// Founding Flock checkout - disabled until Stripe is fully configured
+/**
+ * Founding Flock Yearly Checkout Endpoint
+ * Creates a Stripe checkout session for $29.99/year Founding Flock membership
+ * Verifies waitlist eligibility if user is from waitlist
+ */
 export async function POST() {
   try {
     const { userId: clerkUserId } = await auth()
@@ -9,20 +17,91 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Stripe not configured yet
-    return NextResponse.json(
-      { error: 'Premium purchases are coming soon! All users currently have Founding Flock access.' },
-      { status: 503 }
-    )
+    // Check if Stripe is configured
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Payment processing is not available. Please contact support.' },
+        { status: 503 }
+      )
+    }
+
+    // Get database user ID
+    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
+    }
+
+    // Check founding slots availability
+    const foundingCount = await getFoundingMemberCount()
+    if (foundingCount >= FOUNDING_FLOCK_LIMIT) {
+      return NextResponse.json(
+        { error: 'Founding Flock slots are full. Monthly subscription is still available.' },
+        { status: 400 }
+      )
+    }
+
+    // Check if user is on waitlist and eligible
+    const supabase = getSupabase()
+    const { data: user } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', userId)
+      .single()
+
+    if (user?.email) {
+      const { data: waitlistEntry } = await supabase
+        .from('waitlist_entries')
+        .select('foundingFlockEligible, invitedAt')
+        .eq('email', user.email)
+        .single()
+
+      // If user is on waitlist but not eligible, return error
+      if (waitlistEntry && !waitlistEntry.foundingFlockEligible) {
+        return NextResponse.json(
+          { error: 'Founding Flock eligibility has expired. Monthly subscription is still available.' },
+          { status: 400 }
+        )
+      }
+
+      // Mark waitlist entry as invited if not already
+      if (waitlistEntry && !waitlistEntry.invitedAt) {
+        await supabase
+          .from('waitlist_entries')
+          .update({ invitedAt: new Date().toISOString() })
+          .eq('email', user.email)
+      }
+    }
+
+    // Create checkout session
+    const checkout = await createFoundingFlockYearlyCheckout(clerkUserId, userId)
+
+    if (!checkout) {
+      return NextResponse.json(
+        { error: 'Failed to create checkout session. Please try again later.' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      sessionId: checkout.sessionId,
+      url: checkout.url,
+    })
   } catch (error: unknown) {
     console.error('[checkout/founding-flock] Error:', error)
-    return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json(
+      { error: 'Failed to create checkout session', message },
+      { status: 500 }
+    )
   }
 }
 
+/**
+ * GET - Check checkout status
+ */
 export async function GET() {
   return NextResponse.json({ 
-    message: 'Founding Flock checkout - coming soon',
-    allUsersHaveAccess: true 
+    message: 'Founding Flock Yearly checkout endpoint',
+    configured: !!stripe,
   })
 }

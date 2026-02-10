@@ -1,154 +1,229 @@
 # /debug-issue
 
-Systematically investigate and resolve a bug or issue. Act like a senior developer with strong debugging skills and patience.
+Systematic debugging assistance for SongBird issues. Act like a senior engineer troubleshooting production problems.
 
-## Debugging Process
+## Debugging Framework
 
-### 1. Reproduce the Issue
+### 1. Reproduce
 - What are the exact steps to reproduce?
+- Which user/account is affected?
+- When did it start happening?
 - Is it consistent or intermittent?
-- Does it happen locally, production, or both?
-- What browser/device?
-- What user account?
 
-### 2. Gather Evidence
+### 2. Isolate
+- Does it happen in development or production?
+- Does it affect all users or specific ones?
+- Is it browser/device specific?
+- Is it related to specific data?
 
-#### Check the Console
-- Browser console errors (client-side)
-- Terminal output (server-side)
-- Vercel function logs (production)
+### 3. Investigate
+- Check console errors (browser + server)
+- Check network requests (status codes, responses)
+- Check database state
+- Check recent deployments
 
-#### Check the Network
-- API request/response in Network tab
-- Status codes
-- Response body
+### 4. Fix & Verify
+- Make minimal change to fix
+- Test the fix locally
+- Verify in staging/preview
+- Deploy and monitor
 
-#### Check the Data
-- Prisma Studio (`npx prisma studio`)
-- Database state
-- User-specific data
+## Common Issue Categories
 
-### 3. Form Hypotheses
+### Authentication Issues
 
-Common SongBird issue patterns:
+**Symptoms**: "Unauthorized", redirects to login, 401 errors
 
-#### Authentication Issues
-- Missing `auth()` check
-- Clerk user not synced to database
-- Wrong userId being used
-
-#### Data Issues
-- Entry not found for date
-- Duplicate entry constraint violation
-- Missing required fields
-
-#### API Issues
-- 500 error without proper error handling
-- Timeout on large queries
-- Missing environment variables
-
-#### UI Issues
-- Wrong loading state shown
-- Stale data after mutation
-- Race condition in useEffect
-
-### 4. Test Hypotheses
-
-#### Add Logging
+**Check**:
 ```typescript
-console.log('[DEBUG] userId:', userId)
-console.log('[DEBUG] query result:', result)
-console.log('[DEBUG] error:', error)
-```
-
-#### Isolate the Problem
-- Comment out code sections
-- Test with hardcoded values
-- Check individual components
-
-### 5. Implement Fix
-
-#### Fix Checklist
-- [ ] Root cause identified
-- [ ] Fix addresses root cause (not symptom)
-- [ ] Fix doesn't break other functionality
-- [ ] Edge cases considered
-- [ ] Error handling added
-
-### 6. Verify Fix
-
-- [ ] Original issue resolved
-- [ ] Works locally
-- [ ] Works in production
-- [ ] Related features still work
-- [ ] Clean up debug logging
-
-## Common SongBird Issues
-
-### "Cannot read property of undefined"
-- Check for null/undefined before access
-- Add optional chaining: `object?.property`
-- Add nullish coalescing: `value ?? defaultValue`
-
-### "Unauthorized" or 401 errors
-```typescript
+// 1. Is auth() returning a user?
 const { userId } = await auth()
-if (!userId) {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-}
-// Also sync Clerk user to DB if needed
+console.log('Clerk userId:', userId)
+
+// 2. Is the user in the database?
+const user = await getPrismaUserIdFromClerk(userId)
+console.log('Database user:', user)
+
+// 3. Is the session valid?
+// Check Clerk dashboard for session status
 ```
 
-### "Entry not found" for today
+### Database Issues
+
+**Symptoms**: "User not found", empty data, stale data
+
+**Check**:
 ```typescript
-// Date handling issue - check timezone
-const today = new Date()
-today.setHours(0, 0, 0, 0)
+// 1. Query the database directly
+const { data, error } = await supabase
+  .from('users')
+  .select('*')
+  .eq('clerkId', clerkId)
+
+console.log('Query result:', { data, error })
+
+// 2. Check for connection issues
+// Supabase dashboard → Database → Connection pool
 ```
 
-### Infinite loading
+### API Issues
+
+**Symptoms**: 500 errors, timeout, wrong data
+
+**Check**:
 ```typescript
-// Missing finally in fetch
+// 1. Add logging to API route
+console.log('Request params:', request.nextUrl.searchParams)
+
+// 2. Check rate limiting
+const { allowed, remaining } = await checkRateLimit(userId, 'READ')
+console.log('Rate limit:', { allowed, remaining })
+
+// 3. Check response structure
+return NextResponse.json({ 
+  success: true,
+  data,
+  _debug: { userId, timestamp: Date.now() }  // Temporary
+})
+```
+
+### UI Issues
+
+**Symptoms**: Blank screen, loading forever, wrong display
+
+**Check**:
+```tsx
+// 1. Add console logs in component
+useEffect(() => {
+  console.log('Component mounted, state:', { loading, data, error })
+}, [loading, data, error])
+
+// 2. Check for React errors in console
+// Look for: "Uncaught Error", "Cannot read property"
+
+// 3. Check loading state order
+// Must be: loading → data → empty
+```
+
+### Performance Issues
+
+**Symptoms**: Slow loading, freezing, memory warnings
+
+**Check**:
+```typescript
+// 1. Time your operations
+console.time('fetchEntries')
+const entries = await fetchEntries()
+console.timeEnd('fetchEntries')
+
+// 2. Check for N+1 queries
+// Look for repeated similar queries in logs
+
+// 3. Check response sizes
+console.log('Response size:', JSON.stringify(data).length)
+```
+
+## Debugging Tools
+
+### Browser DevTools
+- Console: JavaScript errors
+- Network: API requests/responses
+- Application: Storage, cookies, service workers
+- Performance: Rendering issues
+
+### Vercel Dashboard
+- Logs: Function execution logs
+- Analytics: Performance metrics
+- Deployments: Recent deploys
+
+### Supabase Dashboard
+- Database: Query execution
+- Auth: Session state
+- Logs: API requests
+
+### Clerk Dashboard
+- Users: User state and sessions
+- Sessions: Active sessions
+- Logs: Authentication events
+
+## Log Patterns
+
+### Structured Logging
+```typescript
+console.log('[API:entries] Fetching entries', {
+  userId,
+  date,
+  timestamp: new Date().toISOString(),
+})
+
+console.error('[API:entries] Error fetching entries', {
+  error: error.message,
+  stack: error.stack,
+  userId,
+})
+```
+
+### Breadcrumb Trail
+```typescript
 try {
-  // ...
-} catch {
-  // ...
-} finally {
-  setLoading(false) // This line missing!
+  console.log('[1] Starting entry creation')
+  const user = await getUser()
+  
+  console.log('[2] User found:', user.id)
+  const entry = await createEntry(data)
+  
+  console.log('[3] Entry created:', entry.id)
+  await updateStreak(user.id)
+  
+  console.log('[4] Streak updated')
+  return { success: true, entry }
+} catch (error) {
+  console.error('[ERROR] Failed at step:', error)
+  throw error
 }
 ```
 
-### Data not refreshing
+## Quick Fixes
+
+### "User not found in database"
 ```typescript
-// Need to refetch after mutation
-await fetch('/api/entries', { method: 'POST', ... })
-await fetchEntries() // Refetch to update UI
+// Check Clerk → DB sync
+await syncClerkUser(clerkId)
 ```
 
-## Output Format
-
-### Issue Summary
-Brief description of the problem
-
-### Root Cause
-What's actually causing the issue
-
-### Evidence
-- Console output
-- Network requests
-- Database state
-
-### Fix
+### "Rate limited"
 ```typescript
-// Before
-// problematic code
-
-// After
-// fixed code
+// Check current rate limit state
+const store = rateLimitStore.get(userId)
+console.log('Rate limit state:', store)
 ```
 
-### Prevention
-How to prevent similar issues in the future
+### "Entry not saving"
+```typescript
+// Check for unique constraint violation
+// [userId, date] must be unique
+const existing = await supabase
+  .from('entries')
+  .select('id')
+  .eq('userId', userId)
+  .eq('date', date)
+```
 
+### "Push notification not received"
+```typescript
+// Check subscription exists
+const subs = await supabase
+  .from('push_subscriptions')
+  .select('*')
+  .eq('userId', userId)
 
+console.log('Push subscriptions:', subs.data)
+```
 
+## Escalation Path
+
+1. **Self-debug** - Use this guide
+2. **Check docs** - SONGBIRD_DOCUMENTATION.md
+3. **Search codebase** - grep for similar issues
+4. **Review recent changes** - git log, deployments
+5. **Check external services** - Spotify, Clerk, Supabase status

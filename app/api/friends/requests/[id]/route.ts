@@ -4,6 +4,7 @@ import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 import { sendPushToUser } from '@/lib/sendPushToUser'
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 // Simple ID generator
 function generateId(): string {
@@ -23,6 +24,13 @@ export async function PUT(
 ) {
   try {
     const { userId: clerkUserId } = await auth()
+    
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(clerkUserId, 'WRITE')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
+
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -108,6 +116,8 @@ export async function PUT(
         sender: userMap.get(friendRequest.senderId) || null,
         receiver: userMap.get(friendRequest.receiverId) || null,
       },
+    }, {
+      headers: await getRateLimitHeaders(clerkUserId, 'WRITE'),
     })
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -131,6 +141,13 @@ export async function DELETE(
 ) {
   try {
     const { userId: clerkUserId } = await auth()
+    
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(clerkUserId, 'WRITE')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
+
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -164,7 +181,9 @@ export async function DELETE(
 
     if (error) throw error
 
-    return NextResponse.json({ message: 'Friend request cancelled' })
+    return NextResponse.json({ message: 'Friend request cancelled' }, {
+      headers: await getRateLimitHeaders(clerkUserId, 'WRITE'),
+    })
   } catch (error: any) {
     console.error('[friends/requests/[id]] DELETE Error:', error?.message || error)
     return NextResponse.json(

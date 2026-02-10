@@ -46,7 +46,9 @@ export default function MemoriesScreen({ onContinue, hasFirstEntry }: MemoriesSc
                 className="flex items-center gap-3 p-3 bg-bg/50 rounded-xl opacity-60"
               >
                 <div className="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
-                  <span className="text-lg">🎵</span>
+                  <svg className="w-6 h-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                  </svg>
                 </div>
                 <div className="flex-1">
                   <div className="text-xs text-accent mb-0.5">{memory.year}</div>
@@ -93,10 +95,12 @@ export default function MemoriesScreen({ onContinue, hasFirstEntry }: MemoriesSc
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={6} currentStep={3} className="pb-8" />
+      <ProgressDots totalSteps={12} currentStep={6} className="pb-8" />
     </div>
   )
 }
+
+
 
 
 

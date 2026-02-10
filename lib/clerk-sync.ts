@@ -12,8 +12,30 @@ function generateCuid(): string {
 }
 
 /**
+ * Generate a unique invite code
+ * Format: 8-character alphanumeric code
+ */
+function generateInviteCode(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  let code = ''
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return code
+}
+
+/**
  * Get the database user ID from Clerk user ID
+ * 
+ * IMPORTANT: This function ALWAYS returns users.id (the database primary key)
+ * - For new users: users.id = clerkUserId (same value)
+ * - For existing users: users.id may differ from clerkId
+ * 
+ * This ID should be used for all database queries (entries.userId, etc.)
  * Uses Supabase REST API (more reliable on Vercel than Prisma)
+ * 
+ * @param clerkUserId - The Clerk user ID (from auth().userId)
+ * @returns The database users.id field, or null if user not found/can't be created
  */
 export async function getPrismaUserIdFromClerk(clerkUserId: string): Promise<string | null> {
   if (!clerkUserId) {
@@ -64,7 +86,7 @@ export async function getPrismaUserIdFromClerk(clerkUserId: string): Promise<str
 
       const { data: userByEmail, error: emailError } = await supabase
         .from('users')
-        .select('id')
+        .select('id, username, image')
         .eq('email', email)
         .maybeSingle()
 
@@ -76,10 +98,33 @@ export async function getPrismaUserIdFromClerk(clerkUserId: string): Promise<str
       if (userByEmail) {
         console.log('[clerk-sync] Found user by email:', userByEmail.id)
 
-        // Link clerkId for future lookups
+        // Sync Clerk data to database user - ONLY if database doesn't have it
+        const updateData: Record<string, any> = {
+          clerkId: clerkUserId,
+        }
+        
+        // Update name if Clerk has it (name can be updated)
+        if (clerkUser.firstName) {
+          const clerkName = `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim()
+          updateData.name = clerkName
+        }
+        
+        // ONLY update username if database doesn't have one (don't overwrite custom usernames!)
+        if (!userByEmail.username && clerkUser.username) {
+          updateData.username = clerkUser.username
+        }
+        
+        // ONLY update image if database doesn't have one (don't overwrite custom images!)
+        if (!userByEmail.image && clerkUser.imageUrl) {
+          updateData.image = clerkUser.imageUrl
+        }
+        
+        updateData.updatedAt = new Date().toISOString()
+
+        // Link clerkId and sync data for future lookups
         await supabase
           .from('users')
-          .update({ clerkId: clerkUserId })
+          .update(updateData)
           .eq('id', userByEmail.id)
 
         userIdCache.set(clerkUserId, { id: userByEmail.id, timestamp: Date.now() })
@@ -90,6 +135,8 @@ export async function getPrismaUserIdFromClerk(clerkUserId: string): Promise<str
       console.log('[clerk-sync] User not found, creating new user for:', email)
 
       const newUserId = clerkUserId // Use Clerk ID as database ID
+      const inviteCode = generateInviteCode()
+      
       const { data: newUser, error: createError } = await supabase
         .from('users')
         .insert({
@@ -102,6 +149,7 @@ export async function getPrismaUserIdFromClerk(clerkUserId: string): Promise<str
           image: clerkUser.imageUrl || null,
           clerkId: clerkUserId,
           password: '',
+          inviteCode, // Generate unique invite code for new users
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })
@@ -207,6 +255,8 @@ export async function getOrCreateUser(clerkUserId: string): Promise<{
 
   // Create new user
   const newUserId = clerkUserId
+  const inviteCode = generateInviteCode()
+  
   const { data: newUser, error: createError } = await supabase
     .from('users')
     .insert({
@@ -219,6 +269,7 @@ export async function getOrCreateUser(clerkUserId: string): Promise<{
       image: clerkUser.imageUrl || null,
       clerkId: clerkUserId,
       password: '',
+      inviteCode, // Generate unique invite code for new users
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     })

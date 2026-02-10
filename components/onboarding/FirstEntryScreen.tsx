@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import ThemeBird from '@/components/ThemeBird'
+import SpotifyAttribution from '@/components/SpotifyAttribution'
 import ProgressDots from './ProgressDots'
 
 interface Track {
@@ -19,7 +20,7 @@ interface Track {
 }
 
 interface FirstEntryScreenProps {
-  onContinue: () => void
+  onContinue: (entryData?: any) => void
   onSkip: () => void
 }
 
@@ -94,6 +95,13 @@ export default function FirstEntryScreen({ onContinue, onSkip }: FirstEntryScree
 
       if (res.ok) {
         setSaved(true)
+        const entryData = {
+          songTitle: selectedTrack.name,
+          artist: selectedTrack.artist,
+          albumArt: selectedTrack.albumArt,
+          date,
+          notes: notes || undefined,
+        }
         // Track analytics
         fetch('/api/analytics/event', {
           method: 'POST',
@@ -101,9 +109,9 @@ export default function FirstEntryScreen({ onContinue, onSkip }: FirstEntryScree
           body: JSON.stringify({ event: 'onboarding_first_entry_created' }),
         }).catch(() => {})
         
-        // Wait a moment to show success, then continue
+        // Wait a moment to show success, then continue with entry data
         setTimeout(() => {
-          onContinue()
+          onContinue(entryData)
         }, 1500)
       } else {
         const data = await res.json()
@@ -149,8 +157,12 @@ export default function FirstEntryScreen({ onContinue, onSkip }: FirstEntryScree
             Let's log your first song
           </h1>
           
-          <p className="text-text/60 mb-10 text-center">
-            What song defined today? Or pick a recent day that stands out.
+          <p className="text-text/60 mb-4 text-center max-w-md mx-auto">
+            The song of the day can be anything: maybe it came on in the gym, maybe you were blasting it in the car with a friend, maybe it was stuck in your head all day.
+          </p>
+          
+          <p className="text-text/70 mb-10 text-center max-w-md mx-auto font-medium">
+            Whatever will help you remember the day.
           </p>
 
           {/* Tappable bird */}
@@ -193,7 +205,7 @@ export default function FirstEntryScreen({ onContinue, onSkip }: FirstEntryScree
         </div>
 
         {/* Progress dots */}
-        <ProgressDots totalSteps={6} currentStep={2} className="pb-8" />
+        <ProgressDots totalSteps={12} currentStep={5} className="pb-8" />
       </div>
     )
   }
@@ -279,6 +291,9 @@ export default function FirstEntryScreen({ onContinue, onSkip }: FirstEntryScree
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-lg text-text">{selectedTrack.name}</div>
                 <div className="text-text/70">{selectedTrack.artist}</div>
+                <div className="mt-1">
+                  <SpotifyAttribution variant="minimal" />
+                </div>
                 <button
                   onClick={() => setSelectedTrack(null)}
                   className="mt-2 text-sm text-accent hover:text-accent/80 transition-colors"
@@ -339,7 +354,7 @@ export default function FirstEntryScreen({ onContinue, onSkip }: FirstEntryScree
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={6} currentStep={2} className="pb-6" />
+      <ProgressDots totalSteps={12} currentStep={5} className="pb-6" />
     </div>
   )
 }

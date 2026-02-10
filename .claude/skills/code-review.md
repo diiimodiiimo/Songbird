@@ -1,150 +1,190 @@
 # /code-review
 
-Perform a thorough code review on the current file or changes. Act like a thoughtful senior developer who balances quality with pragmatism.
+Perform thorough code reviews with categorized feedback. Act like a senior engineer reviewing a pull request.
 
-## Review Mindset
+## Review Categories
 
-### Goals
-- Catch bugs before they ship
-- Ensure code is maintainable
-- Share knowledge and improve the codebase
-- Be helpful, not nitpicky
+### 🚫 Blocking (Must Fix)
+Critical issues that prevent merging:
+- Security vulnerabilities
+- Data corruption risks
+- Breaking changes
+- Missing authentication
+- Incorrect business logic
 
-### Principles
-- **Assume good intent** - author tried their best
-- **Explain the "why"** - not just what's wrong
-- **Suggest, don't demand** - "Consider..." not "You must..."
-- **Praise good work** - acknowledge what's done well
+### ⚠️ Non-Blocking (Should Fix)
+Important improvements:
+- Performance issues
+- Error handling gaps
+- Missing edge cases
+- Code smell / tech debt
+- Incomplete error messages
 
-## Review Checklist
+### 💡 Suggestions (Nice to Have)
+Minor improvements:
+- Code style
+- Variable naming
+- Documentation
+- Alternative approaches
+- Future optimization opportunities
 
-### Correctness
-- [ ] Logic is correct for the intended purpose
-- [ ] Edge cases are handled
-- [ ] Error handling is appropriate
-- [ ] No obvious bugs
+### ✨ Praise
+What's done well (keep doing!):
+- Clean patterns
+- Good test coverage
+- Thoughtful error handling
+- Performance optimization
 
-### Security
-- [ ] Auth checks in place
-- [ ] User can only access their own data
-- [ ] Input is validated
-- [ ] No sensitive data exposed
-
-### Performance
-- [ ] No obvious performance issues
-- [ ] Appropriate use of caching/memoization
-- [ ] Database queries are efficient
-- [ ] No unnecessary re-renders
-
-### Maintainability
-- [ ] Code is readable without comments
-- [ ] Functions are focused (single responsibility)
-- [ ] No magic numbers/strings
-- [ ] Follows existing patterns
+## SongBird Code Standards
 
 ### TypeScript
-- [ ] Types are correct and helpful
-- [ ] No `any` without justification
-- [ ] Interfaces defined for data structures
-- [ ] Props typed for components
-
-### Testing
-- [ ] Is this testable?
-- [ ] Are edge cases covered?
-- [ ] Would I trust this in production?
-
-## SongBird Standards
-
-### Must Follow
-- Loading state before empty state pattern
-- Auth check on all API routes
-- Design system colors (bg-bg, text-text, etc.)
-- Prisma for database operations
-- Clerk for authentication
-
-### Naming Conventions
-- Components: PascalCase
-- Files: kebab-case or PascalCase for components
-- Variables: camelCase
-- Constants: UPPER_SNAKE_CASE
-
-### Code Organization
 ```typescript
-'use client'
-
-// 1. External imports
-import { useState, useEffect } from 'react'
-import { useUser } from '@clerk/nextjs'
-
-// 2. Internal imports
-import { EntryCard } from '@/components/EntryCard'
-
-// 3. Types
-interface Props {
-  id: string
+// ✅ Good: Explicit types for function params/returns
+async function getEntries(userId: string): Promise<Entry[]> {
+  // ...
 }
 
-// 4. Component
-export default function MyComponent({ id }: Props) {
-  // 5. Hooks
-  const { user } = useUser()
-  const [state, setState] = useState()
-  
-  // 6. Effects
-  useEffect(() => {}, [])
-  
-  // 7. Handlers
-  const handleClick = () => {}
-  
-  // 8. Render
-  return <div>...</div>
+// ❌ Bad: Using 'any'
+function processData(data: any): any { ... }
+
+// ✅ Good: Interface for complex objects
+interface CreateEntryInput {
+  songTitle: string
+  artist: string
+  notes?: string
 }
 ```
 
-## Comment Types
+### API Routes
+```typescript
+// ✅ Good: Complete pattern
+export async function POST(request: Request) {
+  // 1. Auth check
+  const { userId: clerkId } = await auth()
+  if (!clerkId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
-### Blocking (Must Fix)
-❌ **Bug:** This will cause X to fail when Y
-❌ **Security:** User could access others' data here
-❌ **Crash:** This will throw when Z is null
+  // 2. Rate limiting
+  const { allowed, response } = await checkRateLimit(clerkId, 'WRITE')
+  if (!allowed) return response
 
-### Non-Blocking (Should Consider)
-⚠️ **Performance:** Consider memoizing this
-⚠️ **Readability:** This could be clearer as...
-⚠️ **Pattern:** We usually do X instead of Y
+  // 3. Get database user
+  const userId = await getPrismaUserIdFromClerk(clerkId)
+  if (!userId) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  }
 
-### Nitpicks (Optional)
-💭 **Nit:** Prefer const over let here
-💭 **Style:** This could be more concise as...
+  // 4. Execute with try/catch
+  try {
+    const result = await doSomething()
+    return NextResponse.json({ data: result })
+  } catch (error) {
+    console.error('[API] Error:', error)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+```
 
-### Praise
-✅ **Nice:** Clean solution to the X problem
-✅ **Good:** Thanks for handling the edge case
+### React Components
+```tsx
+// ✅ Good: Loading state first
+{loading ? (
+  <Skeleton />
+) : entries.length > 0 ? (
+  <EntryList entries={entries} />
+) : (
+  <EmptyState />
+)}
 
-## Output Format
+// ❌ Bad: Empty state flashes during load
+{entries.length === 0 ? <EmptyState /> : <EntryList entries={entries} />}
+```
+
+### Error Handling
+```typescript
+// ✅ Good: Specific error handling
+try {
+  await supabase.from('entries').insert(data)
+} catch (error) {
+  if (error.code === '23505') {
+    return { error: 'Entry already exists for this date' }
+  }
+  throw error // Re-throw unexpected errors
+}
+
+// ❌ Bad: Swallowing errors silently
+try {
+  await riskyOperation()
+} catch (e) {
+  // Nothing happens
+}
+```
+
+### Database Queries
+```typescript
+// ✅ Good: Select only needed fields
+const { data } = await supabase
+  .from('entries')
+  .select('id, songTitle, artist, date')
+  .eq('userId', userId)
+  .limit(50)
+
+// ❌ Bad: Selecting everything
+const { data } = await supabase.from('entries').select('*')
+```
+
+## Review Template
+
+```markdown
+## Code Review: [Feature/File Name]
+
+### 🚫 Blocking Issues
+1. **[Issue Title]**
+   - Location: `file.ts:123`
+   - Problem: [Description]
+   - Fix: [Suggested code]
+
+### ⚠️ Non-Blocking
+1. **[Issue Title]**
+   - Location: `file.ts:45`
+   - Suggestion: [Description]
+
+### 💡 Suggestions
+1. Consider [improvement] for [reason]
+
+### ✨ What's Good
+- [Positive feedback]
+- [Pattern worth keeping]
 
 ### Summary
-Brief overall assessment (1-2 sentences)
+- Blocking: X issues
+- Non-blocking: Y issues
+- Ready to merge: Yes/No
+```
 
-### Must Fix
-1. **[Location]** Issue description
-   - Why it's a problem
-   - Suggested fix
+## Common Review Points
 
-### Should Fix
-1. **[Location]** Issue description
-   - Why it matters
-   - Suggested improvement
+### Security
+- [ ] Auth check on all protected routes
+- [ ] User can only access their own data
+- [ ] Rate limiting on write operations
+- [ ] No sensitive data in responses
+- [ ] Input validation on user inputs
 
-### Consider
-1. **[Location]** Optional improvement
-   - Benefit
+### Performance
+- [ ] No N+1 queries
+- [ ] Appropriate use of indexes
+- [ ] Response size is reasonable
+- [ ] Expensive operations are cached
 
-### Looks Good
-- What was done well
-- Patterns worth keeping
+### Code Quality
+- [ ] No unused imports
+- [ ] No console.log in production code
+- [ ] Proper error messages for users
+- [ ] TypeScript types are correct
 
-### Approved: ✅ / Needs Changes: 🔄
-
-
-
+### Testing
+- [ ] Edge cases considered
+- [ ] Error paths handled
+- [ ] Loading states work correctly

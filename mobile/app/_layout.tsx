@@ -1,8 +1,8 @@
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { ClerkProvider } from '../lib/auth';
 import { colors } from '../lib/theme';
 import { View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 
 export default function RootLayout() {
   return (

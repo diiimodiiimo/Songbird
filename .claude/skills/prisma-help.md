@@ -1,282 +1,244 @@
 # /prisma-help
 
-Get help with Prisma ORM operations, schema design, and database queries. Act like a Prisma expert who knows the gotchas.
+Guidance for Prisma ORM usage in SongBird. Note: SongBird primarily uses Supabase client for new code.
 
-## Quick Reference
+## Current Setup
 
-### Generate Client (after schema changes)
-```bash
-npx prisma generate
-```
+SongBird uses **two database clients**:
+- **Prisma** - Type-safe ORM (legacy routes, schema definition)
+- **Supabase** - Direct client (newer routes, preferred)
 
-### Push Schema (dev - no migration history)
-```bash
-npx prisma db push
-```
+## Key Files
 
-### Create Migration (production)
-```bash
-npx prisma migrate dev --name migration_name
-```
+- `prisma/schema.prisma` - Schema definition (source of truth)
+- `lib/prisma.ts` - Prisma client singleton
+- `lib/supabase.ts` - Supabase client
 
-### Open Prisma Studio
-```bash
-npx prisma studio
-```
+## When to Use What
 
-### Format Schema
-```bash
-npx prisma format
-```
+### Use Prisma For
+- Schema definition
+- Type generation
+- Complex relations with type safety
+- Legacy code maintenance
 
-## Schema Patterns
+### Use Supabase For
+- New API routes
+- Simple CRUD operations
+- Real-time subscriptions
+- Edge-compatible operations
 
-### Basic Model
+## Schema Definition
+
 ```prisma
-model Entry {
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
   id        String   @id @default(cuid())
+  email     String   @unique
+  username  String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  // Fields
-  songTitle String
-  artist    String
-  notes     String?
-  
-  // Relations
+
+  entries Entry[]
+
+  @@map("users")  // PostgreSQL table name
+}
+
+model Entry {
+  id        String   @id @default(cuid())
+  date      DateTime
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  
-  // Indexes
-  @@index([userId])
-  @@unique([userId, date])
+  songTitle String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])  // One entry per user per day
+  @@index([userId, date])   // Query optimization
+  @@map("entries")
 }
 ```
 
-### One-to-Many
+## Common Schema Patterns
+
+### Unique Constraints
 ```prisma
+// Single field
+email String @unique
+
+// Composite unique
+@@unique([userId, date])
+@@unique([entryId, userId])  // One vibe per user per entry
+```
+
+### Indexes
+```prisma
+// Single field index
+@@index([userId])
+
+// Composite index for common queries
+@@index([userId, date])
+```
+
+### Relations
+```prisma
+// One-to-Many
 model User {
-  id      String   @id @default(cuid())
-  entries Entry[]  // One user has many entries
+  entries Entry[]
 }
 
 model Entry {
-  id     String @id @default(cuid())
   userId String
-  user   User   @relation(fields: [userId], references: [id])
-}
-```
-
-### Many-to-Many
-```prisma
-model Entry {
-  id   String  @id @default(cuid())
-  tags EntryTag[]
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// Self-referential (blocking)
 model User {
-  id      String  @id @default(cuid())
-  taggedIn EntryTag[]
-}
-
-model EntryTag {
-  id      String @id @default(cuid())
-  entryId String
-  userId  String
-  entry   Entry  @relation(fields: [entryId], references: [id])
-  user    User   @relation(fields: [userId], references: [id])
-  
-  @@unique([entryId, userId])
+  blockedUsers  BlockedUser[] @relation("Blocker")
+  blockedBy     BlockedUser[] @relation("Blocked")
 }
 ```
 
-## Query Patterns
+### Cascade Delete
+```prisma
+// When user is deleted, delete their entries
+user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-### Find Many with Filter
+// When user is deleted, set null (for optional relations)
+user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+```
+
+## Prisma Client Usage
+
 ```typescript
+import { prisma } from '@/lib/prisma'
+
+// Find one
+const user = await prisma.user.findUnique({
+  where: { id: userId },
+  select: { id: true, email: true, username: true },
+})
+
+// Find many with relations
 const entries = await prisma.entry.findMany({
-  where: {
-    userId: userId,
-    date: {
-      gte: startDate,
-      lte: endDate,
-    }
-  },
-  select: {
-    id: true,
-    songTitle: true,
-    artist: true,
-    date: true,
-  },
+  where: { userId },
+  include: { vibes: true, comments: true },
   orderBy: { date: 'desc' },
-  take: 100,
-  skip: 0,
+  take: 50,
 })
-```
 
-### Find Unique
-```typescript
-const entry = await prisma.entry.findUnique({
-  where: {
-    id: entryId,
-  },
-  include: {
-    user: true,
-    tags: true,
-  }
-})
-```
-
-### Find First (flexible unique lookup)
-```typescript
-const todayEntry = await prisma.entry.findFirst({
-  where: {
-    userId: userId,
-    date: today,
-  }
-})
-```
-
-### Create
-```typescript
+// Create
 const entry = await prisma.entry.create({
   data: {
+    userId,
     songTitle: 'Yesterday',
     artist: 'The Beatles',
-    userId: userId,
-    date: new Date(),
-  }
-})
-```
-
-### Upsert (create or update)
-```typescript
-const entry = await prisma.entry.upsert({
-  where: {
-    userId_date: {
-      userId: userId,
-      date: today,
-    }
+    // ...
   },
-  create: {
-    songTitle: 'Yesterday',
-    artist: 'The Beatles',
-    userId: userId,
-    date: today,
-  },
-  update: {
-    songTitle: 'Yesterday',
-    artist: 'The Beatles',
-  }
 })
-```
 
-### Update
-```typescript
-const entry = await prisma.entry.update({
-  where: { id: entryId },
-  data: { notes: 'Updated notes' }
+// Update
+await prisma.user.update({
+  where: { id: userId },
+  data: { theme: 'cardinal' },
 })
-```
 
-### Delete
-```typescript
+// Upsert
+await prisma.entry.upsert({
+  where: { userId_date: { userId, date } },
+  create: { userId, date, songTitle, artist, ... },
+  update: { songTitle, artist, ... },
+})
+
+// Delete
 await prisma.entry.delete({
-  where: { id: entryId }
+  where: { id: entryId },
 })
 ```
 
-### Aggregations
-```typescript
-// Count
-const count = await prisma.entry.count({
-  where: { userId }
-})
+## Schema Changes
 
-// Group by
-const artistCounts = await prisma.entry.groupBy({
-  by: ['artist'],
-  where: { userId },
-  _count: { id: true },
-  orderBy: { _count: { id: 'desc' } },
-  take: 10,
-})
-```
-
-## Common Issues
-
-### N+1 Query Problem
-```typescript
-// BAD: N+1 queries
-const entries = await prisma.entry.findMany({ where: { userId } })
-for (const entry of entries) {
-  const tags = await prisma.entryTag.findMany({ where: { entryId: entry.id } })
+### Adding a Field
+```prisma
+model User {
+  newField String?  // Optional by default
 }
-
-// GOOD: Include in single query
-const entries = await prisma.entry.findMany({
-  where: { userId },
-  include: { tags: true }
-})
 ```
 
-### Connection Pooling (Vercel)
+Then:
+```bash
+npx prisma generate  # Regenerate client
+npx prisma db push   # Push to database (dev)
+# OR create migration file for production
+```
+
+### Adding a Required Field
+```prisma
+model User {
+  requiredField String @default("default_value")
+}
+```
+
+### Creating a Migration
+```bash
+# For development
+npx prisma db push
+
+# For production (creates migration file)
+npx prisma migrate dev --name add_new_field
+```
+
+## Prisma Client Singleton
+
 ```typescript
 // lib/prisma.ts
 import { PrismaClient } from '@prisma/client'
 
-const globalForPrisma = global as { prisma?: PrismaClient }
+const globalForPrisma = global as unknown as { prisma: PrismaClient }
 
 export const prisma =
-  globalForPrisma.prisma ??
+  globalForPrisma.prisma ||
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query'] : [],
+    log: process.env.NODE_ENV === 'development' 
+      ? ['query', 'error', 'warn'] 
+      : ['error'],
   })
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma
-}
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 ```
 
-### Date Handling
-```typescript
-// Create date for "today" (start of day)
-const today = new Date()
-today.setHours(0, 0, 0, 0)
+## Common Issues
 
-// Date range query
-where: {
-  date: {
-    gte: new Date('2024-01-01'),
-    lt: new Date('2024-02-01'),
-  }
-}
+### "Cannot find module '@prisma/client'"
+```bash
+npx prisma generate
 ```
 
-### Unique Constraint Errors
+### "Unique constraint violation"
 ```typescript
 try {
-  await prisma.entry.create({ data: {...} })
+  await prisma.entry.create({ ... })
 } catch (error) {
   if (error.code === 'P2002') {
-    // Unique constraint violation
-    return NextResponse.json(
-      { error: 'Entry already exists for this date' },
-      { status: 409 }
-    )
+    // Handle duplicate
   }
-  throw error
 }
 ```
 
-## Output Format
+### "Foreign key constraint failed"
+- Referenced record doesn't exist
+- Check `onDelete` behavior
 
-Based on your question, provide:
-
-1. **Schema Example** (if applicable)
-2. **Query Code** (TypeScript)
-3. **Common Pitfalls** to avoid
-4. **Commands to Run** (if any)
-
-
-
+### Slow Queries
+- Add appropriate indexes
+- Use `select` to limit fields
+- Check for N+1 patterns

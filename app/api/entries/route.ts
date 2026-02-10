@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
-import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { canCreateEntry } from '@/lib/paywall'
 
 // Generate a CUID-like ID
 function generateId(): string {
@@ -10,15 +11,63 @@ function generateId(): string {
   return `c${timestamp}${randomPart}`
 }
 
+/**
+ * Get Supabase user ID directly from Clerk email
+ * Bypasses Clerk ID mapping - goes straight to Supabase
+ */
+async function getSupabaseUserIdFromClerk(): Promise<string | null> {
+  try {
+    const clerkUser = await currentUser()
+    if (!clerkUser?.emailAddresses?.[0]?.emailAddress) {
+      console.error('[entries] No Clerk email found')
+      return null
+    }
+
+    const email = clerkUser.emailAddresses[0].emailAddress
+    const supabase = getSupabase()
+
+    // Query Supabase directly by email
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (error) {
+      console.error('[entries] Supabase query error:', error)
+      return null
+    }
+
+    if (!user) {
+      console.error('[entries] User not found in Supabase for email:', email)
+      return null
+    }
+
+    console.log('[entries] Found Supabase user:', user.id, 'for email:', email)
+    return user.id
+  } catch (error: any) {
+    console.error('[entries] Error getting Supabase user:', error)
+    return null
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const { userId: clerkUserId } = await auth()
+    
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    
+    // Rate limiting - check after auth to avoid unnecessary work
+    const rateLimitResult = await checkRateLimit(clerkUserId, 'READ')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
 
-    const prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)
+    const prismaUserId = await getSupabaseUserIdFromClerk()
     if (!prismaUserId) {
+      console.error('[entries] GET: Failed to get Supabase user ID')
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
@@ -140,6 +189,8 @@ export async function GET(request: Request) {
         page,
         pageSize,
         hasMore: (entries?.length || 0) === pageSize,
+      }, {
+        headers: await getRateLimitHeaders(clerkUserId, 'READ'),
       })
     }
   } catch (error: any) {
@@ -154,13 +205,36 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { userId: clerkUserId } = await auth()
+    
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(clerkUserId, 'WRITE')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
+
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    const userId = await getSupabaseUserIdFromClerk()
     if (!userId) {
+      console.error('[entries] POST: Failed to get Supabase user ID')
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
+    }
+
+    // Check paywall: entry limit for free users
+    const entryCheck = await canCreateEntry(clerkUserId)
+    if (!entryCheck.allowed) {
+      return NextResponse.json(
+        { 
+          error: 'Entry limit reached',
+          message: entryCheck.reason,
+          currentCount: entryCheck.currentCount,
+          limit: entryCheck.limit,
+          upgradeRequired: true,
+        },
+        { status: 403 }
+      )
     }
 
     const body = await request.json()
@@ -177,6 +251,7 @@ export async function POST(request: Request) {
       trackId,
       uri,
       notes,
+      mood,
       peopleNames = [],
     } = body
 
@@ -229,13 +304,23 @@ export async function POST(request: Request) {
         trackId: trackId || '',
         uri: uri || '',
         notes: notes || null,
+        mood: mood || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
       .select('*')
       .single()
 
-    if (createError) throw createError
+    if (createError) {
+      console.error('[entries] POST: Create entry error:', {
+        error: createError.message,
+        code: createError.code,
+        details: createError.details,
+        userId,
+        date: targetDate.toISOString(),
+      })
+      throw createError
+    }
 
     // Match people to users and create person references
     if (peopleNames && peopleNames.length > 0) {
@@ -279,11 +364,24 @@ export async function POST(request: Request) {
         user,
         people: [],
       },
-    }, { status: 201 })
+    }, { 
+      status: 201,
+      headers: await getRateLimitHeaders(clerkUserId, 'WRITE'),
+    })
   } catch (error: any) {
-    console.error('[entries] POST error:', error?.message || error)
+    console.error('[entries] POST error:', {
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+      stack: error?.stack,
+    })
     return NextResponse.json(
-      { error: 'Failed to create entry', message: error?.message },
+      { 
+        error: 'Failed to create entry', 
+        message: error?.message || 'Unknown error occurred',
+        details: error?.details,
+      },
       { status: 500 }
     )
   }

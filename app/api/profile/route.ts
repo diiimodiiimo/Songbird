@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
@@ -11,22 +11,120 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    console.log('[profile] Clerk user ID:', clerkUserId)
+
+    // Initialize Supabase first to catch any initialization errors
+    let supabase
+    try {
+      supabase = getSupabase()
+    } catch (supabaseError: any) {
+      console.error('[profile] Failed to initialize Supabase:', supabaseError)
+      return NextResponse.json({ 
+        error: 'Database connection failed', 
+        message: supabaseError?.message || 'Failed to initialize Supabase client. Check environment variables.' 
+      }, { status: 500 })
+    }
+
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
+    console.log('[profile] Database user ID:', userId)
+    
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
+    
+    // DISABLED SYNC - Don't sync Clerk data to avoid overwriting custom usernames/images
+    // Users can manually update their profile if needed
 
-    const supabase = getSupabase()
-    const { data: user, error } = await supabase
+    console.log('[profile] Querying Supabase for user:', userId)
+    
+    // Try multiple query strategies to find the user
+    let user = null
+    let error = null
+    
+    // Strategy 1: Query by id
+    let result = await supabase
       .from('users')
-      .select('id, email, name, username, image, bio, favoriteArtists, favoriteSongs')
+      .select('id, email, name, username, image, bio, gender, favoriteArtists, favoriteSongs')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
+    
+    if (result.error) {
+      console.error('[profile] Query by id failed:', result.error)
+      error = result.error
+    } else if (result.data) {
+      user = result.data
+      console.log('[profile] Found user by id:', user.username || user.email)
+    }
+    
+    // Strategy 2: If not found, try by clerkId
+    if (!user && clerkUserId) {
+      console.log('[profile] Trying query by clerkId:', clerkUserId)
+      result = await supabase
+        .from('users')
+        .select('id, email, name, username, image, bio, gender, favoriteArtists, favoriteSongs')
+        .eq('clerkId', clerkUserId)
+        .maybeSingle()
+      
+      if (result.error) {
+        console.error('[profile] Query by clerkId failed:', result.error)
+        if (!error) error = result.error
+      } else if (result.data) {
+        user = result.data
+        console.log('[profile] Found user by clerkId:', user.username || user.email)
+      }
+    }
+    
+    // Strategy 3: If still not found, try by email
+    if (!user) {
+      const { currentUser } = await import('@clerk/nextjs/server')
+      const clerkUser = await currentUser()
+      const email = clerkUser?.emailAddresses?.[0]?.emailAddress
+      
+      if (email) {
+        console.log('[profile] Trying query by email:', email)
+        result = await supabase
+          .from('users')
+          .select('id, email, name, username, image, bio, gender, favoriteArtists, favoriteSongs')
+          .eq('email', email)
+          .maybeSingle()
+        
+        if (result.error) {
+          console.error('[profile] Query by email failed:', result.error)
+          if (!error) error = result.error
+        } else if (result.data) {
+          user = result.data
+          console.log('[profile] Found user by email:', user.username || user.email)
+        }
+      }
+    }
 
-    if (error || !user) {
-      console.error('[profile] Error fetching user:', error)
+    if (error && !user) {
+      console.error('[profile] All query strategies failed. Last error:', {
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        userId,
+        clerkUserId,
+      })
+      return NextResponse.json({ 
+        error: 'Failed to fetch user from database', 
+        message: error.message 
+      }, { status: 500 })
+    }
+
+    if (!user) {
+      console.error('[profile] User not found in database after all strategies:', { userId, clerkUserId })
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
+
+    console.log('[profile] Successfully fetched user:', user.username || user.email)
+    console.log('[profile] User image data:', {
+      image: user.image,
+      hasImage: !!user.image,
+      imageLength: user.image?.length,
+      imageType: typeof user.image,
+    })
 
     // Parse JSON fields for response
     const responseUser = {
@@ -79,6 +177,10 @@ const updateProfileSchema = z.object({
     .string()
     .max(160)
     .transform((val) => (val.trim() === '' ? null : val.trim()))
+    .optional()
+    .nullable(),
+  gender: z
+    .enum(['male', 'female', 'non-binary', 'prefer-not-to-say'])
     .optional()
     .nullable(),
   favoriteArtists: z
@@ -138,6 +240,7 @@ export async function PUT(request: Request) {
     if (data.username !== undefined) updateData.username = data.username || null
     if (data.image !== undefined) updateData.image = data.image || null
     if (data.bio !== undefined) updateData.bio = data.bio || null
+    if (data.gender !== undefined) updateData.gender = data.gender || null
     if (data.favoriteArtists !== undefined) updateData.favoriteArtists = JSON.stringify(data.favoriteArtists || [])
     if (data.favoriteSongs !== undefined) updateData.favoriteSongs = JSON.stringify(data.favoriteSongs || [])
     if (data.theme !== undefined) updateData.theme = data.theme
@@ -146,7 +249,7 @@ export async function PUT(request: Request) {
       .from('users')
       .update(updateData)
       .eq('id', userId)
-      .select('id, email, name, username, image, bio, favoriteArtists, favoriteSongs')
+      .select('id, email, name, username, image, bio, gender, favoriteArtists, favoriteSongs')
       .single()
 
     if (error) {

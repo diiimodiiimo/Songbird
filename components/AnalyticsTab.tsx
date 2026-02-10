@@ -26,12 +26,36 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
   const [artistSearchQuery, setArtistSearchQuery] = useState('')
   const [artistSearchResults, setArtistSearchResults] = useState<Array<{ songTitle: string; dates: string[]; count: number }>>([])
   const [artistSearchLoading, setArtistSearchLoading] = useState(false)
+  const [aiInsights, setAiInsights] = useState<string[]>([])
+  const [loadingAiInsights, setLoadingAiInsights] = useState(false)
 
   useEffect(() => {
     if (isLoaded && user) {
       fetchAnalytics()
     }
   }, [filterOption, isLoaded, user])
+
+  // Fetch AI insights
+  useEffect(() => {
+    if (analytics && analytics.totalEntries > 10) {
+      fetchAiInsights()
+    }
+  }, [analytics, filterOption])
+
+  const fetchAiInsights = async () => {
+    setLoadingAiInsights(true)
+    try {
+      const res = await fetch(`/api/ai-insight?filter=${filterOption}`)
+      const data = await res.json()
+      if (res.ok && data.insights) {
+        setAiInsights(data.insights)
+      }
+    } catch (error) {
+      console.error('Error fetching AI insights:', error)
+    } finally {
+      setLoadingAiInsights(false)
+    }
+  }
 
   useEffect(() => {
     // Fetch artist images for top artists
@@ -205,6 +229,47 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
         </div>
       ) : analytics ? (
         <div className="space-y-12">
+          {/* AI Insights Section - Featured prominently */}
+          {analytics.totalEntries > 10 && (
+            <section className="bg-gradient-to-br from-accent/20 via-accent/10 to-transparent rounded-2xl p-1 border-2 border-accent/30">
+              <div className="bg-surface rounded-xl p-6 sm:p-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <ThemeBird size={48} state="sing" />
+                  <div>
+                    <h3 className="text-2xl sm:text-3xl font-bold text-accent mb-1">AI Insights</h3>
+                    <p className="text-text/60 text-sm">Patterns we noticed in your music</p>
+                  </div>
+                </div>
+                
+                {loadingAiInsights ? (
+                  <div className="flex flex-col items-center py-8">
+                    <div className="mb-3">
+                      <ThemeBird size={64} state="curious" className="animate-pulse" />
+                    </div>
+                    <p className="text-text/60">Analyzing your musical patterns...</p>
+                  </div>
+                ) : aiInsights.length > 0 ? (
+                  <div className="space-y-4">
+                    {aiInsights.map((insight, index) => (
+                      <div
+                        key={index}
+                        className="bg-bg/50 border border-accent/20 rounded-xl p-5 hover:bg-bg/70 transition-colors"
+                      >
+                        <p className="text-text/90 leading-relaxed text-base sm:text-lg italic">
+                          "{insight}"
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-text/60">
+                    <p>Not enough data yet. Keep logging songs to unlock AI insights!</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
           {/* Artist Search - Clean Search UI - MOVED TO TOP */}
           <section className="bg-gradient-to-r from-accent/10 via-accent/5 to-transparent rounded-2xl p-1">
             <div className="bg-surface rounded-xl p-4 sm:p-6">

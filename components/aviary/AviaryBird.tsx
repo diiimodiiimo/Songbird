@@ -6,7 +6,7 @@ import type { AviaryBird as AviaryBirdType } from '@/types/aviary'
 
 interface AviaryBirdProps {
   bird: AviaryBirdType
-  size: 'small' | 'large'
+  size: 'small' | 'medium' | 'large'
   position?: { x: number; y: number }
   onTap: () => void
 }
@@ -20,10 +20,11 @@ export function AviaryBird({ bird, size, position, onTap }: AviaryBirdProps) {
 
   const sizeClasses = {
     small: 'w-14 h-14 sm:w-16 sm:h-16',
+    medium: 'w-16 h-16 sm:w-20 sm:h-20',
     large: 'w-20 h-20 sm:w-24 sm:h-24',
   }
 
-  const iconSize = size === 'large' ? 80 : 56
+  const iconSize = size === 'large' ? 80 : size === 'medium' ? 72 : 56
 
   const style = position
     ? {
@@ -63,7 +64,9 @@ export function AviaryBird({ bird, size, position, onTap }: AviaryBirdProps) {
       </div>
 
       {/* Username */}
-      <span className={`text-text-muted font-medium ${size === 'large' ? 'text-sm' : 'text-xs'}`}>
+      <span className={`text-text-muted font-medium ${
+        size === 'large' ? 'text-sm' : size === 'medium' ? 'text-xs sm:text-sm' : 'text-xs'
+      }`}>
         {isCurrentUser ? 'You' : user.username}
       </span>
     </button>
@@ -78,6 +81,8 @@ function isToday(date: Date): boolean {
     date.getFullYear() === today.getFullYear()
   )
 }
+
+
 
 
 

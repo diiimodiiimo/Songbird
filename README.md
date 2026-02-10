@@ -17,6 +17,7 @@ A full-stack Next.js application for tracking your daily music journal with soci
 ## Tech Stack
 
 - **Frontend**: Next.js 14+, React, TypeScript, Tailwind CSS
+- **Mobile**: Expo React Native (iOS & Android)
 - **Backend**: Next.js API Routes
 - **Database**: PostgreSQL with Prisma ORM
 - **Authentication**: Clerk
@@ -105,6 +106,10 @@ npm run dev
 │   ├── sign-in/          # Clerk sign-in
 │   ├── sign-up/          # Clerk sign-up
 │   └── page.tsx          # Main dashboard
+├── mobile/                # Expo React Native mobile app
+│   ├── app/              # Expo Router app directory
+│   ├── lib/              # Mobile utilities
+│   └── assets/           # Mobile assets
 ├── components/            # React components
 │   ├── Dashboard.tsx     # Main dashboard component
 │   ├── AddEntryTab.tsx   # Add new song entry
@@ -133,11 +138,19 @@ npm run dev
 
 ## Development
 
+### Web App
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npx prisma studio` - Open Prisma Studio to view/edit database
 - `npx prisma db push` - Push schema changes to database
+
+### Mobile App
+- `cd mobile && npm install` - Install mobile dependencies
+- `cd mobile && npm start` - Start Expo development server
+- `cd mobile && npm run ios` - Run on iOS simulator
+- `cd mobile && npm run android` - Run on Android emulator
+- See `mobile/GETTING_STARTED.md` for detailed mobile setup instructions
 
 ## Documentation
 

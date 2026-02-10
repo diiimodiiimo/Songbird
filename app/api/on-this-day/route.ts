@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { getOnThisDayDateLimit } from '@/lib/paywall'
 
 export async function GET(request: Request) {
   try {
@@ -29,19 +30,29 @@ export async function GET(request: Request) {
 
     const supabase = getSupabase()
 
-    // Fetch ALL entries with pagination - NO YEAR LIMIT, access entire history
+    // Get date limit for free users (30 days) or null for premium (unlimited)
+    const dateLimit = await getOnThisDayDateLimit(clerkUserId)
+
+    // Fetch entries with pagination - apply date limit for free users
     const allEntries: any[] = []
     let page = 0
     const pageSize = 1000
     let hasMore = true
 
     while (hasMore) {
-      const { data: pageEntries, error: pageError } = await supabase
+      let query = supabase
         .from('entries')
         .select('id, date, songTitle, artist, albumArt, notes, durationMs, explicit, popularity, releaseDate')
         .eq('userId', userId)
         .order('date', { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1)
+
+      // Apply date limit for free users
+      if (dateLimit) {
+        query = query.gte('date', dateLimit.toISOString())
+      }
+
+      const { data: pageEntries, error: pageError } = await query
 
       if (pageError) throw pageError
 
@@ -53,11 +64,11 @@ export async function GET(request: Request) {
         hasMore = false
       }
 
-      // Safety limit: max 20 pages (20,000 entries) - ENTIRE HISTORY
+      // Safety limit: max 20 pages (20,000 entries)
       if (page >= 20) break
     }
 
-    // Filter entries where month/day matches - searches ENTIRE history
+    // Filter entries where month/day matches
     const entries = allEntries.filter((entry) => {
       const entryDate = new Date(entry.date)
       return entryDate.getMonth() + 1 === monthNum && entryDate.getDate() === dayNum

@@ -4,6 +4,8 @@ import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
 import { sendPushToUser } from '@/lib/sendPushToUser'
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { canAddFriend } from '@/lib/paywall'
 
 // Simple ID generator
 function generateId(): string {
@@ -20,6 +22,13 @@ const friendRequestSchema = z.object({
 export async function GET(request: Request) {
   try {
     const { userId: clerkUserId } = await auth()
+    
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(clerkUserId, 'READ')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
+
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -72,7 +81,9 @@ export async function GET(request: Request) {
       receiver: userMap.get(r.receiverId) || null,
     }))
 
-    return NextResponse.json({ requests: enrichedRequests })
+    return NextResponse.json({ requests: enrichedRequests }, {
+      headers: await getRateLimitHeaders(clerkUserId, 'READ'),
+    })
   } catch (error: any) {
     console.error('[friends/requests] GET Error:', error?.message || error)
     return NextResponse.json(
@@ -86,6 +97,13 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { userId: clerkUserId } = await auth()
+    
+    // Rate limiting
+    const rateLimitResult = await checkRateLimit(clerkUserId, 'WRITE')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
+
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -93,6 +111,21 @@ export async function POST(request: Request) {
     const userId = await getPrismaUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
+    }
+
+    // Check paywall: friend limit for free users
+    const friendCheck = await canAddFriend(clerkUserId)
+    if (!friendCheck.allowed) {
+      return NextResponse.json(
+        { 
+          error: 'Friend limit reached',
+          message: friendCheck.reason,
+          currentCount: friendCheck.currentCount,
+          limit: friendCheck.limit,
+          upgradeRequired: true,
+        },
+        { status: 403 }
+      )
     }
 
     const body = await request.json()
@@ -179,7 +212,10 @@ export async function POST(request: Request) {
         ...friendRequest,
         receiver,
       },
-    }, { status: 201 })
+    }, { 
+      status: 201,
+      headers: await getRateLimitHeaders(clerkUserId, 'WRITE'),
+    })
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

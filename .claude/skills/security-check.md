@@ -9,6 +9,29 @@ Thoroughly investigate the current feature or codebase for security vulnerabilit
 - Ensure user can only access/modify their own data
 - Check for missing session validation
 - Look for routes that should be protected but aren't
+- Verify Clerk user ID → database user ID mapping via `getPrismaUserIdFromClerk()`
+
+### Rate Limiting (SongBird Pattern)
+```typescript
+import { checkRateLimit } from '@/lib/rate-limit'
+
+// Check rate limit first
+const { allowed, response } = await checkRateLimit(clerkId, 'WRITE')
+if (!allowed) return response
+```
+
+Rate limit types:
+- `AUTH`: 10/min (authentication endpoints)
+- `READ`: 100/min (GET requests)
+- `WRITE`: 30/min (POST, PUT, DELETE)
+- `SEARCH`: 20/min (search endpoints)
+
+### Blocking System
+- Check `lib/blocking.ts` is used to filter blocked users from:
+  - Feed entries
+  - Friend suggestions
+  - Search results
+  - Comments/vibes
 
 ### Data Exposure
 - Check for sensitive data in API responses (passwords, tokens, internal IDs)
@@ -23,15 +46,25 @@ Thoroughly investigate the current feature or codebase for security vulnerabilit
 - Check for missing Zod validation on API inputs
 
 ### API Security
-- Look for missing rate limiting
+- Look for missing rate limiting on critical endpoints
 - Check for IDOR (Insecure Direct Object Reference) vulnerabilities
 - Verify proper HTTP status codes for auth failures (401/403)
 - Check for information disclosure in error messages
 
+### User Safety
+- Verify blocking prevents all interaction
+- Check reporting system doesn't expose reporter identity
+- Verify account deletion removes all user data
+
+### Premium/Payment Security
+- Stripe webhook signature verification
+- Premium status can't be spoofed
+- Founding Flock slots properly limited
+
 ### Database Security
 - Verify `userId` checks on all database operations
 - Look for queries that could expose other users' data
-- Check for proper use of Prisma's `where` clauses
+- Check for proper use of `where` clauses
 - Ensure friend-only content is properly protected
 
 ## Output Format
@@ -47,6 +80,3 @@ For each issue, provide:
 - Vulnerability description
 - Potential exploit scenario
 - Recommended fix
-
-
-

@@ -4,13 +4,22 @@ import { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { useRouter, useSearchParams } from 'next/navigation'
 import WelcomeScreen from './WelcomeScreen'
+import DemographicsScreen from './AgeGateScreen'
+import ValueProp1Screen from './ValueProp1Screen'
+import ValueProp2Screen from './ValueProp2Screen'
+import SocialPreviewScreen from './SocialPreviewScreen'
+import SpotifyDataPrimerScreen from './SpotifyDataPrimerScreen'
 import UsernameScreen from './UsernameScreen'
 import FirstEntryScreen from './FirstEntryScreen'
+import FirstEntryCelebrationScreen from './FirstEntryCelebrationScreen'
 import MemoriesScreen from './MemoriesScreen'
 import SocialScreen from './SocialScreen'
+import NotificationSetupScreen from './NotificationSetupScreen'
+import AttributionScreen from './AttributionScreen'
+import PremiumScreen from './PremiumScreen'
 import CompletionScreen from './CompletionScreen'
 
-type OnboardingStep = 'welcome' | 'username' | 'first-entry' | 'memories' | 'social' | 'completion'
+type OnboardingStep = 'welcome' | 'demographics' | 'value-prop-1' | 'value-prop-2' | 'social-preview' | 'username' | 'spotify-primer' | 'notifications' | 'first-entry' | 'first-entry-celebration' | 'memories' | 'social' | 'attribution' | 'premium' | 'completion'
 
 interface UserProfile {
   username?: string
@@ -26,6 +35,7 @@ export default function OnboardingFlow() {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome')
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [hasFirstEntry, setHasFirstEntry] = useState(false)
+  const [firstEntryData, setFirstEntryData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   // Check user state on mount
@@ -84,14 +94,21 @@ export default function OnboardingFlow() {
         }
       }
 
-      // In tutorial mode with existing username, skip to memories screen
-      // (skip username and first-entry since they already have those)
-      if (isTutorialMode && userHasUsername && userHasEntries) {
+      // In tutorial mode, always start at memories screen
+      // (skip compliance screens, username and first-entry since they already have those)
+      if (isTutorialMode) {
         setCurrentStep('memories')
+      } else if (userHasUsername && userHasEntries) {
+        // If username already set and has entries, skip onboarding
+        // (This shouldn't happen in normal flow, but handle it)
+        router.push('/')
+        return
       } else if (userHasUsername) {
         // If username already set but no entries, start at first-entry step
+        // (skip compliance screens since they've already completed onboarding)
         setCurrentStep('first-entry')
       }
+      // Otherwise start at welcome (new user flow)
 
       // Track analytics
       fetch('/api/analytics/event', {
@@ -109,12 +126,86 @@ export default function OnboardingFlow() {
     }
   }
 
-  // Handle step transitions
-  const handleWelcomeContinue = () => {
-    setCurrentStep('username')
+  // Get previous step for back navigation
+  const getPreviousStep = (current: OnboardingStep): OnboardingStep | null => {
+    if (!isTutorialMode) {
+      // Normal flow navigation
+      const stepOrder: OnboardingStep[] = ['welcome', 'demographics', 'value-prop-1', 'value-prop-2', 'social-preview', 'username', 'spotify-primer', 'notifications', 'first-entry', 'first-entry-celebration', 'memories', 'social', 'attribution', 'premium', 'completion']
+      const currentIndex = stepOrder.indexOf(current)
+      return currentIndex > 0 ? stepOrder[currentIndex - 1] : null
+    } else {
+      // Tutorial mode - skip username-related steps
+      const tutorialStepOrder: OnboardingStep[] = ['memories', 'social', 'attribution', 'premium', 'completion']
+      const currentIndex = tutorialStepOrder.indexOf(current)
+      if (currentIndex > 0) {
+        return tutorialStepOrder[currentIndex - 1]
+      }
+      // If at first step, go back to dashboard
+      return null
+    }
   }
 
-  const handleUsernameContinue = (username: string) => {
+  const handleBack = () => {
+    const previousStep = getPreviousStep(currentStep)
+    if (previousStep) {
+      setCurrentStep(previousStep)
+    } else {
+      // Go back to dashboard
+      router.push('/')
+    }
+  }
+
+  // Handle step transitions
+  const handleWelcomeContinue = () => {
+    if (isTutorialMode) {
+      // Skip to memories in tutorial mode
+      setCurrentStep('memories')
+    } else {
+      setCurrentStep('demographics')
+    }
+  }
+
+  const handleDemographicsContinue = () => {
+    if (isTutorialMode) {
+      setCurrentStep('memories')
+    } else {
+      setCurrentStep('value-prop-1')
+    }
+  }
+
+  const handleValueProp1Continue = () => {
+    if (isTutorialMode) {
+      setCurrentStep('memories')
+    } else {
+      setCurrentStep('value-prop-2')
+    }
+  }
+
+  const handleValueProp2Continue = () => {
+    if (isTutorialMode) {
+      setCurrentStep('memories')
+    } else {
+      setCurrentStep('social-preview')
+    }
+  }
+
+  const handleSocialPreviewContinue = () => {
+    if (isTutorialMode) {
+      setCurrentStep('memories')
+    } else {
+      setCurrentStep('username')
+    }
+  }
+
+  const handleSocialPreviewSkip = () => {
+    if (isTutorialMode) {
+      setCurrentStep('memories')
+    } else {
+      setCurrentStep('username')
+    }
+  }
+
+  const handleUsernameContinue = (username: string, selectedBird?: string) => {
     setProfile(prev => prev ? { ...prev, username } : { username })
     
     // Track analytics
@@ -124,23 +215,77 @@ export default function OnboardingFlow() {
       body: JSON.stringify({ event: 'onboarding_username_set' }),
     }).catch(() => {})
 
+    if (isTutorialMode) {
+      setCurrentStep('memories')
+    } else {
+      setCurrentStep('spotify-primer')
+    }
+  }
+
+  const handleSpotifyPrimerContinue = () => {
+    if (isTutorialMode) {
+      setCurrentStep('memories')
+    } else {
+      setCurrentStep('notifications')
+    }
+  }
+
+  const handleNotificationsContinue = () => {
     setCurrentStep('first-entry')
   }
 
-  const handleFirstEntryContinue = () => {
+  const handleNotificationsSkip = () => {
+    setCurrentStep('first-entry')
+  }
+
+  const handleFirstEntryContinue = (entryData?: any) => {
     setHasFirstEntry(true)
-    setCurrentStep('memories')
+    setFirstEntryData(entryData)
+    setCurrentStep('first-entry-celebration')
   }
 
   const handleFirstEntrySkip = () => {
-    setCurrentStep('memories')
+    setCurrentStep('social')
   }
 
   const handleMemoriesContinue = () => {
     setCurrentStep('social')
   }
 
+  const handleFirstEntryCelebrationContinue = () => {
+    if (isTutorialMode) {
+      setCurrentStep('memories')
+    } else {
+      setCurrentStep('social')
+    }
+  }
+
+  const handleFirstEntryCelebrationViewEntry = () => {
+    // Navigate to dashboard to view entry
+    router.push('/')
+  }
+
   const handleSocialContinue = () => {
+    setCurrentStep('attribution')
+  }
+
+  const handleSocialSkip = () => {
+    setCurrentStep('attribution')
+  }
+
+  const handleAttributionContinue = () => {
+    setCurrentStep('premium')
+  }
+
+  const handleAttributionSkip = () => {
+    setCurrentStep('premium')
+  }
+
+  const handlePremiumContinue = () => {
+    setCurrentStep('completion')
+  }
+
+  const handlePremiumSkip = () => {
     setCurrentStep('completion')
   }
 
@@ -160,48 +305,148 @@ export default function OnboardingFlow() {
     )
   }
 
-  // Render current step
-  switch (currentStep) {
-    case 'welcome':
-      return <WelcomeScreen onContinue={handleWelcomeContinue} />
-
-    case 'username':
-      return (
-        <UsernameScreen
-          onContinue={handleUsernameContinue}
-          existingUsername={profile?.username}
-        />
-      )
-
-    case 'first-entry':
-      return (
-        <FirstEntryScreen
-          onContinue={handleFirstEntryContinue}
-          onSkip={handleFirstEntrySkip}
-        />
-      )
-
-    case 'memories':
-      return (
-        <MemoriesScreen
-          onContinue={handleMemoriesContinue}
-          hasFirstEntry={hasFirstEntry}
-        />
-      )
-
-    case 'social':
-      return (
-        <SocialScreen
-          onContinue={handleSocialContinue}
-          inviteCode={profile?.inviteCode}
-        />
-      )
-
-    case 'completion':
-      return <CompletionScreen onComplete={handleComplete} isTutorialMode={isTutorialMode} />
-
-    default:
-      return <WelcomeScreen onContinue={handleWelcomeContinue} />
+  // Back button component for tutorial mode
+  const BackButton = () => {
+    if (!isTutorialMode) return null
+    
+    return (
+      <button
+        onClick={handleBack}
+        className="fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 bg-surface border border-text/20 text-text/70 rounded-lg text-sm hover:bg-surface/80 transition-colors"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+        Back
+      </button>
+    )
   }
+
+  // Render current step
+  return (
+    <>
+      <BackButton />
+      {(() => {
+        switch (currentStep) {
+          case 'welcome':
+            return <WelcomeScreen onContinue={handleWelcomeContinue} />
+
+          case 'demographics':
+            if (isTutorialMode) {
+              return <MemoriesScreen onContinue={handleMemoriesContinue} hasFirstEntry={hasFirstEntry} />
+            }
+            return <DemographicsScreen onContinue={handleDemographicsContinue} />
+
+          case 'value-prop-1':
+            if (isTutorialMode) {
+              return <MemoriesScreen onContinue={handleMemoriesContinue} hasFirstEntry={hasFirstEntry} />
+            }
+            return <ValueProp1Screen onContinue={handleValueProp1Continue} />
+
+          case 'value-prop-2':
+            if (isTutorialMode) {
+              return <MemoriesScreen onContinue={handleMemoriesContinue} hasFirstEntry={hasFirstEntry} />
+            }
+            return <ValueProp2Screen onContinue={handleValueProp2Continue} />
+
+          case 'social-preview':
+            if (isTutorialMode) {
+              return <MemoriesScreen onContinue={handleMemoriesContinue} hasFirstEntry={hasFirstEntry} />
+            }
+            return (
+              <SocialPreviewScreen
+                onContinue={handleSocialPreviewContinue}
+                onSkip={handleSocialPreviewSkip}
+              />
+            )
+
+          case 'username':
+            if (isTutorialMode) {
+              return <MemoriesScreen onContinue={handleMemoriesContinue} hasFirstEntry={hasFirstEntry} />
+            }
+            return (
+              <UsernameScreen
+                onContinue={handleUsernameContinue}
+                existingUsername={profile?.username}
+              />
+            )
+
+          case 'spotify-primer':
+            if (isTutorialMode) {
+              return <MemoriesScreen onContinue={handleMemoriesContinue} hasFirstEntry={hasFirstEntry} />
+            }
+            return <SpotifyDataPrimerScreen onContinue={handleSpotifyPrimerContinue} />
+
+          case 'notifications':
+            if (isTutorialMode) {
+              return <MemoriesScreen onContinue={handleMemoriesContinue} hasFirstEntry={hasFirstEntry} />
+            }
+            return (
+              <NotificationSetupScreen
+                onContinue={handleNotificationsContinue}
+                onSkip={handleNotificationsSkip}
+              />
+            )
+
+          case 'first-entry':
+            if (isTutorialMode) {
+              return <MemoriesScreen onContinue={handleMemoriesContinue} hasFirstEntry={hasFirstEntry} />
+            }
+            return (
+              <FirstEntryScreen
+                onContinue={handleFirstEntryContinue}
+                onSkip={handleFirstEntrySkip}
+              />
+            )
+
+          case 'first-entry-celebration':
+            if (isTutorialMode) {
+              return <MemoriesScreen onContinue={handleMemoriesContinue} hasFirstEntry={hasFirstEntry} />
+            }
+            return (
+              <FirstEntryCelebrationScreen
+                onContinue={handleFirstEntryCelebrationContinue}
+                onViewEntry={handleFirstEntryCelebrationViewEntry}
+                entry={firstEntryData}
+              />
+            )
+
+          case 'memories':
+            return <MemoriesScreen onContinue={handleMemoriesContinue} hasFirstEntry={hasFirstEntry} />
+
+          case 'social':
+            return (
+              <SocialScreen
+                onContinue={handleSocialContinue}
+                onSkip={handleSocialSkip}
+                inviteCode={profile?.inviteCode}
+              />
+            )
+
+          case 'attribution':
+            return (
+              <AttributionScreen
+                onContinue={handleAttributionContinue}
+                onSkip={handleAttributionSkip}
+              />
+            )
+
+          case 'premium':
+            return (
+              <PremiumScreen
+                onContinue={handlePremiumContinue}
+                onSkip={handlePremiumSkip}
+              />
+            )
+
+          case 'completion':
+            return <CompletionScreen onComplete={handleComplete} isTutorialMode={isTutorialMode} />
+
+          default:
+            return <WelcomeScreen onContinue={handleWelcomeContinue} />
+        }
+      })()}
+    </>
+  )
 }
 

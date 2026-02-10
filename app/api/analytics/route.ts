@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getSupabase } from '@/lib/supabase'
 import { getPrismaUserIdFromClerk } from '@/lib/clerk-sync'
+import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 // Helper to fetch all entries with pagination
 async function fetchAllUserEntries(supabase: any, userId: string, startDate?: string, endDate?: string) {
@@ -44,8 +45,15 @@ async function fetchAllUserEntries(supabase: any, userId: string, startDate?: st
 export async function GET(request: Request) {
   try {
     const { userId: clerkUserId } = await auth()
+    
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    // Rate limiting - check after auth to avoid unnecessary work
+    const rateLimitResult = await checkRateLimit(clerkUserId, 'READ')
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
     }
 
     const prismaUserId = await getPrismaUserIdFromClerk(clerkUserId)

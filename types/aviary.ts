@@ -35,10 +35,14 @@ export interface SongAssociation {
   createdAt: string
 }
 
+export type ActivityTier = 'today' | 'thisWeek' | 'thisMonth' | 'inactive'
+
 export interface AviaryBird {
   user: AviaryUser
   latestSong: AviarySong | null
   isCurrentUser: boolean
+  activityTier: ActivityTier
+  lastActivityDate: string | null
 }
 
 export interface AviaryData {

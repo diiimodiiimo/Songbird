@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import ThemeBird from './ThemeBird'
+import SpotifyAttribution from './SpotifyAttribution'
+import { getLocalDateString } from '@/lib/date-utils'
 
 interface TodayEntry {
   id: string
@@ -21,18 +23,57 @@ interface Friend {
   image: string | null
 }
 
+interface Milestone {
+  type: string
+  message: string
+  achieved: boolean
+  achievedDate?: string
+  progress?: {
+    current: number
+    target: number
+    message: string
+  }
+}
+
+interface MilestoneData {
+  milestones: Milestone[]
+  nextMilestone: Milestone | null
+  stats: {
+    entryCount: number
+    daysSinceFirst: number
+  }
+}
+
 export default function TodayTab({ onNavigateToAddEntry }: { onNavigateToAddEntry?: () => void }) {
   const [entry, setEntry] = useState<TodayEntry | null>(null)
   const [friendsToday, setFriendsToday] = useState<Friend[]>([])
   const [loading, setLoading] = useState(true)
+  const [milestoneData, setMilestoneData] = useState<MilestoneData | null>(null)
+  const [loadingMilestones, setLoadingMilestones] = useState(false)
 
   useEffect(() => {
     fetchTodayData()
+    fetchMilestones()
   }, [])
+
+  const fetchMilestones = async () => {
+    setLoadingMilestones(true)
+    try {
+      const res = await fetch(`/api/milestones?today=${getLocalDateString()}`)
+      const data = await res.json()
+      if (res.ok) {
+        setMilestoneData(data)
+      }
+    } catch (error) {
+      console.error('Error fetching milestones:', error)
+    } finally {
+      setLoadingMilestones(false)
+    }
+  }
 
   const fetchTodayData = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = getLocalDateString()
       
       // Fetch today's entry
       const entryRes = await fetch(`/api/entries?date=${today}`)
@@ -71,6 +112,53 @@ export default function TodayTab({ onNavigateToAddEntry }: { onNavigateToAddEntr
 
   return (
     <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+      {/* Milestone Celebration Banner */}
+      {milestoneData && milestoneData.milestones.length > 0 && (
+        <div className="mb-6">
+          {milestoneData.milestones.slice(-1).map((milestone) => (
+            <div key={milestone.type} className="bg-gradient-to-r from-accent/20 to-purple-500/20 rounded-xl p-4 border border-accent/30">
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">🎉</div>
+                <div className="flex-1">
+                  <p className="text-text font-medium">{milestone.message}</p>
+                  {milestone.achievedDate && (
+                    <p className="text-text/60 text-sm mt-1">
+                      Achieved {new Date(milestone.achievedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Next Milestone Preview */}
+      {milestoneData && milestoneData.nextMilestone && !milestoneData.nextMilestone.achieved && (
+        <div className="mb-6 bg-surface rounded-xl p-4 border border-accent/10">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-text/70 text-sm mb-1">Next milestone</p>
+              <p className="text-text font-medium">{milestoneData.nextMilestone.message}</p>
+              {milestoneData.nextMilestone.progress && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between text-xs text-text/60 mb-1">
+                    <span>{milestoneData.nextMilestone.progress.message}</span>
+                    <span>{milestoneData.nextMilestone.progress.current} / {milestoneData.nextMilestone.progress.target}</span>
+                  </div>
+                  <div className="w-full bg-bg rounded-full h-2">
+                    <div 
+                      className="bg-accent h-2 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (milestoneData.nextMilestone.progress.current / milestoneData.nextMilestone.progress.target) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero header */}
       <header className="mb-6 sm:mb-12 text-center">
         <h1 
@@ -114,6 +202,11 @@ export default function TodayTab({ onNavigateToAddEntry }: { onNavigateToAddEntr
               <p className="text-text/70 text-xl mb-4">
                 {entry.artist}
               </p>
+
+              {/* Spotify Attribution */}
+              <div className="flex justify-center mt-2 mb-4">
+                <SpotifyAttribution variant="minimal" />
+              </div>
 
               {/* Friend avatars if applicable */}
               {friendsToday.length > 0 && (

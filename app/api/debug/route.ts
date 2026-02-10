@@ -40,9 +40,11 @@ export async function GET(request: Request) {
   try {
     const sb = getSupabase()
     const queryStart = Date.now()
+    
+    // Test basic connection
     const { data, error } = await sb
       .from('users')
-      .select('id')
+      .select('id, username, email')
       .limit(1)
     
     results.supabaseConnection = {
@@ -50,6 +52,26 @@ export async function GET(request: Request) {
       latency: `${Date.now() - queryStart}ms`,
       error: error?.message || null,
       foundUser: !!data && data.length > 0,
+      sampleUser: data && data.length > 0 ? { id: data[0].id, username: data[0].username, email: data[0].email } : null,
+    }
+    
+    // Test specific user lookup if Clerk auth is available
+    if (results.clerkAuth?.userId) {
+      const clerkUserId = results.clerkAuth.userId
+      const { data: userById, error: userError } = await sb
+        .from('users')
+        .select('id, username, email, clerkId')
+        .or(`id.eq.${clerkUserId},clerkId.eq.${clerkUserId}`)
+        .maybeSingle()
+      
+      results.userLookup = {
+        status: userError ? 'ERROR' : (userById ? 'FOUND' : 'NOT_FOUND'),
+        error: userError?.message || null,
+        userId: userById?.id || null,
+        username: userById?.username || null,
+        email: userById?.email || null,
+        clerkId: userById?.clerkId || null,
+      }
     }
   } catch (error: any) {
     results.supabaseConnection = {

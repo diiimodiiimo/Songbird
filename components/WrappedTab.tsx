@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
 import ThemeBird from './ThemeBird'
+import SpotifyAttribution from './SpotifyAttribution'
+import { UpgradePrompt } from './UpgradePrompt'
 
 interface WrappedData {
   year: number
@@ -62,6 +64,7 @@ export default function WrappedTab() {
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
   const [artistImages, setArtistImages] = useState<Record<string, string | null>>({})
   const [seasonalTimelineIndex, setSeasonalTimelineIndex] = useState(0)
+  const [upgradeRequired, setUpgradeRequired] = useState(false)
   const [interactiveGame, setInteractiveGame] = useState<{
     type: 'streak' | null
     question: string
@@ -104,10 +107,15 @@ export default function WrappedTab() {
       const data = await res.json()
       if (res.ok) {
         setWrappedData(data)
+        setUpgradeRequired(false)
         setCurrentCard(0)
         setSeasonalTimelineIndex(0)
         setInteractiveGame({ type: null, question: '', options: [], correct: 0, selected: null, revealed: false })
+      } else if (res.status === 403 && data.upgradeRequired) {
+        setUpgradeRequired(true)
+        setWrappedData(null)
       } else if (res.status === 404) {
+        setUpgradeRequired(false)
         setWrappedData(null)
         // If availableYears is provided, suggest switching to a year with data
         if (data.availableYears && data.availableYears.length > 0) {
@@ -318,6 +326,17 @@ export default function WrappedTab() {
   }
 
   if (!wrappedData) {
+    if (upgradeRequired) {
+      return (
+        <div className="flex items-center justify-center min-h-[400px]">
+          <UpgradePrompt
+            title="Wrapped is Premium"
+            message="Upgrade to premium to access your year-end music summary and insights."
+          />
+        </div>
+      )
+    }
+    
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -486,6 +505,9 @@ export default function WrappedTab() {
                         <span className="font-semibold">{item.songTitle}</span>
                       </div>
                       <div className="text-sm text-primary/80 italic ml-8">by {item.artist}</div>
+                      <div className="ml-8 mt-1">
+                        <SpotifyAttribution variant="minimal" />
+                      </div>
                       <div className="text-sm text-primary/60 ml-8">{item.count} time{item.count !== 1 ? 's' : ''}</div>
                     </div>
                   </div>
@@ -864,6 +886,9 @@ export default function WrappedTab() {
                   <div className="flex-grow">
                     <div className="font-semibold">{wrappedData.noteSongMatching.mostDivergedSong.songTitle}</div>
                     <div className="text-sm text-primary/80 italic">by {wrappedData.noteSongMatching.mostDivergedSong.artist}</div>
+                    <div className="mt-1">
+                      <SpotifyAttribution variant="minimal" />
+                    </div>
                     <div className="text-xs text-primary/60 mt-1 line-clamp-2">
                       "{wrappedData.noteSongMatching.mostDivergedSong.notes}"
                     </div>

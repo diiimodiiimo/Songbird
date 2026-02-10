@@ -1,214 +1,166 @@
-# Claude Code Skills for SongBird
+# SongBird Claude Code Skills
 
-This folder contains custom Claude Code skills tailored for the SongBird project. These are reusable prompts that help Claude act as a specialized expert for specific tasks.
-
-## How to Use
-
-In Claude Code, reference a skill by typing its name as a command:
-
-```
-/security-check
-/ui-review
-/api-review
-```
-
-Then provide context about what you want reviewed (a file, feature, or area of the codebase).
+Custom skills for developing and maintaining SongBird. Reference these by name when working with Claude.
 
 ---
 
-## Available Skills
+## Quick Reference
 
-### 🔒 Security & Quality
+### Core Development
+| Skill | Use For |
+|-------|---------|
+| `/security-check` | Find vulnerabilities, auth issues, data exposure |
+| `/api-review` | Review API routes for best practices |
+| `/ui-review` | Check UI/UX, design system compliance |
+| `/component-review` | Review React components |
+| `/database-check` | Schema, queries, performance |
+| `/performance-audit` | Load times, rendering, optimization |
+| `/code-review` | Full code review with categorized feedback |
+| `/accessibility-check` | WCAG 2.1 AA compliance |
 
-| Skill | Description |
-|-------|-------------|
-| `/security-check` | Red-team pen-testing for auth, data exposure, injection, IDOR |
-| `/code-review` | Thorough code review with blocking/non-blocking/nit comments |
-| `/accessibility-check` | WCAG 2.1 AA compliance review |
+### Feature-Specific
+| Skill | Use For |
+|-------|---------|
+| `/streak-system` | Streak logic, freezes, restores |
+| `/bird-system` | Bird unlocks, themes, milestones |
+| `/onboarding-flow` | Multi-step onboarding |
+| `/analytics` | Event tracking, user properties |
+| `/notifications` | Push, in-app, preferences |
+| `/premium-system` | Stripe, Founding Flock, feature flags |
+| `/invite-system` | Referrals, viral growth |
+| `/waitlist-system` | Pre-launch signups |
+| `/blocking-reporting` | User safety features |
 
-### 🎨 Frontend
+### Integration & Platform
+| Skill | Use For |
+|-------|---------|
+| `/spotify-integration` | Spotify API, search, attribution |
+| `/mobile-app` | Expo/React Native development |
+| `/remotion-video` | Wrapped video generation |
+| `/app-store-prep` | App Store / Google Play submission |
+| `/prisma-help` | Prisma ORM, schema, migrations |
 
-| Skill | Description |
-|-------|-------------|
-| `/ui-review` | Design system compliance, UX patterns, visual polish |
-| `/component-review` | React component best practices and patterns |
-
-### ⚙️ Backend
-
-| Skill | Description |
-|-------|-------------|
-| `/api-review` | API route correctness, security, performance |
-| `/database-check` | Prisma schema, queries, and data operations |
-| `/prisma-help` | Quick reference for Prisma ORM patterns |
-
-### 🚀 Performance & Deployment
-
-| Skill | Description |
-|-------|-------------|
-| `/performance-audit` | React, database, and serverless performance |
-| `/deploy-check` | Pre-deployment checklist for Vercel |
-
-### 🛠️ Development
-
-| Skill | Description |
-|-------|-------------|
-| `/feature-plan` | Plan and scope new features with MVP thinking |
-| `/debug-issue` | Systematic bug investigation process |
-| `/refactor` | Clean up code without changing behavior |
-| `/test-scenarios` | Generate comprehensive test cases |
+### Workflow
+| Skill | Use For |
+|-------|---------|
+| `/debug-issue` | Systematic debugging help |
+| `/feature-plan` | Plan and scope new features |
+| `/deploy-check` | Pre-deployment verification |
+| `/refactor` | Code refactoring suggestions |
+| `/test-scenarios` | Generate test cases |
 
 ---
 
-## Skill Details
+## All Skills (27 total)
 
 ### `/security-check`
-Acts as a red-team penetration tester. Checks for:
-- Authentication bypass
-- Authorization failures (IDOR)
-- Data exposure
-- Input validation gaps
-- SQL injection / XSS vectors
-
-### `/ui-review`
-Acts as a senior product designer. Checks for:
-- Design system compliance (colors, typography, spacing)
-- Loading/empty/error state patterns
-- Responsive design
-- Accessibility basics
+Penetration testing mindset. Find auth issues, data exposure, IDOR, rate limiting gaps, blocking system verification.
 
 ### `/api-review`
-Acts as a senior backend engineer. Checks for:
-- Auth validation
-- Input validation
-- Error handling
-- Database query efficiency
-- Response format consistency
+Review API routes for authentication, rate limiting, error handling, response format, analytics tracking.
 
-### `/performance-audit`
-Acts as a performance engineer. Checks for:
-- React rendering issues
-- Database N+1 queries
-- Bundle size
-- Serverless cold starts
-
-### `/database-check`
-Acts as a DBA. Checks for:
-- Schema design
-- Index usage
-- Query efficiency
-- Connection pooling
-
-### `/accessibility-check`
-Acts as an a11y specialist. Checks for:
-- Keyboard navigation
-- Screen reader support
-- Color contrast
-- Motion preferences
+### `/ui-review`
+Check design system compliance, CSS variables, loading states, accessibility, SongBird aesthetic.
 
 ### `/component-review`
-Acts as a senior React developer. Checks for:
-- Hook patterns
-- State management
-- TypeScript usage
-- SongBird loading state pattern
+React best practices, hooks usage, state management, TypeScript patterns, loading state order.
 
-### `/deploy-check`
-Acts as a DevOps engineer. Provides:
-- Environment variable checklist
-- Build verification commands
-- Database readiness checks
-- Post-deploy verification
+### `/database-check`
+Prisma schema, Supabase queries, indexes, N+1 prevention, data integrity, blocking filters.
 
-### `/feature-plan`
-Acts as a product engineer. Helps with:
-- MVP scoping
-- Technical assessment
-- Development phases
-- Risk identification
-
-### `/debug-issue`
-Acts as a senior debugger. Provides:
-- Systematic investigation process
-- Common SongBird issue patterns
-- Evidence gathering techniques
-- Fix verification
-
-### `/refactor`
-Acts as a senior engineer. Helps with:
-- Extract function/constant
-- Simplify conditionals
-- Remove duplication
-- SongBird-specific patterns
-
-### `/test-scenarios`
-Acts as a QA engineer. Generates:
-- Happy path tests
-- Error handling tests
-- Edge cases
-- SongBird-specific scenarios
+### `/performance-audit`
+Core Web Vitals, bundle size, query optimization, caching strategies, image optimization.
 
 ### `/code-review`
-Acts as a thoughtful reviewer. Provides:
-- Correctness checks
-- Security review
-- Maintainability assessment
-- Praise for good work
+Full code review with blocking/non-blocking/suggestion categories. SongBird-specific patterns.
+
+### `/accessibility-check`
+WCAG 2.1 AA compliance, keyboard navigation, screen readers, color contrast, ARIA labels.
+
+### `/streak-system`
+Same-day entry rules, freeze logic (covers 1 missed day), restore limits (once per month), milestone tracking, bird unlocks.
+
+### `/bird-system`
+Bird unlocks via streaks/milestones, theme colors, avatar components, premium access.
+
+### `/onboarding-flow`
+18+ screen multi-step onboarding, step management, analytics tracking, skip handling.
+
+### `/analytics`
+Event tracking patterns (`trackEvent`), user properties, metrics queries, AnalyticsEvents constants.
+
+### `/notifications`
+Push notifications (Web Push API), in-app notifications, preferences, daily reminders.
+
+### `/premium-system`
+Stripe integration (currently disabled), Founding Flock, feature flags, subscription status.
+
+### `/invite-system`
+Invite link generation, referral tracking, auto-friending on signup, viral metrics.
+
+### `/waitlist-system`
+Pre-launch waitlist, email collection, referral codes, Founding Flock eligibility.
+
+### `/blocking-reporting`
+User blocks (hides from feed/profile), content reports, safety filtering, admin review.
+
+### `/spotify-integration`
+Spotify Web API, client credentials flow, token refresh, search, attribution requirements.
+
+### `/mobile-app`
+Expo Router, Clerk auth with SecureStore, API client, EAS Build, React Native patterns.
+
+### `/remotion-video`
+Wrapped video compositions, animations, useCurrentFrame, Sequence, rendering pipeline.
+
+### `/app-store-prep`
+App Store / Google Play requirements, screenshots, legal pages, submission checklist.
 
 ### `/prisma-help`
-Quick Prisma reference. Includes:
-- Schema patterns
-- Query examples
-- Common issues and solutions
-- Commands
+Schema definition, relations, indexes, migrations, Prisma vs Supabase client usage.
+
+### `/debug-issue`
+Systematic debugging framework, common issue categories, logging patterns, escalation path.
+
+### `/feature-plan`
+Feature planning template, MVP scoping, technical requirements, implementation steps.
+
+### `/deploy-check`
+Pre-deployment checklist, environment variables, build verification, post-deploy smoke tests.
+
+### `/refactor`
+Refactoring patterns (extract function, early return, etc.), when to refactor, checklist.
+
+### `/test-scenarios`
+Test scenario generation, happy path, edge cases, error conditions, security tests.
 
 ---
+
+## Usage Examples
+
+```
+"Please /security-check this API route"
+
+"Can you do a /ui-review of the Feed tab?"
+
+"Help me with the /streak-system - freezes aren't working"
+
+"I need to /debug-issue why notifications aren't sending"
+
+"/feature-plan for adding B-sides feature"
+
+"/deploy-check before I push to production"
+```
 
 ## Adding New Skills
 
-To add a new skill:
-
-1. Create a new file in `.claude/skills/` named `your-skill.md`
-2. Use this format:
-
-```markdown
-# /your-skill
-
-One-line description of what this skill does.
-
-## Focus Areas
-- Area 1
-- Area 2
-
-## How to Use
-Instructions...
-
-## Output Format
-What the output should look like...
-```
-
-3. Add it to this README
-
----
-
-## SongBird-Specific Context
-
-All skills are tailored for SongBird's stack:
-- **Next.js 14+** with App Router
-- **TypeScript** with strict typing
-- **Prisma** ORM with PostgreSQL
-- **Clerk** authentication
-- **Tailwind CSS** with custom design system
-- **Vercel** deployment
-
-They reference SongBird patterns like:
-- Loading state before empty state
-- Design system colors (`bg-bg`, `text-text`, `bg-surface`, `text-accent`)
-- API route structure with `auth()` checks
-- Prisma singleton pattern
+Create a new `.md` file in `.claude/skills/` with:
+1. Clear purpose/trigger
+2. Relevant code patterns  
+3. File locations
+4. Common issues
+5. Output format
 
 ---
 
 *Last updated: January 2026*
-
-
-

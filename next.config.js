@@ -10,6 +10,10 @@ const nextConfig = {
     // DATABASE_URL - Supabase connection string
     DATABASE_URL: 'postgresql://postgres.undbrbgtjgslmoswqaww:D1modadreamo4979@aws-0-us-east-1.pooler.supabase.com:6543/postgres',
     DIRECT_URL: 'postgresql://postgres:D1modadreamo4979@db.undbrbgtjgslmoswqaww.supabase.co:5432/postgres',
+    // Supabase API - Required for profile API
+    // Get these from Supabase Dashboard: Settings > API
+    NEXT_PUBLIC_SUPABASE_URL: 'https://undbrbgtjgslmoswqaww.supabase.co',
+    // SUPABASE_SERVICE_ROLE_KEY: 'your-service-role-key-here', // Add this from Supabase Dashboard > Settings > API > service_role key
   },
   images: {
     remotePatterns: [

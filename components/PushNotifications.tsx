@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
+import ThemeBird from './ThemeBird'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -69,14 +70,20 @@ export default function PushNotifications() {
 
     // Determine if we should show the banner
     try {
-      const dismissed = localStorage.getItem('pushBannerDismissed')
-      const dismissedAt = dismissed ? parseInt(dismissed, 10) : 0
-      const daysSinceDismissed = (Date.now() - dismissedAt) / (1000 * 60 * 60 * 24)
-      
-      // Show banner if not dismissed in last 7 days and notifications aren't set up
-      const notificationPermission = 'Notification' in window ? Notification.permission : 'denied'
-      if (daysSinceDismissed > 7 && notificationPermission !== 'granted') {
-        setShowBanner(true)
+      const permanentlyDismissed = localStorage.getItem('pushBannerPermanentDismiss')
+      if (permanentlyDismissed === 'true') {
+        // User chose "Don't show again" — never show
+        setShowBanner(false)
+      } else {
+        const dismissed = localStorage.getItem('pushBannerDismissed')
+        const dismissedAt = dismissed ? parseInt(dismissed, 10) : 0
+        const daysSinceDismissed = (Date.now() - dismissedAt) / (1000 * 60 * 60 * 24)
+        
+        // Show banner if not dismissed in last 30 days and notifications aren't set up
+        const notificationPermission = 'Notification' in window ? Notification.permission : 'denied'
+        if (daysSinceDismissed > 30 && notificationPermission !== 'granted') {
+          setShowBanner(true)
+        }
       }
     } catch (e) {
       // Ignore localStorage errors
@@ -223,8 +230,15 @@ export default function PushNotifications() {
     }
   }
 
-  const dismissBanner = () => {
-    localStorage.setItem('pushBannerDismissed', Date.now().toString())
+  const dismissBanner = (permanent: boolean = false) => {
+    try {
+      if (permanent) {
+        localStorage.setItem('pushBannerPermanentDismiss', 'true')
+      }
+      localStorage.setItem('pushBannerDismissed', Date.now().toString())
+    } catch (e) {
+      // Ignore localStorage errors
+    }
     setShowBanner(false)
   }
 
@@ -249,7 +263,9 @@ export default function PushNotifications() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 p-3 sm:p-4 bg-gradient-to-r from-accent/90 to-pink-600/90 backdrop-blur-sm border-t border-white/20 safe-area-bottom">
       <div className="max-w-lg mx-auto flex items-center gap-3">
-        <div className="text-2xl sm:text-3xl flex-shrink-0">🐦</div>
+        <div className="flex-shrink-0">
+          <ThemeBird size={36} state="sing" showParticles={false} />
+        </div>
         <div className="flex-1 min-w-0">
           {isIOS && isSafari && !isStandalone ? (
             <>
@@ -293,9 +309,10 @@ export default function PushNotifications() {
             </button>
           ) : null}
           <button
-            onClick={dismissBanner}
+            onClick={() => dismissBanner(true)}
             className="p-1.5 sm:p-2 text-white/60 hover:text-white transition-colors"
-            aria-label="Dismiss"
+            aria-label="Don't show again"
+            title="Don't show again"
           >
             <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

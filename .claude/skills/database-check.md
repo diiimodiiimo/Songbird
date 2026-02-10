@@ -2,99 +2,172 @@
 
 Review database schema, queries, and data operations for correctness, performance, and best practices. Act like a database administrator with production experience.
 
-## Schema Review (prisma/schema.prisma)
+## Current Stack
 
-### Model Design
-- Appropriate field types (String, Int, DateTime, etc.)
-- Proper use of `@id`, `@unique`, `@default`
-- Sensible nullable vs required fields
-- Relations defined correctly (`@relation`)
+SongBird uses **two database clients**:
+1. **Prisma** - Type-safe ORM (legacy, some routes)
+2. **Supabase** - Direct client (newer routes, preferred)
 
-### Indexes
-- Indexed fields used in WHERE clauses
-- Composite indexes for multi-field queries (e.g., `[userId, date]`)
-- Unique constraints where appropriate
+## Key Files
 
-### Relationships
-- Proper one-to-many, many-to-many setup
-- Cascade delete behavior defined
-- Reference integrity maintained
+- `prisma/schema.prisma` - Database schema
+- `lib/prisma.ts` - Prisma client singleton
+- `lib/supabase.ts` - Supabase client
+- `migrations/*.sql` - Manual SQL migrations
+
+## Schema Overview
+
+### Core Models
+- **User** - User accounts with profile, streaks, premium status
+- **Entry** - Song of the day entries
+- **FriendRequest** - Two-way friend system
+- **Mention** - Entry mentions (notifies user)
+- **PersonReference** - Non-user person tags
+
+### Social Models
+- **Vibe** - Heart/likes on entries
+- **Comment** - Comments on entries
+- **Notification** - User notifications
+
+### System Models
+- **PushSubscription** - Web push subscriptions
+- **Invite** - Invite codes
+- **AnalyticsEvent** - Analytics tracking
+- **UnlockedBird** - Bird unlock records
+- **BlockedUser** - User blocks
+- **Report** - User/content reports
+- **WaitlistEntry** - Pre-launch waitlist
 
 ## Query Patterns
 
-### Field Selection
-- Using `select` to limit returned fields
-- Using `include` sparingly (N+1 risk)
-- Never fetching `*` when not needed
-- Excluding heavy fields (base64, large text) in lists
-
-### Filtering
-- Always including `userId` in user-specific queries
-- Proper date range queries
-- Efficient text search patterns
-
-### Pagination
-- Using `skip` and `take` for large datasets
-- Cursor-based pagination for infinite scroll
-- Reasonable page sizes (100-1000)
-
-### Aggregations
-- Using `count()`, `groupBy()` efficiently
-- Avoiding client-side aggregation
-- Caching expensive aggregations
-
-## Data Integrity
-
-### Constraints
-- Unique constraints where needed
-- Foreign key constraints
-- Check constraints (via application layer)
-
-### Migrations
-- Safe migration patterns
-- Data preservation during schema changes
-- Rollback strategy
-
-### User Data Isolation
-- All queries scoped to current user
-- No cross-user data leaks
-- Friend permissions properly enforced
-
-## Performance
-
-### Common Issues
-- N+1 queries (use `include` or batch)
-- Missing indexes on frequently queried fields
-- Large result sets without pagination
-- Inefficient sorting
-
-### Serverless Considerations
-- Connection pooling setup
-- Query timeout awareness
-- Cold start optimization
-
-## Prisma Best Practices
-
-### Client Setup
+### Using Supabase (Preferred)
 ```typescript
-// Singleton pattern for Prisma client
-import { PrismaClient } from '@prisma/client'
+import { getSupabase } from '@/lib/supabase'
 
+const supabase = getSupabase()
+
+// Select with filter
+const { data, error } = await supabase
+  .from('entries')
+  .select('id, songTitle, artist, date')
+  .eq('userId', userId)
+  .order('date', { ascending: false })
+  .limit(100)
+
+// Insert
+const { data, error } = await supabase
+  .from('entries')
+  .insert({ userId, songTitle, artist, ... })
+  .select()
+  .single()
+
+// Update
+const { error } = await supabase
+  .from('users')
+  .update({ theme: 'cardinal' })
+  .eq('id', userId)
+
+// Count (efficient)
+const { count } = await supabase
+  .from('entries')
+  .select('id', { count: 'exact', head: true })
+  .eq('userId', userId)
+```
+
+### Using Prisma (Legacy)
+```typescript
+import { prisma } from '@/lib/prisma'
+
+const entries = await prisma.entry.findMany({
+  where: { userId },
+  select: { id: true, songTitle: true, artist: true },
+  orderBy: { date: 'desc' },
+  take: 100,
+})
+```
+
+## Important Indexes
+
+```prisma
+@@index([userId, date])    // Entry queries by user
+@@index([userId])          // User-specific queries
+@@index([event])           // Analytics by event type
+@@index([createdAt])       // Time-based queries
+```
+
+## Schema Changes
+
+### Adding New Fields
+1. Update `prisma/schema.prisma`
+2. Create migration file in `migrations/`
+3. Run migration on Supabase
+4. Run `npx prisma generate`
+
+Example migration:
+```sql
+-- migrations/add-new-field.sql
+ALTER TABLE users ADD COLUMN new_field TEXT;
+```
+
+### Unique Constraints
+```prisma
+@@unique([userId, date])    // One entry per day
+@@unique([entryId, userId]) // One vibe per user per entry
+@@unique([blockerId, blockedId]) // One block record
+```
+
+## Performance Checklist
+
+### Query Optimization
+- [ ] Select only needed fields (`select: {...}`)
+- [ ] Use indexes for WHERE clauses
+- [ ] Limit results for pagination
+- [ ] Use `count` with `head: true` for counts
+- [ ] Avoid N+1 queries
+
+### Bulk Operations
+```typescript
+// Bad: N+1 queries
+for (const entry of entries) {
+  const vibes = await supabase.from('vibes').select().eq('entryId', entry.id)
+}
+
+// Good: Single query with join
+const { data } = await supabase
+  .from('entries')
+  .select('*, vibes(*)')
+  .in('id', entryIds)
+```
+
+### Connection Pooling
+Supabase handles pooling automatically. For Prisma, use singleton pattern:
+```typescript
 const globalForPrisma = global as { prisma?: PrismaClient }
 export const prisma = globalForPrisma.prisma ?? new PrismaClient()
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 ```
 
-### Query Patterns
-```typescript
-// Good: Select only needed fields
-const entries = await prisma.entry.findMany({
-  where: { userId },
-  select: { id: true, songTitle: true, artist: true, date: true }
-})
+## Data Integrity
 
-// Bad: Fetching everything
-const entries = await prisma.entry.findMany({ where: { userId } })
+### User Data Isolation
+```typescript
+// ALWAYS filter by userId
+const { data } = await supabase
+  .from('entries')
+  .select('*')
+  .eq('userId', userId)  // REQUIRED
+```
+
+### Cascade Deletes
+```prisma
+user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+```
+
+### Blocking Filter
+```typescript
+const blockedIds = await getBlockedUserIds(userId)
+// Filter from queries
+.not('userId', 'in', `(${blockedIds.join(',')})`)
 ```
 
 ## Output Format
@@ -110,6 +183,3 @@ const entries = await prisma.entry.findMany({ where: { userId } })
 
 **Recommendations:**
 - Specific improvements with code examples
-
-
-

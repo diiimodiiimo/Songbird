@@ -1,135 +1,191 @@
 # /feature-plan
 
-Help plan and scope a new feature for SongBird. Act like a product engineer who balances user value with development effort.
+Help plan and scope new features with structured breakdown. Act like a senior product engineer.
 
-## Feature Analysis Framework
+## Planning Framework
 
-### 1. User Value Assessment
-- **Who benefits?** (existing users, new users, power users)
-- **What problem does it solve?**
-- **How often will it be used?** (daily, weekly, occasionally)
-- **Does it align with core value prop?** ("Remember your life through music")
+### 1. Define the Feature
+- What problem does this solve?
+- Who is the target user?
+- What's the success metric?
 
-### 2. Scope Definition
+### 2. Break Down Requirements
+- User stories (As a user, I want to...)
+- Acceptance criteria (The feature is complete when...)
+- Edge cases to consider
 
-#### MVP (Minimum Viable)
-- What's the simplest version that delivers value?
-- Can we ship in 1-2 days?
-- What can we defer to v2?
-
-#### Full Vision
-- What does the complete feature look like?
-- What are the nice-to-haves?
-- What's the maintenance burden?
-
-### 3. Technical Assessment
-
-#### Frontend Changes
-- New components needed?
-- Existing components to modify?
-- New routes/pages?
-- State management needs?
-
-#### Backend Changes
-- New API routes?
-- Database schema changes?
+### 3. Technical Design
+- What files/components are affected?
+- Database changes needed?
+- API endpoints required?
 - Third-party integrations?
-- Performance considerations?
 
-#### Database Impact
-- New models or fields?
-- Migration complexity?
-- Index requirements?
-- Data volume considerations?
+### 4. Implementation Plan
+- MVP (minimum viable product) scope
+- Phase 2 enhancements
+- Future considerations
 
-### 4. Risk Assessment
+### 5. Risk Assessment
+- Technical challenges
+- Dependencies
+- Performance implications
 
-- **Breaking changes?** (affects existing data/features)
-- **Performance impact?** (query complexity, response size)
-- **Security implications?** (new attack surface)
-- **Dependency additions?** (new packages)
+## Feature Planning Template
 
-### 5. Development Plan
+```markdown
+## Feature: [Name]
 
-#### Phase 1: Foundation
-- Database schema changes
-- Core API routes
-- Basic UI
+### Problem Statement
+[What problem are we solving?]
 
-#### Phase 2: Core Experience
-- Main user flows
-- Error handling
-- Loading states
+### User Stories
+1. As a [user type], I want to [action] so that [benefit]
 
-#### Phase 3: Polish
-- Edge cases
-- Performance optimization
-- Accessibility
-- Documentation
+### Acceptance Criteria
+- [ ] [Criterion 1]
+- [ ] [Criterion 2]
+- [ ] [Criterion 3]
 
-## SongBird Feature Context
+### Technical Requirements
 
-### Existing Patterns to Reuse
-- Entry management (create, read, update, delete)
-- Friend system (requests, permissions)
-- Analytics aggregation
-- Loading state pattern
-- Design system components
+#### Database Changes
+```prisma
+// New models or fields
+```
 
-### Planned Features (from roadmap)
-1. Mood/vibe emoji tags
-2. B-sides (additional songs)
-3. Streaks (gamification)
-4. Playlist generation
-5. Notifications
-6. Shareable Wrapped
+#### API Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /api/feature | Fetch data |
+| POST | /api/feature | Create data |
 
-### Constraints
-- Solo developer (limited bandwidth)
-- Bootstrap budget (minimal spending)
-- Mobile-first design
-- Vercel serverless limits
-- Clerk authentication
+#### Components
+- [ ] `FeatureComponent.tsx` - [Purpose]
+- [ ] `FeatureModal.tsx` - [Purpose]
 
-## Output Format
+### Implementation Steps
 
-### Feature: [Name]
+#### Phase 1: MVP
+1. [ ] Create database schema
+2. [ ] Implement API endpoints
+3. [ ] Build UI components
+4. [ ] Add analytics tracking
 
-**Summary:** One sentence description
+#### Phase 2: Polish
+1. [ ] Add loading states
+2. [ ] Improve error handling
+3. [ ] Add animations
+4. [ ] Mobile optimization
 
-**User Story:**
-> As a [user type], I want to [action] so that [benefit].
+### Edge Cases
+- What if [scenario]?
+- What happens when [edge case]?
 
-**MVP Scope:**
-- [ ] Feature 1
-- [ ] Feature 2
+### Dependencies
+- Requires: [feature/change]
+- Blocks: [other feature]
 
-**Deferred to v2:**
-- Future enhancement 1
-- Future enhancement 2
+### Estimated Effort
+- Backend: X hours
+- Frontend: X hours
+- Testing: X hours
+- Total: X hours
+```
 
-**Technical Plan:**
+## SongBird Feature Patterns
 
-| Layer | Changes | Effort |
-|-------|---------|--------|
-| Database | ... | Low/Med/High |
-| API | ... | Low/Med/High |
-| Frontend | ... | Low/Med/High |
+### Adding a New Tab
+1. Create component in `components/[Tab]Tab.tsx`
+2. Add to `Dashboard.tsx` navigation
+3. Create API route in `app/api/[route]/route.ts`
+4. Add analytics event tracking
 
-**Files to Create/Modify:**
-- `path/to/file.ts` - Description
+### Adding a New Field to Entry
+1. Update `prisma/schema.prisma`
+2. Create migration in `migrations/`
+3. Update API routes
+4. Update `AddEntryTab.tsx` form
+5. Update display components
 
-**Dependencies:**
-- None / List packages
+### Adding a New Premium Feature
+1. Define feature flag in `lib/premium.ts`
+2. Check flag in relevant components
+3. Add premium gate UI
+4. Track usage in analytics
 
-**Estimated Effort:** X hours/days
+### Adding a New Notification Type
+1. Add type to notification schema
+2. Create trigger in relevant action
+3. Add display in `Notifications.tsx`
+4. Add preference in `NotificationSettings.tsx`
 
-**Risks:**
-- Risk 1 → Mitigation
+## Example: Adding "B-Sides" Feature
 
-**Success Criteria:**
-- User can...
-- System correctly...
+```markdown
+## Feature: B-Sides (Multiple Songs Per Day)
 
+### Problem Statement
+Power users want to log multiple songs per day, not just one "main" song.
 
+### User Stories
+1. As a premium user, I want to add additional songs to my day
+2. As a user, I want to mark one song as my "main" song
 
+### Acceptance Criteria
+- [ ] Premium users can add up to 3 additional "B-side" songs
+- [ ] One song is always marked as the "main" song
+- [ ] B-sides appear on the day view but not in On This Day
+- [ ] B-sides don't affect streak (only main song does)
+
+### Technical Requirements
+
+#### Database Changes
+```prisma
+model Entry {
+  isBSide Boolean @default(false)  // New field
+  // ... existing fields
+}
+```
+
+#### API Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /api/entries | Updated to support isBSide |
+| GET | /api/entries | Filter by isBSide if needed |
+
+#### Components
+- [ ] Update `AddEntryTab.tsx` - Add B-side button
+- [ ] Update `TodayTab.tsx` - Show B-sides section
+- [ ] Create `BSideCard.tsx` - Smaller entry display
+
+### Implementation Steps
+
+#### Phase 1: MVP
+1. [x] Add isBSide to schema
+2. [ ] Update entries API
+3. [ ] Add B-side UI in AddEntryTab
+4. [ ] Display B-sides in TodayTab
+
+#### Phase 2: Polish
+1. [ ] Add swipe to add B-side
+2. [ ] Animate B-side additions
+3. [ ] B-side count limit
+
+### Edge Cases
+- What if user downgrades from premium? (Keep existing, can't add new)
+- What if user tries to add 4th B-side? (Show limit message)
+
+### Estimated Effort
+- Backend: 2 hours
+- Frontend: 4 hours
+- Testing: 1 hour
+- Total: 7 hours
+```
+
+## Questions to Ask
+
+1. **Scope**: What's the minimum we can ship?
+2. **Priority**: Is this more important than X?
+3. **Dependencies**: What needs to exist first?
+4. **Reversibility**: Can we easily change/remove this?
+5. **Metrics**: How will we know if it's working?

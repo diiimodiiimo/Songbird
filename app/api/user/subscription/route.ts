@@ -19,7 +19,9 @@ export async function GET() {
       isPremium: status.isPremium,
       isFoundingMember: status.isFoundingMember,
       premiumSince: status.premiumSince?.toISOString() || null,
-      plan: status.isFoundingMember ? 'founding_flock' : status.isPremium ? 'premium' : 'free',
+      stripeCustomerId: status.stripeCustomerId || null,
+      plan: status.isFoundingMember ? 'founding_flock' : status.isPremium ? 'monthly' : 'free',
+      subscriptionTier: status.isFoundingMember ? 'founding_flock' : status.isPremium ? 'monthly' : null,
     })
   } catch (error: unknown) {
     console.error('[user/subscription] Error:', error)
@@ -27,6 +29,8 @@ export async function GET() {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+
 
 
 
