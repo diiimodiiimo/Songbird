@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/lib/theme'
 import ThemeBird from '@/components/ThemeBird'
 
-export default function WaitlistPage() {
+function WaitlistContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { currentTheme } = useTheme()
@@ -333,5 +333,19 @@ export default function WaitlistPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function WaitlistPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-bg flex items-center justify-center">
+          <div className="w-12 h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin mx-auto" />
+        </div>
+      }
+    >
+      <WaitlistContent />
+    </Suspense>
   )
 }

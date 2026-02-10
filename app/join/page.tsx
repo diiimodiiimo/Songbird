@@ -1,17 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from '@/lib/theme'
 import Image from 'next/image'
 // Stripe integration disabled for now - uncomment when @stripe/stripe-js is installed
 // import { loadStripe } from '@stripe/stripe-js'
 
-/**
- * Simple waitlist page optimized for social media sharing
- * Always accessible - not gated by WAITLIST_MODE_ENABLED
- */
-export default function SimpleWaitlistPage() {
+function SimpleWaitlistContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { currentTheme } = useTheme()
@@ -212,4 +208,20 @@ export default function SimpleWaitlistPage() {
   )
 }
 
-
+/**
+ * Simple waitlist page optimized for social media sharing
+ * Always accessible - not gated by WAITLIST_MODE_ENABLED
+ */
+export default function SimpleWaitlistPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-bg flex items-center justify-center">
+          <div className="w-12 h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin mx-auto" />
+        </div>
+      }
+    >
+      <SimpleWaitlistContent />
+    </Suspense>
+  )
+}

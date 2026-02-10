@@ -59,6 +59,14 @@ export interface Entry {
   vibes?: string[];
 }
 
+export interface SuggestedUser {
+  id: string;
+  username: string;
+  name?: string;
+  image?: string;
+  mutualFriends: number;
+}
+
 export interface SpotifyTrack {
   id: string;
   name: string;
@@ -167,5 +175,9 @@ export const api = {
       body: JSON.stringify({ code }),
       token,
     }),
+
+  // Suggested Users (sorted by mutual friends)
+  getSuggestedUsers: (token: string, limit = 20) =>
+    apiFetch<{ users: SuggestedUser[] }>(`/api/users/suggested?limit=${limit}`, { token }),
 };
 

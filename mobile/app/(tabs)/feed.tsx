@@ -8,10 +8,11 @@ import {
   Image,
   RefreshControl,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fontSize, spacing, borderRadius } from '../../lib/theme';
-import { api, Entry } from '../../lib/api';
+import { api, Entry, SuggestedUser } from '../../lib/api';
 import { useAuth, useAuthToken } from '../../lib/auth';
 
 interface FeedEntry extends Entry {
@@ -34,6 +35,8 @@ export default function FeedTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
+  const [loadingSuggested, setLoadingSuggested] = useState(true);
 
   const fetchFeed = useCallback(async (pageNum = 1) => {
     if (!isLoaded || !isSignedIn) return;
@@ -56,14 +59,31 @@ export default function FeedTab() {
     }
   }, [isLoaded, isSignedIn, getToken]);
 
+  const fetchSuggestedUsers = useCallback(async () => {
+    if (!isLoaded || !isSignedIn) return;
+
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      const data = await api.getSuggestedUsers(token, 20);
+      setSuggestedUsers(data.users);
+    } catch (error) {
+      console.error('Error fetching suggested users:', error);
+    } finally {
+      setLoadingSuggested(false);
+    }
+  }, [isLoaded, isSignedIn, getToken]);
+
   useEffect(() => {
     fetchFeed(1);
-  }, [fetchFeed]);
+    fetchSuggestedUsers();
+  }, [fetchFeed, fetchSuggestedUsers]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     setPage(1);
-    await fetchFeed(1);
+    await Promise.all([fetchFeed(1), fetchSuggestedUsers()]);
     setRefreshing(false);
   };
 
@@ -152,6 +172,48 @@ export default function FeedTab() {
     </View>
   );
 
+  const renderSuggestedUserItem = (user: SuggestedUser) => (
+    <View key={user.id} style={styles.suggestedUserItem}>
+      {user.image ? (
+        <Image source={{ uri: user.image }} style={styles.suggestedAvatar} />
+      ) : (
+        <View style={styles.suggestedAvatarPlaceholder}>
+          <Text style={styles.suggestedAvatarText}>
+            {(user.name?.[0] || user.username?.[0] || '?').toUpperCase()}
+          </Text>
+        </View>
+      )}
+      <View style={styles.suggestedUserInfo}>
+        {user.name && (
+          <Text style={styles.suggestedName} numberOfLines={1}>{user.name}</Text>
+        )}
+        <Text style={styles.suggestedUsername} numberOfLines={1}>@{user.username}</Text>
+        {user.mutualFriends > 0 && (
+          <Text style={styles.mutualFriendsText}>
+            {user.mutualFriends} mutual friend{user.mutualFriends !== 1 ? 's' : ''}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+
+  const SuggestedUsersSection = () => {
+    if (loadingSuggested || suggestedUsers.length === 0) return null;
+
+    return (
+      <View style={styles.suggestedSection}>
+        <Text style={styles.suggestedSectionTitle}>Users on SongBird</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.suggestedScrollContent}
+        >
+          {suggestedUsers.map(renderSuggestedUserItem)}
+        </ScrollView>
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -169,19 +231,27 @@ export default function FeedTab() {
       </View>
 
       {entries.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>🎵</Text>
-          <Text style={styles.emptyTitle}>No entries yet</Text>
-          <Text style={styles.emptyText}>
-            Add friends to see what songs are defining their days.
-          </Text>
-        </View>
+        <ScrollView
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+          }
+        >
+          <SuggestedUsersSection />
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyEmoji}>🎵</Text>
+            <Text style={styles.emptyTitle}>No entries yet</Text>
+            <Text style={styles.emptyText}>
+              Add friends to see what songs are defining their days.
+            </Text>
+          </View>
+        </ScrollView>
       ) : (
         <FlatList
           data={entries}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          ListHeaderComponent={<SuggestedUsersSection />}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
           }
@@ -329,6 +399,69 @@ const styles = StyleSheet.create({
   actionCount: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
+  },
+  // Suggested users section
+  suggestedSection: {
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  suggestedSectionTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  suggestedScrollContent: {
+    gap: spacing.sm,
+    paddingRight: spacing.lg,
+  },
+  suggestedUserItem: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    alignItems: 'center',
+    width: 130,
+  },
+  suggestedAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginBottom: spacing.sm,
+  },
+  suggestedAvatarPlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.accent + '33',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  suggestedAvatarText: {
+    color: colors.accent,
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+  },
+  suggestedUserInfo: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  suggestedName: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  suggestedUsername: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  mutualFriendsText: {
+    fontSize: fontSize.xs,
+    color: colors.accent,
+    marginTop: 2,
+    textAlign: 'center',
   },
 });
 

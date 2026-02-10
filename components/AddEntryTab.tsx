@@ -305,7 +305,7 @@ export default function AddEntryTab() {
                 ))}
               </div>
               <div className="flex-1 text-sm text-text/70">
-                {friendsWhoLoggedToday[0].name} and {friendsWhoLoggedToday.length - 1} {friendsWhoLoggedToday.length === 2 ? 'other' : 'others'} posted today
+                {friendsWhoLoggedToday[0].username || friendsWhoLoggedToday[0].name}{friendsWhoLoggedToday.length > 1 && <> and {friendsWhoLoggedToday.length - 1} {friendsWhoLoggedToday.length === 2 ? 'other' : 'others'}</>} posted today
               </div>
             </div>
           </div>

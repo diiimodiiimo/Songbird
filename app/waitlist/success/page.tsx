@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ThemeBird from '@/components/ThemeBird'
 
-export default function WaitlistSuccessPage() {
+function WaitlistSuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('session_id')
@@ -40,4 +40,16 @@ export default function WaitlistSuccessPage() {
   )
 }
 
-
+export default function WaitlistSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-bg flex items-center justify-center">
+          <div className="w-12 h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin mx-auto" />
+        </div>
+      }
+    >
+      <WaitlistSuccessContent />
+    </Suspense>
+  )
+}
