@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
 import ThemeBird from '@/components/ThemeBird'
 import ProgressDots from './ProgressDots'
@@ -12,12 +13,17 @@ interface UsernameScreenProps {
   existingUsername?: string
 }
 
-// Starter birds available during onboarding
 const starterBirds: ThemeId[] = ['american-robin', 'northern-cardinal']
 
 export default function UsernameScreen({ onContinue, existingUsername }: UsernameScreenProps) {
+  const { user: clerkUser } = useUser()
   const { setTheme } = useTheme()
-  const [username, setUsername] = useState(existingUsername || '')
+
+  const clerkUsername = clerkUser?.username || ''
+  const initialUsername = existingUsername || clerkUsername
+
+  const [username, setUsername] = useState(initialUsername)
+  const [prefilledFromClerk, setPrefilledFromClerk] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null)
@@ -26,7 +32,17 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
   const [showAllBirds, setShowAllBirds] = useState(false)
   const [birdStatuses, setBirdStatuses] = useState<any[]>([])
 
-  // Fetch bird unlock statuses
+  // Pre-fill from Clerk if available
+  useEffect(() => {
+    if (clerkUsername && !existingUsername && !username) {
+      const cleaned = clerkUsername.toLowerCase().replace(/[^a-z0-9_]/g, '')
+      if (cleaned.length >= 3) {
+        setUsername(cleaned)
+        setPrefilledFromClerk(true)
+      }
+    }
+  }, [clerkUsername, existingUsername])
+
   useEffect(() => {
     async function fetchBirdStatuses() {
       try {
@@ -142,7 +158,6 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
       })
 
       if (res.ok) {
-        // Track analytics
         fetch('/api/analytics/event', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -151,7 +166,7 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
         onContinue(username, selectedBird)
       } else {
         const data = await res.json()
-        setError(data.error || 'Failed to save username')
+        setError(data.error || data.message || 'Failed to save username')
       }
     } catch (err) {
       setError('Something went wrong')
@@ -172,8 +187,13 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
 
         {/* Headline */}
         <h1 className="text-3xl sm:text-4xl font-bold text-text mb-2 text-center font-title">
-          Choose Your Username
+          {prefilledFromClerk ? 'Confirm Your Username' : 'Choose Your Username'}
         </h1>
+        {prefilledFromClerk && (
+          <p className="text-text/60 text-sm mb-2 text-center">
+            We grabbed this from your account. Change it if you'd like.
+          </p>
+        )}
 
         {/* Username input */}
         <div className="w-full mb-6">
@@ -335,7 +355,7 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={13} currentStep={6} className="pb-8" />
+      <ProgressDots totalSteps={13} currentStep={4} className="pb-8" />
     </div>
   )
 }

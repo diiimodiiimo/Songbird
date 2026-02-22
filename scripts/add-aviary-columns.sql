@@ -32,3 +32,4 @@ CREATE INDEX IF NOT EXISTS idx_song_associations_user_friend ON song_association
 
 
 
+

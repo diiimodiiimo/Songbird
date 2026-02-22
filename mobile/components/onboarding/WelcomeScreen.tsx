@@ -1,13 +1,12 @@
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Image } from 'react-native';
 import { useEffect, useRef } from 'react';
-import { colors, fontSize, spacing, borderRadius } from '../../lib/theme';
+import { colors, fontSize, spacing, borderRadius, defaultBirdImage } from '../../lib/theme';
 
 interface WelcomeScreenProps {
   onContinue: () => void;
 }
 
 export default function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
-  // Pulse animation for bird
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -32,22 +31,15 @@ export default function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        {/* Bird with gentle idle animation */}
         <Animated.View style={[styles.birdContainer, { transform: [{ scale: pulseAnim }] }]}>
-          <Text style={styles.birdEmoji}>🐦</Text>
+          <Image source={defaultBirdImage} style={styles.birdImage} resizeMode="contain" />
         </Animated.View>
 
-        {/* Headline */}
         <Text style={styles.title}>Welcome to SongBird</Text>
-
-        {/* Tagline */}
         <Text style={styles.tagline}>Giving music a new meaning</Text>
-
-        {/* Subtext */}
         <Text style={styles.subtext}>A music journaling app for the moments that matter</Text>
       </View>
 
-      {/* Continue button */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity style={styles.continueButton} onPress={onContinue} activeOpacity={0.8}>
           <Text style={styles.continueButtonText}>Continue</Text>
@@ -75,8 +67,9 @@ const styles = StyleSheet.create({
   birdContainer: {
     marginBottom: spacing.xl,
   },
-  birdEmoji: {
-    fontSize: 120,
+  birdImage: {
+    width: 200,
+    height: 200,
   },
   title: {
     fontSize: fontSize.display,
@@ -84,6 +77,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.sm,
     textAlign: 'center',
+    fontFamily: 'serif',
   },
   tagline: {
     fontSize: fontSize.xl,
@@ -108,11 +102,11 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
     borderRadius: borderRadius.xl,
   },
   continueButtonText: {
-    color: colors.bg,
+    color: colors.text,
     fontSize: fontSize.lg,
     fontWeight: '600',
     textAlign: 'center',

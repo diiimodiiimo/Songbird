@@ -6,6 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { getSpotifyArtistUrl } from '@/lib/spotify'
 import ThemeBird from './ThemeBird'
+import FeatureSpotlight from './FeatureSpotlight'
 
 interface AnalyticsData {
   totalEntries: number
@@ -198,6 +199,18 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
         <h2 className="text-2xl sm:text-3xl font-title mb-2">Insights</h2>
         <p className="text-text/60 text-sm sm:text-base">Patterns in your music memory</p>
       </div>
+
+      <FeatureSpotlight
+        featureId="insights-intro"
+        title="Your Music Patterns"
+        description="Insights analyzes your song history to surface patterns you'd never notice on your own. The more you log, the richer the data."
+        icon="📊"
+        tips={[
+          'Use the time filter to see patterns across different periods',
+          'Search by artist to see every day they soundtracked your life',
+          'AI Insights appear automatically after 10+ entries',
+        ]}
+      />
 
       {/* Filter */}
       <div className="flex justify-center mb-6 sm:mb-8">

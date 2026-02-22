@@ -36,12 +36,12 @@ export default function ValueProp2Screen({ onContinue }: ValueProp2ScreenProps) 
 
         {/* Body */}
         <p className="text-lg text-text/70 mb-12 text-center leading-relaxed">
-          Our AI finds patterns you'd never notice. Rediscover how your musical taste evolves with your life.
+          Discover patterns you didn't even know existed. Keep logging to get a real 'Wrapped'.
         </p>
       </div>
 
       {/* Progress indicator */}
-      <ProgressDots totalSteps={5} currentStep={2} className="mb-8" />
+      <ProgressDots totalSteps={13} currentStep={2} className="mb-8" />
 
       {/* Continue button */}
       <div className="w-full max-w-sm mx-auto pb-8">
@@ -55,5 +55,6 @@ export default function ValueProp2Screen({ onContinue }: ValueProp2ScreenProps) 
     </div>
   )
 }
+
 
 

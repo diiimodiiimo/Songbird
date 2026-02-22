@@ -61,3 +61,4 @@ export function getScriptSupabase(): SupabaseClient {
   return _client
 }
 
+

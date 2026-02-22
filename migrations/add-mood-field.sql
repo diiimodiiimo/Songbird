@@ -8,3 +8,4 @@ COMMENT ON COLUMN entries.mood IS 'Emoji mood tag for the entry (e.g., ðŸ˜Š, ðŸ˜
 
 
 
+

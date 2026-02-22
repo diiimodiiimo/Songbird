@@ -34,7 +34,7 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
   return response.json();
 }
 
-// Typed API functions
+// ─── Type Definitions ───────────────────────────────────────────────────────
 
 export interface UserProfile {
   id: string;
@@ -45,6 +45,9 @@ export interface UserProfile {
   bio?: string;
   inviteCode?: string;
   onboardingCompletedAt?: string;
+  gender?: string;
+  favoriteArtists?: string[];
+  favoriteSongs?: Array<{ songTitle: string; artist: string }>;
 }
 
 export interface Entry {
@@ -57,6 +60,32 @@ export interface Entry {
   trackId?: string;
   notes?: string;
   vibes?: string[];
+  mood?: string;
+  people?: Array<{ id: string; name: string }>;
+  mentionedUsers?: Array<{ id: string; name: string; email: string }>;
+}
+
+export interface FeedEntry extends Entry {
+  user?: {
+    id?: string;
+    name?: string;
+    username?: string;
+    image?: string;
+  };
+  vibeCount?: number;
+  commentCount?: number;
+}
+
+export interface Comment {
+  id: string;
+  text: string;
+  createdAt: string;
+  user: {
+    id: string;
+    name?: string;
+    username?: string;
+    image?: string;
+  };
 }
 
 export interface SuggestedUser {
@@ -82,8 +111,142 @@ export interface SpotifyTrack {
   release_date?: string;
 }
 
+export interface Friend {
+  id: string;
+  email: string;
+  name: string | null;
+  username: string | null;
+  image: string | null;
+}
+
+export interface FriendRequest {
+  id: string;
+  status: string;
+  sender: {
+    id: string;
+    email: string;
+    name: string | null;
+    image: string | null;
+  };
+  receiver: {
+    id: string;
+    email: string;
+    name: string | null;
+    image: string | null;
+  };
+  createdAt: string;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  relatedId: string | null;
+  read: boolean;
+  createdAt: string;
+  relatedData: any;
+}
+
+export interface NotificationPreferences {
+  notificationsEnabled: boolean;
+  pushNotificationsEnabled: boolean;
+  reminderTime: number;
+  reminderEnabled: boolean;
+  notifyOnVibe: boolean;
+  notifyOnComment: boolean;
+  notifyOnMention: boolean;
+  notifyOnFriendRequest: boolean;
+  notifyOnFriendAccepted: boolean;
+  notifyOnThisDay: boolean;
+}
+
+export interface LeaderboardData {
+  topArtists: Array<{ artist: string; count: number }>;
+  topSongs: Array<{ songTitle: string; artist: string; albumArt: string | null; count: number }>;
+  stats: {
+    totalUsers: number;
+    totalEntries: number;
+    timeFilter: string;
+  };
+}
+
+export interface GlobalSOTD {
+  songTitle: string;
+  artist: string;
+  albumTitle: string;
+  albumArt: string | null;
+  trackId: string;
+  count: number;
+  date: string;
+  firstLoggedBy: {
+    username: string | null;
+    name: string | null;
+  } | null;
+}
+
+export interface PublicProfile {
+  username: string;
+  name: string;
+  email: string;
+  image: string | null;
+  bio: string | null;
+  favoriteArtists: string[];
+  favoriteSongs: Array<{ songTitle: string; artist: string }>;
+  stats: {
+    totalEntries: number;
+    friendsCount: number;
+  };
+}
+
+export interface FriendshipStatus {
+  isOwnProfile: boolean;
+  isFriend: boolean;
+  hasPendingRequest: boolean;
+  requestDirection: 'sent' | 'received' | null;
+  requestId?: string;
+}
+
+export interface BlockedUser {
+  id: string;
+  username: string | null;
+  name: string | null;
+  image: string | null;
+  blockedAt: string;
+}
+
+export interface Milestone {
+  type: string;
+  headline: string;
+  body: string;
+  icon: string;
+  reward?: {
+    icon: string;
+    text: string;
+  };
+}
+
+export interface BirdStatus {
+  birdId: string;
+  isUnlocked: boolean;
+  progress?: {
+    current: number;
+    required: number;
+    percentage: number;
+    label: string;
+  };
+  unlockCondition?: string;
+}
+
+export interface SubscriptionInfo {
+  isPremium: boolean;
+  isFoundingMember: boolean;
+  stripeCustomerId: string | null;
+  subscriptionTier: string | null;
+}
+
+// ─── API Functions ───────────────────────────────────────────────────────────
+
 export const api = {
-  // Profile
+  // ── Profile ──────────────────────────────────────────────────────────────
   getProfile: (token: string) =>
     apiFetch<{ user: UserProfile }>('/api/profile', { token }),
 
@@ -94,11 +257,11 @@ export const api = {
       token,
     }),
 
-  // Username
+  // ── Username ─────────────────────────────────────────────────────────────
   checkUsername: (username: string) =>
     apiFetch<{ available: boolean }>(`/api/username/check?username=${encodeURIComponent(username)}`),
 
-  // Entries
+  // ── Entries ──────────────────────────────────────────────────────────────
   getEntries: (token: string, page = 1, pageSize = 20) =>
     apiFetch<{ entries: Entry[]; total: number }>(`/api/entries?page=${page}&pageSize=${pageSize}`, { token }),
 
@@ -106,7 +269,7 @@ export const api = {
     apiFetch<{ entry: Entry | null }>('/api/today-data', { token }),
 
   createEntry: (token: string, data: Partial<Entry>) =>
-    apiFetch<{ entry: Entry }>('/api/entries', {
+    apiFetch<{ entry: Entry; milestone?: Milestone }>('/api/entries', {
       method: 'POST',
       body: JSON.stringify(data),
       token,
@@ -119,19 +282,26 @@ export const api = {
       token,
     }),
 
-  // Songs
+  deleteEntry: (token: string, id: string) =>
+    apiFetch(`/api/entries/${id}`, { method: 'DELETE', token }),
+
+  // ── Songs ────────────────────────────────────────────────────────────────
   searchSongs: (query: string) =>
     apiFetch<{ tracks: SpotifyTrack[] }>(`/api/songs/search?q=${encodeURIComponent(query)}`),
 
-  // Feed
+  // ── Feed ─────────────────────────────────────────────────────────────────
   getFeed: (token: string, page = 1) =>
-    apiFetch<{ entries: Entry[]; hasMore: boolean }>(`/api/feed?page=${page}`, { token }),
+    apiFetch<{ entries: FeedEntry[]; hasMore: boolean }>(`/api/feed?page=${page}`, { token }),
 
-  // On This Day
-  getOnThisDay: (token: string) =>
-    apiFetch<{ memories: Entry[] }>('/api/on-this-day', { token }),
+  // ── On This Day ──────────────────────────────────────────────────────────
+  getOnThisDay: (token: string, date?: string) =>
+    apiFetch<{ memories: Entry[] }>(`/api/on-this-day${date ? `?date=${date}` : ''}`, { token }),
 
-  // Analytics
+  // ── Streak ───────────────────────────────────────────────────────────────
+  getStreak: (token: string) =>
+    apiFetch<{ currentStreak: number; longestStreak: number }>('/api/streak', { token }),
+
+  // ── Analytics ────────────────────────────────────────────────────────────
   getAnalytics: (token: string, year?: number) =>
     apiFetch<{ analytics: any }>(`/api/analytics${year ? `?year=${year}` : ''}`, { token }),
 
@@ -142,22 +312,64 @@ export const api = {
       token,
     }),
 
-  // Onboarding
+  // ── Onboarding ───────────────────────────────────────────────────────────
   completeOnboarding: (token: string) =>
     apiFetch('/api/onboarding/complete', { method: 'POST', token }),
 
-  // Friends
+  // ── Friends ──────────────────────────────────────────────────────────────
   getFriends: (token: string) =>
-    apiFetch<{ friends: any[] }>('/api/friends/list', { token }),
+    apiFetch<{ friends: Friend[] }>('/api/friends/list', { token }),
 
   getFriendRequests: (token: string) =>
-    apiFetch<{ received: any[]; sent: any[] }>('/api/friends/requests', { token }),
+    apiFetch<{ requests: FriendRequest[] }>('/api/friends/requests?type=all', { token }),
 
-  // Notifications
-  getNotifications: (token: string) =>
-    apiFetch<{ notifications: any[] }>('/api/notifications', { token }),
+  sendFriendRequest: (token: string, receiverUsername: string) =>
+    apiFetch<{ request: FriendRequest }>('/api/friends/requests', {
+      method: 'POST',
+      body: JSON.stringify({ receiverUsername }),
+      token,
+    }),
 
-  // Vibes
+  respondToFriendRequest: (token: string, requestId: string, action: 'accept' | 'decline') =>
+    apiFetch(`/api/friends/requests/${requestId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ action }),
+      token,
+    }),
+
+  getFriendsToday: (token: string) =>
+    apiFetch<{ friends: any[] }>('/api/friends/today', { token }),
+
+  // ── Notifications ────────────────────────────────────────────────────────
+  getNotifications: (token: string, unreadOnly = false) =>
+    apiFetch<{ notifications: Notification[] }>(`/api/notifications?unreadOnly=${unreadOnly}`, { token }),
+
+  markNotificationsRead: (token: string, notificationIds: string[]) =>
+    apiFetch('/api/notifications', {
+      method: 'PATCH',
+      body: JSON.stringify({ notificationIds }),
+      token,
+    }),
+
+  getNotificationPreferences: (token: string) =>
+    apiFetch<{ preferences: NotificationPreferences }>('/api/notifications/preferences', { token }),
+
+  updateNotificationPreferences: (token: string, data: Partial<NotificationPreferences>) =>
+    apiFetch('/api/notifications/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  // ── Push Notifications ───────────────────────────────────────────────────
+  subscribePush: (token: string, pushToken: string) =>
+    apiFetch('/api/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ pushToken, platform: 'expo' }),
+      token,
+    }),
+
+  // ── Vibes ────────────────────────────────────────────────────────────────
   addVibe: (token: string, entryId: string, emoji: string) =>
     apiFetch('/api/vibes', {
       method: 'POST',
@@ -165,7 +377,21 @@ export const api = {
       token,
     }),
 
-  // Invites
+  // ── Comments ─────────────────────────────────────────────────────────────
+  getComments: (token: string, entryId: string) =>
+    apiFetch<{ comments: Comment[] }>(`/api/comments?entryId=${entryId}`, { token }),
+
+  addComment: (token: string, entryId: string, text: string) =>
+    apiFetch<{ comment: Comment }>('/api/comments', {
+      method: 'POST',
+      body: JSON.stringify({ entryId, text }),
+      token,
+    }),
+
+  // ── Invites ──────────────────────────────────────────────────────────────
+  getInviteInfo: (token: string) =>
+    apiFetch<{ personalCode: string; inviteUrl: string }>('/api/invites', { token }),
+
   validateInvite: (code: string) =>
     apiFetch<{ valid: boolean; invite?: any }>(`/api/invites/validate?code=${code}`),
 
@@ -176,8 +402,92 @@ export const api = {
       token,
     }),
 
-  // Suggested Users (sorted by mutual friends)
+  // ── User Profiles (public) ───────────────────────────────────────────────
+  getUserProfile: (token: string, username: string) =>
+    apiFetch<PublicProfile>(`/api/users/${encodeURIComponent(username)}`, { token }),
+
+  getFriendshipStatus: (token: string, username: string) =>
+    apiFetch<FriendshipStatus>(`/api/users/${encodeURIComponent(username)}/friendship`, { token }),
+
+  searchUsers: (token: string, query: string) =>
+    apiFetch<{ users: SuggestedUser[] }>(`/api/users/search?q=${encodeURIComponent(query)}`, { token }),
+
   getSuggestedUsers: (token: string, limit = 20) =>
     apiFetch<{ users: SuggestedUser[] }>(`/api/users/suggested?limit=${limit}`, { token }),
-};
 
+  // ── Block / Report ───────────────────────────────────────────────────────
+  blockUser: (token: string, userId: string) =>
+    apiFetch('/api/users/block', {
+      method: 'POST',
+      body: JSON.stringify({ blockedUserId: userId }),
+      token,
+    }),
+
+  unblockUser: (token: string, userId: string) =>
+    apiFetch('/api/users/block', {
+      method: 'DELETE',
+      body: JSON.stringify({ blockedUserId: userId }),
+      token,
+    }),
+
+  getBlockedUsers: (token: string) =>
+    apiFetch<{ blockedUsers: BlockedUser[] }>('/api/users/block', { token }),
+
+  reportContent: (token: string, data: {
+    type: 'user' | 'entry' | 'comment';
+    reportedUserId?: string;
+    reportedEntryId?: string;
+    reportedCommentId?: string;
+    reason: string;
+    description?: string;
+  }) =>
+    apiFetch('/api/reports', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  // ── Leaderboard ──────────────────────────────────────────────────────────
+  getLeaderboard: (timeFilter: 'all' | 'year' | 'month' | 'week' = 'all') =>
+    apiFetch<LeaderboardData>(`/api/leaderboard?time=${timeFilter}`),
+
+  getGlobalSOTD: () =>
+    apiFetch<{ globalSOTD: GlobalSOTD | null }>('/api/global-sotd'),
+
+  // ── Milestones ───────────────────────────────────────────────────────────
+  getMilestones: (token: string) =>
+    apiFetch<{ milestones: Milestone[] }>('/api/milestones', { token }),
+
+  // ── Birds / Aviary ───────────────────────────────────────────────────────
+  getBirds: (token: string) =>
+    apiFetch<{ birds: any[] }>('/api/birds', { token }),
+
+  getBirdStatuses: (token: string) =>
+    apiFetch<{ birds: BirdStatus[] }>('/api/birds/status', { token }),
+
+  getAviary: (token: string) =>
+    apiFetch<{ aviary: any }>('/api/aviary', { token }),
+
+  // ── Subscription / Premium ───────────────────────────────────────────────
+  getSubscription: (token: string) =>
+    apiFetch<SubscriptionInfo>('/api/user/subscription', { token }),
+
+  getUserUsage: (token: string) =>
+    apiFetch<{ usage: any }>('/api/user/usage', { token }),
+
+  // ── Account ──────────────────────────────────────────────────────────────
+  deleteAccount: (token: string) =>
+    apiFetch('/api/user/delete', { method: 'DELETE', token }),
+
+  // ── Mentions ─────────────────────────────────────────────────────────────
+  getMentions: (token: string) =>
+    apiFetch<{ mentions: any[] }>('/api/mentions', { token }),
+
+  // ── Song Associations ────────────────────────────────────────────────────
+  getSongAssociations: (token: string) =>
+    apiFetch<{ associations: any[] }>('/api/song-associations', { token }),
+
+  // ── Artist Search (for images) ───────────────────────────────────────────
+  searchArtists: (name: string) =>
+    apiFetch<{ image: string | null }>(`/api/artists/search?name=${encodeURIComponent(name)}`),
+};

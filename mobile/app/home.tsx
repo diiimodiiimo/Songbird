@@ -1,91 +1,52 @@
-// Home page - Sign in/Sign up (matches web app/home/page.tsx)
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { useState, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth, useUser } from '../lib/auth';
-import { useSignIn, useSignUp } from '@clerk/clerk-expo';
+import { useOAuth } from '@clerk/clerk-expo';
 import * as WebBrowser from 'expo-web-browser';
-import { useWarmUpBrowser } from '../lib/useWarmUpBrowser';
-import { colors, fontSize, spacing, borderRadius } from '../lib/theme';
+import * as Linking from 'expo-linking';
+import { colors, fontSize, spacing, borderRadius, defaultBirdImage } from '../lib/theme';
 
-// Warm up browser for OAuth
 WebBrowser.maybeCompleteAuthSession();
 
 export default function HomePage() {
-  useWarmUpBrowser();
   const { isLoaded, isSignedIn, signOut } = useAuth();
   const { user } = useUser();
   const router = useRouter();
-  const { signIn, setActive: setSignInActive } = useSignIn();
-  const { signUp, setActive: setSignUpActive } = useSignUp();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSignIn = async () => {
-    if (!signIn) return;
+  const { startOAuthFlow: startGoogleOAuth } = useOAuth({ strategy: 'oauth_google' });
+  const { startOAuthFlow: startAppleOAuth } = useOAuth({ strategy: 'oauth_apple' });
 
+  const handleOAuth = useCallback(async (provider: 'google' | 'apple') => {
+    setLoading(true);
+    setError(null);
     try {
-      // For now, use OAuth with Google
-      // This mirrors Clerk's modal behavior on web
-      const redirectUrl = 'songbird://oauth-callback';
+      const startFlow = provider === 'google' ? startGoogleOAuth : startAppleOAuth;
 
-      await signIn.create({
-        strategy: 'oauth_google',
-        redirectUrl,
+      const { createdSessionId, setActive } = await startFlow({
+        redirectUrl: Linking.createURL('/', { scheme: 'songbird' }),
       });
 
-      const { externalVerificationRedirectURL } = signIn.firstFactorVerification;
-
-      if (externalVerificationRedirectURL) {
-        const result = await WebBrowser.openAuthSessionAsync(
-          externalVerificationRedirectURL.toString(),
-          redirectUrl
-        );
-
-        if (result.type === 'success') {
-          // Complete the sign in
-          if (signIn.status === 'complete') {
-            await setSignInActive({ session: signIn.createdSessionId });
-            router.replace('/');
-          }
-        }
+      if (createdSessionId && setActive) {
+        await setActive({ session: createdSessionId });
+        router.replace('/');
       }
-    } catch (err) {
-      console.error('Sign in error:', err);
-    }
-  };
-
-  const handleSignUp = async () => {
-    if (!signUp) return;
-
-    try {
-      const redirectUrl = 'songbird://oauth-callback';
-
-      await signUp.create({
-        strategy: 'oauth_google',
-        redirectUrl,
-      });
-
-      const { externalVerificationRedirectURL } = signUp.verifications.externalAccount;
-
-      if (externalVerificationRedirectURL) {
-        const result = await WebBrowser.openAuthSessionAsync(
-          externalVerificationRedirectURL.toString(),
-          redirectUrl
-        );
-
-        if (result.type === 'success') {
-          if (signUp.status === 'complete') {
-            await setSignUpActive({ session: signUp.createdSessionId });
-            router.replace('/welcome');
-          }
-        }
+    } catch (err: any) {
+      console.error(`${provider} OAuth error:`, err);
+      if (err?.errors?.[0]?.message) {
+        setError(err.errors[0].message);
+      } else {
+        setError('Sign in failed. Please try again.');
       }
-    } catch (err) {
-      console.error('Sign up error:', err);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [startGoogleOAuth, startAppleOAuth, router]);
 
   const handleSignOut = async () => {
     await signOut();
-    // Stay on home page after sign out
   };
 
   const handleGoToDashboard = () => {
@@ -95,7 +56,7 @@ export default function HomePage() {
   if (!isLoaded) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading...</Text>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -103,41 +64,70 @@ export default function HomePage() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          {/* TODO: Add actual bird logo image */}
-          <View style={styles.logoPlaceholder}>
-            <Text style={styles.logoEmoji}>🐦</Text>
-          </View>
-        </View>
+        {/* Real bird logo */}
+        <Image
+          source={defaultBirdImage}
+          style={styles.logo}
+          resizeMode="contain"
+        />
 
         {/* App Name */}
         <Text style={styles.title}>SongBird</Text>
         <Text style={styles.subtitle}>Your personal music journal</Text>
 
-        {/* Auth Buttons */}
+        {/* Error message */}
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
         {isSignedIn ? (
           <View style={styles.buttonContainer}>
             <Text style={styles.signedInText}>
-              You are currently signed in. Sign out to use a different account.
+              Welcome back, {user?.firstName || 'friend'}!
             </Text>
-            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-              <Text style={styles.signOutButtonText}>Sign Out</Text>
+            <TouchableOpacity style={styles.primaryButton} onPress={handleGoToDashboard}>
+              <Text style={styles.primaryButtonText}>Go to Dashboard</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.dashboardButton} onPress={handleGoToDashboard}>
-              <Text style={styles.dashboardButtonText}>Go to Dashboard</Text>
+            <TouchableOpacity style={styles.outlineButton} onPress={handleSignOut}>
+              <Text style={styles.outlineButtonText}>Sign Out</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.signInButton} onPress={handleSignIn}>
-              <Text style={styles.signInButtonText}>Sign In</Text>
+            {/* Google Sign In */}
+            <TouchableOpacity
+              style={[styles.primaryButton, loading && styles.disabledButton]}
+              onPress={() => handleOAuth('google')}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color={colors.bg} />
+              ) : (
+                <Text style={styles.primaryButtonText}>Continue with Google</Text>
+              )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.signUpButton} onPress={handleSignUp}>
-              <Text style={styles.signUpButtonText}>Create Account</Text>
+
+            {/* Apple Sign In */}
+            <TouchableOpacity
+              style={[styles.outlineButton, loading && styles.disabledButton]}
+              onPress={() => handleOAuth('apple')}
+              disabled={loading}
+            >
+              <Text style={styles.outlineButtonText}>Continue with Apple</Text>
             </TouchableOpacity>
+
+            <Text style={styles.termsText}>
+              By continuing, you agree to our Terms of Service and Privacy Policy
+            </Text>
           </View>
         )}
+      </View>
+
+      {/* Spotify attribution */}
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>Powered by Spotify</Text>
       </View>
     </View>
   );
@@ -156,97 +146,93 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     alignItems: 'center',
   },
-  logoContainer: {
-    marginBottom: spacing.lg,
-  },
-  logoPlaceholder: {
+  logo: {
     width: 200,
     height: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoEmoji: {
-    fontSize: 120,
+    marginBottom: spacing.lg,
   },
   title: {
     fontSize: fontSize.display,
     fontWeight: 'bold',
     color: colors.text,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
+    fontFamily: 'serif',
   },
   subtitle: {
     fontSize: fontSize.xl,
     color: colors.textMuted,
     marginBottom: spacing.xxl,
   },
-  loadingText: {
+  errorContainer: {
+    backgroundColor: colors.error + '1A',
+    borderWidth: 1,
+    borderColor: colors.error + '4D',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    width: '100%',
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: fontSize.sm,
+    textAlign: 'center',
+  },
+  signedInText: {
     color: colors.text,
-    fontSize: fontSize.md,
+    fontSize: fontSize.lg,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
   },
   buttonContainer: {
     width: '100%',
     gap: spacing.md,
   },
-  signedInText: {
-    color: colors.textMuted,
-    fontSize: fontSize.md,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  signInButton: {
-    backgroundColor: colors.accent,
+  primaryButton: {
+    backgroundColor: colors.primary,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
     width: '100%',
+    alignItems: 'center',
   },
-  signInButtonText: {
-    color: colors.bg,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  signUpButton: {
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    borderColor: colors.accent,
-    width: '100%',
-  },
-  signUpButtonText: {
-    color: colors.accent,
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  signOutButton: {
-    backgroundColor: colors.error,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.lg,
-    width: '100%',
-  },
-  signOutButtonText: {
+  primaryButtonText: {
     color: colors.text,
     fontSize: fontSize.lg,
     fontWeight: '600',
     textAlign: 'center',
   },
-  dashboardButton: {
+  outlineButton: {
     backgroundColor: colors.surface,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
     borderWidth: 2,
-    borderColor: colors.accent,
+    borderColor: colors.primary,
     width: '100%',
+    alignItems: 'center',
   },
-  dashboardButtonText: {
+  outlineButtonText: {
     color: colors.accent,
     fontSize: fontSize.lg,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  termsText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    lineHeight: 18,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: spacing.xxl,
+  },
+  footerText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
   },
 });

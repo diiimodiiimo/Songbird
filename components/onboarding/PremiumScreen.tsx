@@ -14,9 +14,9 @@ export default function PremiumScreen({ onContinue, onSkip }: PremiumScreenProps
   const router = useRouter()
   const [isFoundingMember, setIsFoundingMember] = useState(false)
   const [foundingMembersCount, setFoundingMembersCount] = useState(0)
+  const [foundingSlotsTotal, setFoundingSlotsTotal] = useState(500)
 
   useEffect(() => {
-    // Check if user is a founding member
     fetch('/api/profile')
       .then(res => res.json())
       .then(data => {
@@ -26,18 +26,17 @@ export default function PremiumScreen({ onContinue, onSkip }: PremiumScreenProps
       })
       .catch(() => {})
 
-    // Fetch founding members count
-    fetch('/api/premium/founding-count')
+    fetch('/api/waitlist/stats')
       .then(res => res.json())
       .then(data => {
-        if (data.count !== undefined) {
-          setFoundingMembersCount(data.count)
+        if (data.foundingMembers !== undefined) {
+          setFoundingMembersCount(data.foundingMembers)
+        }
+        if (data.foundingSlotsTotal !== undefined) {
+          setFoundingSlotsTotal(data.foundingSlotsTotal)
         }
       })
-      .catch(() => {
-        // Fallback to placeholder if API doesn't exist yet
-        setFoundingMembersCount(127)
-      })
+      .catch(() => {})
   }, [])
 
   return (
@@ -68,12 +67,12 @@ export default function PremiumScreen({ onContinue, onSkip }: PremiumScreenProps
           {/* Counter */}
           <div className="mt-4">
             <div className="text-center text-sm text-text/70 mb-2">
-              {500 - foundingMembersCount} of 500 spots remaining
+              {foundingSlotsTotal - foundingMembersCount} of {foundingSlotsTotal} spots remaining
             </div>
             <div className="w-full bg-bg rounded-full h-2">
               <div 
                 className="bg-accent h-2 rounded-full transition-all"
-                style={{ width: `${Math.min(100, (foundingMembersCount / 500) * 100)}%` }}
+                style={{ width: `${Math.min(100, (foundingMembersCount / foundingSlotsTotal) * 100)}%` }}
               />
             </div>
           </div>
@@ -174,12 +173,12 @@ export default function PremiumScreen({ onContinue, onSkip }: PremiumScreenProps
 
         {/* Small Print */}
         <p className="text-xs text-text/40 text-center mt-4">
-          After 500 members, price increases to $29.99/year subscription
+          After {foundingSlotsTotal} members, price increases to $29.99/year subscription
         </p>
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={13} currentStep={12} className="pb-8" />
+      <ProgressDots totalSteps={13} currentStep={11} className="pb-8" />
     </div>
   )
 }

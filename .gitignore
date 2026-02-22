@@ -50,3 +50,9 @@ next-env.d.ts
 
 # google credentials (contains secrets)
 google-credentials.json
+
+# Capacitor - ios/ and android/ are tracked for native config
+# but build artifacts are ignored
+ios/App/App/public/
+ios/App/Pods/
+ios/capacitor-cordova-ios-plugins/

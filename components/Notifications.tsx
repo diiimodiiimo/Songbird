@@ -129,7 +129,9 @@ export default function Notifications() {
     } else if (notification.type === 'vibe') {
       const entry = notification.relatedData
       if (entry) {
-        return `Someone vibed to "${entry.songTitle}"`
+        const viber = entry.vibeUser
+        const viberName = viber?.name || viber?.username || viber?.email || 'Someone'
+        return `${viberName} vibed to "${entry.songTitle}"`
       }
       return 'Someone vibed to your song!'
     } else if (notification.type === 'comment') {
@@ -175,10 +177,19 @@ export default function Notifications() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
+  const handleBellClick = () => {
+    const wasOpen = isOpen
+    setIsOpen(!isOpen)
+    if (!wasOpen && unreadCount > 0) {
+      const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id)
+      markAsRead(unreadIds)
+    }
+  }
+
   return (
     <div className="relative">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleBellClick}
         className="relative p-2 sm:px-3 sm:py-2 bg-surface border border-text/20 rounded-lg hover:bg-surface/80 transition-colors"
       >
         <span className="text-sm sm:text-base">🔔</span>

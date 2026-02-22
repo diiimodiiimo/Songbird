@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { colors, fontSize, spacing, borderRadius } from '../../lib/theme';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Image } from 'react-native';
+import { colors, fontSize, spacing, borderRadius, defaultBirdImage } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuthToken } from '../../lib/auth';
 import ProgressDots from './ProgressDots';
@@ -79,7 +79,7 @@ export default function CompletionScreen({ onComplete, isTutorialMode = false }:
       <View style={styles.content}>
         {/* Celebrating bird */}
         <Animated.View style={[styles.birdContainer, { transform: [{ scale: scaleAnim }] }]}>
-          <Text style={styles.birdEmoji}>🐦</Text>
+          <Image source={defaultBirdImage} style={styles.birdImage} resizeMode="contain" />
         </Animated.View>
 
         {/* Headline */}
@@ -158,8 +158,9 @@ const styles = StyleSheet.create({
   birdContainer: {
     marginBottom: spacing.xl,
   },
-  birdEmoji: {
-    fontSize: 140,
+  birdImage: {
+    width: 160,
+    height: 160,
   },
   title: {
     fontSize: fontSize.display,

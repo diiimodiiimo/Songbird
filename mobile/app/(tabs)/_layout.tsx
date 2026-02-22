@@ -2,8 +2,8 @@ import { Tabs } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../lib/theme';
+import AppHeader from '../../components/AppHeader';
 
-// Tab bar icon component
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
@@ -16,7 +16,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
+        header: () => <AppHeader />,
         tabBarStyle: {
           backgroundColor: colors.card + 'F2', // 95% opacity
           borderTopColor: colors.border,
@@ -86,6 +87,19 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name={focused ? 'person' : 'person-outline'} color={color} focused={focused} />
           ),
+        }}
+      />
+      {/* Hidden tabs - accessible via navigation but not shown in tab bar */}
+      <Tabs.Screen
+        name="friends"
+        options={{
+          href: null, // hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="leaderboard"
+        options={{
+          href: null, // hide from tab bar
         }}
       />
     </Tabs>

@@ -12,7 +12,7 @@ import {
   Platform,
   Animated,
 } from 'react-native';
-import { colors, fontSize, spacing, borderRadius } from '../../lib/theme';
+import { colors, fontSize, spacing, borderRadius, defaultBirdImage } from '../../lib/theme';
 import { api, SpotifyTrack } from '../../lib/api';
 import { useAuthToken } from '../../lib/auth';
 import ProgressDots from './ProgressDots';
@@ -126,7 +126,7 @@ export default function FirstEntryScreen({ onContinue, onSkip }: FirstEntryScree
     return (
       <View style={styles.successContainer}>
         <View style={styles.birdContainer}>
-          <Text style={styles.birdEmoji}>🐦</Text>
+          <Image source={defaultBirdImage} style={styles.birdImage} resizeMode="contain" />
         </View>
         <Text style={styles.successTitle}>Got it!</Text>
         <Text style={styles.successText}>Your first memory is saved ♪</Text>
@@ -151,7 +151,7 @@ export default function FirstEntryScreen({ onContinue, onSkip }: FirstEntryScree
             activeOpacity={0.8}
           >
             <Animated.View style={styles.birdPulse}>
-              <Text style={styles.largeBirdEmoji}>🐦</Text>
+              <Image source={defaultBirdImage} style={styles.largeBirdImage} resizeMode="contain" />
             </Animated.View>
           </TouchableOpacity>
 
@@ -353,8 +353,9 @@ const styles = StyleSheet.create({
   birdPulse: {
     // Add animation later
   },
-  largeBirdEmoji: {
-    fontSize: 140,
+  largeBirdImage: {
+    width: 160,
+    height: 160,
   },
   tapHint: {
     fontSize: fontSize.sm,
@@ -557,8 +558,9 @@ const styles = StyleSheet.create({
   birdContainer: {
     marginBottom: spacing.lg,
   },
-  birdEmoji: {
-    fontSize: 120,
+  birdImage: {
+    width: 120,
+    height: 120,
   },
   successTitle: {
     fontSize: fontSize.xxl,

@@ -507,3 +507,4 @@ Domain purchase is critical and cheap. Do it now. Trademark is important but can
 *Remember: Execution > IP protection. Focus on building a great product, but protect your brand name with a domain and trademark.*
 
 
+

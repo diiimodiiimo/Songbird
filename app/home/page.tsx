@@ -1,34 +1,36 @@
 'use client'
 
+import { Suspense, useEffect } from 'react'
 import { useUser, SignOutButton } from '@clerk/nextjs'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { SignInButton, SignUpButton } from '@clerk/nextjs'
 import { useTheme } from '@/lib/theme'
 
-export default function HomePage() {
+function HomeContent() {
   const { isSignedIn, isLoaded } = useUser()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { currentTheme } = useTheme()
 
-  // Check if waitlist mode is enabled and redirect if needed
+  const inviteCode = searchParams.get('invite') || ''
+
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
-      // Check waitlist mode (client-side check via API)
-      fetch('/api/waitlist/check')
+      const checkUrl = inviteCode
+        ? `/api/waitlist/check?code=${encodeURIComponent(inviteCode)}`
+        : '/api/waitlist/check'
+
+      fetch(checkUrl)
         .then(res => res.json())
         .then(data => {
-          // If waitlist is required and user doesn't have invite code, redirect
-          if (data.reason === 'waitlist_required') {
+          if (data.reason === 'waitlist_required' && !data.bypassWaitlist) {
             router.push('/waitlist')
           }
         })
-        .catch(() => {
-          // If API fails, continue with normal flow
-        })
+        .catch(() => {})
     }
-  }, [isLoaded, isSignedIn, router])
+  }, [isLoaded, isSignedIn, router, inviteCode])
 
   if (!isLoaded) {
     return (
@@ -41,7 +43,6 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-4">
       <div className="text-center space-y-8 max-w-md">
-        {/* Logo - Uses current theme's bird */}
         <div className="flex justify-center mb-8">
           <Image
             src={currentTheme.birdLogo}
@@ -53,7 +54,6 @@ export default function HomePage() {
           />
         </div>
 
-        {/* App Name */}
         <h1 className="text-5xl sm:text-6xl font-bold text-text mb-4">
           SongBird
         </h1>
@@ -61,7 +61,6 @@ export default function HomePage() {
           Your personal music journal
         </p>
 
-        {/* Show different content based on auth state */}
         {isSignedIn ? (
           <div className="space-y-4">
             <p className="text-text/60 mb-4">
@@ -95,5 +94,19 @@ export default function HomePage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-bg flex items-center justify-center">
+          <div className="text-text">Loading...</div>
+        </div>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   )
 }

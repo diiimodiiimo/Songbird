@@ -271,16 +271,45 @@ export default function YourBirds({ onSelectBird, compact = false }: YourBirdsPr
         ))}
       </div>
 
-      {/* Tips */}
-      <div className="bg-surface/50 rounded-xl p-4 text-center">
-        <p className="text-sm text-text/60">
-          💡 <span className="text-text/80">Keep logging songs</span> to unlock more birds!
-          Streaks and entry milestones unlock new themes.
+      {/* How to Unlock Birds */}
+      <div className="bg-surface/50 rounded-xl p-5">
+        <h3 className="font-semibold text-text text-sm mb-3 flex items-center gap-2">
+          <span>🗝️</span> How to Unlock Birds
+        </h3>
+        <div className="space-y-2.5 text-sm">
+          <div className="flex items-start gap-3 text-text/70">
+            <span className="text-base flex-shrink-0">🐣</span>
+            <div>
+              <span className="font-medium text-text">Starters</span> — American Robin and Northern Cardinal are yours from day one.
+            </div>
+          </div>
+          <div className="flex items-start gap-3 text-text/70">
+            <span className="text-base flex-shrink-0">🔥</span>
+            <div>
+              <span className="font-medium text-text">Streak Milestones</span> — Log songs consistently to unlock birds at 7, 14, 30, 50, 100, and 365 day streaks.
+            </div>
+          </div>
+          <div className="flex items-start gap-3 text-text/70">
+            <span className="text-base flex-shrink-0">📝</span>
+            <div>
+              <span className="font-medium text-text">Entry Milestones</span> — Reach total entry counts (50, 100, 500) to earn rarer birds.
+            </div>
+          </div>
+          <div className="flex items-start gap-3 text-text/70">
+            <span className="text-base flex-shrink-0">✨</span>
+            <div>
+              <span className="font-medium text-text">Premium</span> — Founding Flock members get all bird themes unlocked instantly.
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-text/50 mt-3">
+          Each bird has its own color palette that changes the entire app. Tap an unlocked bird to use it as your theme.
         </p>
       </div>
     </div>
   )
 }
+
 
 
 

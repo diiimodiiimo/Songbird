@@ -245,7 +245,7 @@ export default function OnboardingFlow() {
   }
 
   const handleFirstEntrySkip = () => {
-    setCurrentStep('social')
+    setCurrentStep('memories')
   }
 
   const handleMemoriesContinue = () => {
@@ -253,11 +253,7 @@ export default function OnboardingFlow() {
   }
 
   const handleFirstEntryCelebrationContinue = () => {
-    if (isTutorialMode) {
-      setCurrentStep('memories')
-    } else {
-      setCurrentStep('social')
-    }
+    setCurrentStep('memories')
   }
 
   const handleFirstEntryCelebrationViewEntry = () => {

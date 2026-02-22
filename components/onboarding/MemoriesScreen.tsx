@@ -95,7 +95,7 @@ export default function MemoriesScreen({ onContinue, hasFirstEntry }: MemoriesSc
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={12} currentStep={6} className="pb-8" />
+      <ProgressDots totalSteps={13} currentStep={8} className="pb-8" />
     </div>
   )
 }

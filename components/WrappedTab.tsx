@@ -328,10 +328,69 @@ export default function WrappedTab() {
   if (!wrappedData) {
     if (upgradeRequired) {
       return (
-        <div className="flex items-center justify-center min-h-[400px]">
+        <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+          {/* Blurred Wrapped preview */}
+          <div className="relative mb-8 rounded-2xl overflow-hidden">
+            <div className="blur-sm pointer-events-none select-none">
+              <div className="bg-gradient-to-br from-accent/30 to-primary/30 rounded-2xl p-8 text-center">
+                <h2 className="text-3xl font-bold text-text mb-2">SongBird Wrapped {currentYear}</h2>
+                <p className="text-text/60 mb-6">Your year in music</p>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="bg-surface/50 rounded-xl p-4">
+                    <div className="text-3xl font-bold text-accent">247</div>
+                    <div className="text-xs text-text/60">Songs Logged</div>
+                  </div>
+                  <div className="bg-surface/50 rounded-xl p-4">
+                    <div className="text-3xl font-bold text-accent">42</div>
+                    <div className="text-xs text-text/60">Day Streak</div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 bg-surface/30 rounded-lg p-3">
+                    <span className="text-lg">🥇</span>
+                    <div className="text-left">
+                      <div className="font-semibold text-sm">Top Artist</div>
+                      <div className="text-xs text-text/60">Your most-logged artist</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-surface/30 rounded-lg p-3">
+                    <span className="text-lg">🎵</span>
+                    <div className="text-left">
+                      <div className="font-semibold text-sm">Top Song</div>
+                      <div className="text-xs text-text/60">The song that defined your year</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-surface/30 rounded-lg p-3">
+                    <span className="text-lg">🌊</span>
+                    <div className="text-left">
+                      <div className="font-semibold text-sm">Seasonal Journey</div>
+                      <div className="text-xs text-text/60">How your taste evolved through the seasons</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-surface/30 rounded-lg p-3">
+                    <span className="text-lg">💭</span>
+                    <div className="text-left">
+                      <div className="font-semibold text-sm">Sentiment Analysis</div>
+                      <div className="text-xs text-text/60">The emotional tone of your notes</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="bg-bg/90 backdrop-blur-sm rounded-xl p-6 text-center max-w-sm mx-4 border border-accent/30">
+                <div className="text-3xl mb-3">🎁</div>
+                <h3 className="text-xl font-bold text-text mb-2">Your Wrapped Awaits</h3>
+                <p className="text-text/60 text-sm mb-4">
+                  See your top artists, seasonal trends, sentiment analysis, and more — all based on the songs you chose each day.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <UpgradePrompt
-            title="Wrapped is Premium"
-            message="Upgrade to premium to access your year-end music summary and insights."
+            title="Unlock Wrapped"
+            message="Upgrade to premium to see your personalized year-end music summary with interactive cards, sentiment analysis, and shareable stats."
           />
         </div>
       )

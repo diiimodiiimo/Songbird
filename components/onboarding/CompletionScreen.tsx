@@ -129,7 +129,7 @@ export default function CompletionScreen({ onComplete, isTutorialMode = false, t
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={12} currentStep={12} className="pb-8" />
+      <ProgressDots totalSteps={13} currentStep={12} className="pb-8" />
 
       {/* Float up animation style */}
       <style jsx>{`

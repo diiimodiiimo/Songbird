@@ -50,6 +50,15 @@ export function UpgradePrompt({
     )
   }
 
+  const premiumFeatures = [
+    { icon: '🐦', text: 'All bird themes unlocked' },
+    { icon: '📊', text: 'Full analytics & AI insights' },
+    { icon: '🎁', text: 'SongBird Wrapped — your year in music' },
+    { icon: '🎵', text: 'B-sides — log extra songs beyond your main SOTD' },
+    { icon: '👥', text: 'Unlimited friends' },
+    { icon: '📤', text: 'Data export' },
+  ]
+
   return (
     <div className="bg-gradient-to-br from-accent/20 to-accent/10 border-2 border-accent/40 rounded-xl p-6 md:p-8 text-center">
       <div className="mb-4 flex justify-center">
@@ -70,6 +79,17 @@ export function UpgradePrompt({
           </div>
         </div>
       )}
+      <div className="mb-5 max-w-sm mx-auto">
+        <h4 className="text-xs font-semibold text-text/50 uppercase tracking-wider mb-3">What you get</h4>
+        <div className="grid grid-cols-1 gap-1.5 text-left">
+          {premiumFeatures.map((f, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm text-text/70">
+              <span className="flex-shrink-0">{f.icon}</span>
+              <span>{f.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
         <Link
           href="/settings/premium"
@@ -87,5 +107,6 @@ export function UpgradePrompt({
     </div>
   )
 }
+
 
 

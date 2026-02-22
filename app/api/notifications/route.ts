@@ -78,15 +78,35 @@ export async function GET(request: Request) {
             }
           }
         } else if (notification.type === 'vibe' && notification.relatedId) {
-          // relatedId is the entryId for vibe notifications
           const { data: entry } = await supabase
             .from('entries')
             .select('id, songTitle, artist, date')
             .eq('id', notification.relatedId)
             .single()
           
+          // Find the vibe creator by looking up the most recent vibe on this entry
+          // created around the same time as the notification
+          const { data: vibe } = await supabase
+            .from('vibes')
+            .select('id, userId, createdAt')
+            .eq('entryId', notification.relatedId)
+            .lte('createdAt', new Date(new Date(notification.createdAt).getTime() + 5000).toISOString())
+            .order('createdAt', { ascending: false })
+            .limit(1)
+            .single()
+
+          let vibeUser = null
+          if (vibe) {
+            const { data: user } = await supabase
+              .from('users')
+              .select('id, email, name, image, username')
+              .eq('id', vibe.userId)
+              .single()
+            vibeUser = user
+          }
+
           if (entry) {
-            relatedData = entry
+            relatedData = { ...entry, vibeUser }
           }
         } else if (notification.type === 'comment' && notification.relatedId) {
           // relatedId is the commentId for comment notifications

@@ -16,9 +16,13 @@ CREATE TABLE IF NOT EXISTS "waitlist_entries" (
   "foundingFlockEligible" BOOLEAN NOT NULL DEFAULT true
 );
 
+-- Add stripeCustomerId column for pre-auth Founding Flock purchases
+ALTER TABLE "waitlist_entries" ADD COLUMN IF NOT EXISTS "stripeCustomerId" TEXT;
+
 -- Create indexes for waitlist_entries
 CREATE INDEX IF NOT EXISTS "waitlist_entries_email_idx" ON "waitlist_entries"("email");
 CREATE INDEX IF NOT EXISTS "waitlist_entries_referralCode_idx" ON "waitlist_entries"("referralCode");
 CREATE INDEX IF NOT EXISTS "waitlist_entries_joinedAt_idx" ON "waitlist_entries"("joinedAt");
+
 
 

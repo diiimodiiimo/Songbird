@@ -1,5 +1,5 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, fontSize, spacing, borderRadius } from '../../lib/theme';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { colors, fontSize, spacing, borderRadius, defaultBirdImage } from '../../lib/theme';
 import ProgressDots from './ProgressDots';
 
 interface MemoriesScreenProps {
@@ -59,7 +59,7 @@ export default function MemoriesScreen({ onContinue, hasFirstEntry }: MemoriesSc
 
         {/* Bird looking at memories */}
         <View style={styles.birdContainer}>
-          <Text style={styles.birdEmoji}>🐦</Text>
+          <Image source={defaultBirdImage} style={styles.birdImage} resizeMode="contain" />
         </View>
 
         {/* Personalized message */}
@@ -189,8 +189,9 @@ const styles = StyleSheet.create({
   birdContainer: {
     marginBottom: spacing.sm,
   },
-  birdEmoji: {
-    fontSize: 60,
+  birdImage: {
+    width: 80,
+    height: 80,
   },
   message: {
     fontSize: fontSize.sm,

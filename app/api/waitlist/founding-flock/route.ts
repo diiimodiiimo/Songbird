@@ -31,13 +31,20 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase()
 
-    // Check founding slots availability
-    const { count: foundingCount } = await supabase
+    // Check founding slots availability (count actual founding members + waitlist reservations)
+    const { count: userFoundingCount } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('isFoundingMember', true)
+
+    const { count: waitlistFoundingCount } = await supabase
       .from('waitlist_entries')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('foundingFlockEligible', true)
 
-    if ((foundingCount || 0) >= FOUNDING_FLOCK_LIMIT) {
+    const foundingCount = (userFoundingCount || 0) + (waitlistFoundingCount || 0)
+
+    if (foundingCount >= FOUNDING_FLOCK_LIMIT) {
       return NextResponse.json(
         { error: 'Founding Flock slots are full. Please join the regular waitlist.' },
         { status: 400 }

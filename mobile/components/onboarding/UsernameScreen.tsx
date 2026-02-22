@@ -8,8 +8,9 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
-import { colors, fontSize, spacing, borderRadius } from '../../lib/theme';
+import { colors, fontSize, spacing, borderRadius, defaultBirdImage } from '../../lib/theme';
 import { api } from '../../lib/api';
 import { useAuthToken } from '../../lib/auth';
 import ProgressDots from './ProgressDots';
@@ -116,7 +117,7 @@ export default function UsernameScreen({ onContinue, existingUsername }: Usernam
       <View style={styles.content}>
         {/* Bird */}
         <View style={styles.birdContainer}>
-          <Text style={styles.birdEmoji}>🐦</Text>
+          <Image source={defaultBirdImage} style={styles.birdImage} resizeMode="contain" />
         </View>
 
         {/* Headline */}
@@ -208,8 +209,9 @@ const styles = StyleSheet.create({
   birdContainer: {
     marginBottom: spacing.lg,
   },
-  birdEmoji: {
-    fontSize: 80,
+  birdImage: {
+    width: 100,
+    height: 100,
   },
   title: {
     fontSize: fontSize.xxxl,

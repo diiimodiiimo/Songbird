@@ -88,3 +88,4 @@ After running this migration:
 - Users who already have premium will be updated to have `isFoundingMember = true`
 
 
+

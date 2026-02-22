@@ -1,4 +1,4 @@
-// Today Tab - Main entry screen (matches web AddEntryTab.tsx)
+// Today Tab - Main entry screen (web TodayTab.tsx + mobile features combined)
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -12,11 +12,19 @@ import {
   RefreshControl,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, fontSize, spacing, borderRadius } from '../../lib/theme';
-import { api, SpotifyTrack, Entry } from '../../lib/api';
+import * as Haptics from 'expo-haptics';
+import { colors, fontSize, spacing, borderRadius, defaultBirdImage } from '../../lib/theme';
+import { api, apiFetch, SpotifyTrack, Entry, Milestone } from '../../lib/api';
 import { useAuth, useUser, useAuthToken } from '../../lib/auth';
+import ThemeBird from '../../components/ThemeBird';
+import MoodPicker from '../../components/MoodPicker';
+import MilestoneModal from '../../components/MilestoneModal';
+
+const { width: screenWidth } = Dimensions.get('window');
+const ALBUM_ART_SIZE = Math.min(screenWidth - spacing.lg * 4, 300);
 
 interface Track {
   id: string;
@@ -31,30 +39,65 @@ interface Track {
   uri: string;
 }
 
+interface MilestoneInfo {
+  type: string;
+  message: string;
+  achieved: boolean;
+  achievedDate?: string;
+  progress?: {
+    current: number;
+    target: number;
+    message: string;
+  };
+}
+
+interface MilestoneDataResponse {
+  milestones: MilestoneInfo[];
+  nextMilestone: MilestoneInfo | null;
+  stats: {
+    entryCount: number;
+    daysSinceFirst: number;
+  };
+}
+
+interface FriendToday {
+  id: string;
+  name: string;
+  image: string | null;
+}
+
 export default function TodayTab() {
   const { isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const { getToken } = useAuthToken();
 
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date] = useState(new Date().toISOString().split('T')[0]);
   const [query, setQuery] = useState('');
   const [tracks, setTracks] = useState<Track[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [notes, setNotes] = useState('');
+  const [mood, setMood] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [existingEntry, setExistingEntry] = useState<Entry | null>(null);
   const [checkingEntry, setCheckingEntry] = useState(true);
   const [showForm, setShowForm] = useState(false);
+
   const [currentStreak, setCurrentStreak] = useState(0);
   const [onThisDayEntries, setOnThisDayEntries] = useState<Entry[]>([]);
+  const [milestoneInfo, setMilestoneInfo] = useState<MilestoneDataResponse | null>(null);
+  const [friendsToday, setFriendsToday] = useState<FriendToday[]>([]);
+  const [milestoneData, setMilestoneData] = useState<Milestone | null>(null);
+  const [showMilestone, setShowMilestone] = useState(false);
 
-  const isToday = date === new Date().toISOString().split('T')[0];
   const today = new Date();
-  const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
+  const dateString = today.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 
-  // Fetch today's data
   const fetchTodayData = useCallback(async () => {
     if (!isLoaded || !isSignedIn) return;
 
@@ -64,7 +107,6 @@ export default function TodayTab() {
       if (!token) return;
 
       const data = await api.getTodayEntry(token);
-
       if (data.entry) {
         setExistingEntry(data.entry);
         setNotes(data.entry.notes || '');
@@ -73,34 +115,41 @@ export default function TodayTab() {
         setNotes('');
       }
 
-      // Try to get streak
       try {
-        const response = await fetch(`https://songbird.vercel.app/api/streak`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const streakData = await response.json();
+        const streakData = await api.getStreak(token);
         if (streakData.currentStreak !== undefined) {
           setCurrentStreak(streakData.currentStreak);
         }
-      } catch (err) {
-        console.log('Could not fetch streak');
-      }
+      } catch {}
 
-      // Try to get on this day
       try {
         const otdData = await api.getOnThisDay(token);
         if (otdData.memories) {
           setOnThisDayEntries(otdData.memories);
         }
-      } catch (err) {
-        console.log('Could not fetch on this day');
-      }
+      } catch {}
+
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const msData = await apiFetch<MilestoneDataResponse>(
+          `/api/milestones?today=${todayStr}`,
+          { token }
+        );
+        setMilestoneInfo(msData);
+      } catch {}
+
+      try {
+        const ftData = await api.getFriendsToday(token);
+        if (ftData.friends) {
+          setFriendsToday(ftData.friends);
+        }
+      } catch {}
     } catch (error) {
       console.error('Error fetching today data:', error);
     } finally {
       setCheckingEntry(false);
     }
-  }, [isLoaded, isSignedIn, getToken, date]);
+  }, [isLoaded, isSignedIn, getToken]);
 
   useEffect(() => {
     fetchTodayData();
@@ -155,17 +204,23 @@ export default function TodayTab() {
         albumArt: selectedTrack.albumArt,
         trackId: selectedTrack.id,
         notes,
+        mood: mood || undefined,
       };
 
       if (existingEntry) {
         await api.updateEntry(token, existingEntry.id, entryData);
         setMessage({ type: 'success', text: 'Entry updated!' });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        await api.createEntry(token, entryData);
+        const result = await api.createEntry(token, entryData);
         setMessage({ type: 'success', text: 'Entry saved!' });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (result.milestone) {
+          setMilestoneData(result.milestone);
+          setShowMilestone(true);
+        }
       }
 
-      // Refresh data
       await fetchTodayData();
       setShowForm(false);
       setSelectedTrack(null);
@@ -178,300 +233,581 @@ export default function TodayTab() {
     }
   };
 
-  // Loading state
+  // ── Shared sub-components ────────────────────────────────────────────────────
+
+  const renderMilestoneBanner = () => {
+    if (!milestoneInfo?.milestones?.length) return null;
+    const latest = milestoneInfo.milestones[milestoneInfo.milestones.length - 1];
+    return (
+      <View style={styles.milestoneBanner}>
+        <Text style={styles.milestoneEmoji}>🎉</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.milestoneMessage}>{latest.message}</Text>
+          {latest.achievedDate && (
+            <Text style={styles.milestoneDate}>
+              Achieved{' '}
+              {new Date(latest.achievedDate).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </Text>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderNextMilestone = () => {
+    const next = milestoneInfo?.nextMilestone;
+    if (!next || next.achieved) return null;
+    const progress = next.progress;
+    const pct = progress
+      ? Math.min(100, (progress.current / progress.target) * 100)
+      : 0;
+    return (
+      <View style={styles.nextMilestoneCard}>
+        <Text style={styles.nextMilestoneLabel}>Next milestone</Text>
+        <Text style={styles.nextMilestoneMessage}>{next.message}</Text>
+        {progress && (
+          <View style={styles.progressSection}>
+            <View style={styles.progressLabels}>
+              <Text style={styles.progressLabelText}>{progress.message}</Text>
+              <Text style={styles.progressLabelText}>
+                {progress.current} / {progress.target}
+              </Text>
+            </View>
+            <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarFill, { flex: pct }]} />
+              <View style={{ flex: Math.max(0, 100 - pct) }} />
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderHeroHeader = () => (
+    <View style={styles.heroHeader}>
+      <Text style={styles.heroDate}>{dateString}</Text>
+      <Text style={styles.heroSubtitle}>How will we remember today?</Text>
+    </View>
+  );
+
+  const renderStreakBadge = () => {
+    if (currentStreak <= 0) return null;
+    return (
+      <View style={styles.streakContainer}>
+        <View style={styles.streakBadge}>
+          <Text style={styles.streakText}>🔥 {currentStreak} day streak</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderFriendsToday = () => {
+    if (!friendsToday.length) return null;
+    return (
+      <View style={styles.friendsTodaySection}>
+        <View style={styles.friendAvatarRow}>
+          {friendsToday.slice(0, 5).map((friend, i) => (
+            <View
+              key={friend.id}
+              style={[styles.friendAvatar, i > 0 && { marginLeft: -8 }]}
+            >
+              {friend.image ? (
+                <Image source={{ uri: friend.image }} style={styles.friendAvatarImage} />
+              ) : (
+                <View style={styles.friendAvatarPlaceholder}>
+                  <Text style={styles.friendAvatarInitial}>
+                    {(friend.name || '?')[0].toUpperCase()}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
+        <Text style={styles.friendsTodayText}>
+          {friendsToday.length === 1
+            ? '1 friend also logged today'
+            : `${friendsToday.length} friends also logged today`}
+        </Text>
+      </View>
+    );
+  };
+
+  const renderSpotifyAttribution = () => (
+    <Text style={styles.spotifyAttribution}>Song data powered by Spotify</Text>
+  );
+
+  const renderNavigationHints = () => (
+    <View style={styles.navHints}>
+      <TouchableOpacity activeOpacity={0.7}>
+        <Text style={styles.navHintText}>See past days →</Text>
+      </TouchableOpacity>
+      {friendsToday.length > 0 && (
+        <TouchableOpacity activeOpacity={0.7}>
+          <Text style={styles.navHintText}>See friends today →</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const renderOnThisDay = () => {
+    if (!onThisDayEntries.length) return null;
+    return (
+      <View style={styles.onThisDaySection}>
+        <Text style={styles.sectionTitle}>On This Day</Text>
+        {onThisDayEntries.map((entry) => (
+          <View key={entry.id} style={styles.memoryCard}>
+            {entry.albumArt && (
+              <Image source={{ uri: entry.albumArt }} style={styles.memoryAlbumArt} />
+            )}
+            <View style={styles.memoryInfo}>
+              <Text style={styles.memoryYear}>
+                {new Date(entry.date).getFullYear()}
+              </Text>
+              <Text style={styles.memorySong} numberOfLines={1}>
+                {entry.songTitle}
+              </Text>
+              <Text style={styles.memoryArtist} numberOfLines={1}>
+                {entry.artist}
+              </Text>
+              {entry.notes && (
+                <Text style={styles.memoryNotes} numberOfLines={1}>
+                  {entry.notes}
+                </Text>
+              )}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  // ── Loading state ────────────────────────────────────────────────────────────
+
   if (!isLoaded || checkingEntry) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={[]}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.birdEmoji}>🐦</Text>
+          <ThemeBird size={80} />
           <Text style={styles.loadingText}>Loading your music...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // Welcome state - show CTA to add entry
-  if (!existingEntry && !showForm) {
+  // ── Entry form ───────────────────────────────────────────────────────────────
+
+  if (showForm) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScrollView
-          contentContainerStyle={styles.welcomeContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+      <SafeAreaView style={styles.container} edges={[]}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.greeting}>Happy {dayName}!</Text>
-            {currentStreak > 0 && (
-              <View style={styles.streakBadge}>
-                <Text style={styles.streakText}>🔥 {currentStreak} day streak</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Bird CTA */}
-          <View style={styles.ctaContainer}>
+          <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
             <TouchableOpacity
-              style={styles.birdButton}
-              onPress={() => setShowForm(true)}
-              activeOpacity={0.8}
+              style={styles.backButton}
+              onPress={() => {
+                setShowForm(false);
+                setSelectedTrack(null);
+                setTracks([]);
+                setQuery('');
+              }}
             >
-              <Text style={styles.largeBirdEmoji}>🐦</Text>
+              <Text style={styles.backButtonText}>← Back</Text>
             </TouchableOpacity>
-            <Text style={styles.ctaText}>What song defined your day?</Text>
-            <Text style={styles.ctaSubtext}>Tap the bird to log your song</Text>
-          </View>
 
-          {/* On This Day */}
-          {onThisDayEntries.length > 0 && (
-            <View style={styles.onThisDaySection}>
-              <Text style={styles.sectionTitle}>On This Day</Text>
-              {onThisDayEntries.map((entry) => (
-                <View key={entry.id} style={styles.memoryCard}>
-                  {entry.albumArt && (
-                    <Image source={{ uri: entry.albumArt }} style={styles.memoryAlbumArt} />
-                  )}
-                  <View style={styles.memoryInfo}>
-                    <Text style={styles.memoryYear}>
-                      {new Date(entry.date).getFullYear()}
-                    </Text>
-                    <Text style={styles.memorySong} numberOfLines={1}>{entry.songTitle}</Text>
-                    <Text style={styles.memoryArtist} numberOfLines={1}>{entry.artist}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
+            <Text style={styles.formTitle}>
+              {existingEntry ? 'Change your song' : 'Log your song'}
+            </Text>
 
-  // Show existing entry
-  if (existingEntry && !showForm) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScrollView
-          contentContainerStyle={styles.entryContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.greeting}>Happy {dayName}!</Text>
-            {currentStreak > 0 && (
-              <View style={styles.streakBadge}>
-                <Text style={styles.streakText}>🔥 {currentStreak} day streak</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Today's entry */}
-          <View style={styles.entryCard}>
-            <Text style={styles.entryLabel}>Today's Song</Text>
-            <View style={styles.entryMain}>
-              {existingEntry.albumArt && (
-                <Image source={{ uri: existingEntry.albumArt }} style={styles.entryAlbumArt} />
-              )}
-              <View style={styles.entryDetails}>
-                <Text style={styles.entrySong}>{existingEntry.songTitle}</Text>
-                <Text style={styles.entryArtist}>{existingEntry.artist}</Text>
-                {existingEntry.notes && (
-                  <Text style={styles.entryNotes} numberOfLines={2}>{existingEntry.notes}</Text>
-                )}
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => setShowForm(true)}
-            >
-              <Text style={styles.editButtonText}>Change Song</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* On This Day */}
-          {onThisDayEntries.length > 0 && (
-            <View style={styles.onThisDaySection}>
-              <Text style={styles.sectionTitle}>On This Day</Text>
-              {onThisDayEntries.map((entry) => (
-                <View key={entry.id} style={styles.memoryCard}>
-                  {entry.albumArt && (
-                    <Image source={{ uri: entry.albumArt }} style={styles.memoryAlbumArt} />
-                  )}
-                  <View style={styles.memoryInfo}>
-                    <Text style={styles.memoryYear}>
-                      {new Date(entry.date).getFullYear()}
-                    </Text>
-                    <Text style={styles.memorySong} numberOfLines={1}>{entry.songTitle}</Text>
-                    <Text style={styles.memoryArtist} numberOfLines={1}>{entry.artist}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // Entry form
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <KeyboardAvoidingView
-        style={styles.formContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
-          {/* Back button */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => {
-              setShowForm(false);
-              setSelectedTrack(null);
-              setTracks([]);
-              setQuery('');
-            }}
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.formTitle}>
-            {existingEntry ? 'Change your song' : 'Log your song'}
-          </Text>
-
-          {/* Search */}
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search for a song..."
-              placeholderTextColor={colors.textMuted + '80'}
-              onSubmitEditing={searchSongs}
-              returnKeyType="search"
-            />
-            <TouchableOpacity
-              style={[styles.searchButton, (!query.trim() || loading) && styles.disabledButton]}
-              onPress={searchSongs}
-              disabled={loading || !query.trim()}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color={colors.bg} />
-              ) : (
-                <Text style={styles.searchButtonText}>Search</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Search results */}
-          {tracks.length > 0 && !selectedTrack && (
-            <View style={styles.resultsContainer}>
-              {tracks.slice(0, 5).map((track) => (
-                <TouchableOpacity
-                  key={track.id}
-                  style={styles.trackItem}
-                  onPress={() => setSelectedTrack(track)}
-                >
-                  {track.albumArt && (
-                    <Image source={{ uri: track.albumArt }} style={styles.trackAlbumArt} />
-                  )}
-                  <View style={styles.trackInfo}>
-                    <Text style={styles.trackName} numberOfLines={1}>{track.name}</Text>
-                    <Text style={styles.trackArtist} numberOfLines={1}>{track.artist}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Selected track */}
-          {selectedTrack && (
-            <View style={styles.selectedContainer}>
-              <View style={styles.selectedTrack}>
-                {selectedTrack.albumArt && (
-                  <Image source={{ uri: selectedTrack.albumArt }} style={styles.selectedAlbumArt} />
-                )}
-                <View style={styles.selectedInfo}>
-                  <Text style={styles.selectedName}>{selectedTrack.name}</Text>
-                  <Text style={styles.selectedArtist}>{selectedTrack.artist}</Text>
-                  <TouchableOpacity onPress={() => setSelectedTrack(null)}>
-                    <Text style={styles.changeLink}>Change song</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Notes */}
-              <View style={styles.notesContainer}>
-                <Text style={styles.label}>Notes (optional)</Text>
-                <TextInput
-                  style={styles.notesInput}
-                  value={notes}
-                  onChangeText={setNotes}
-                  placeholder="What made this song special today?"
-                  placeholderTextColor={colors.textMuted + '80'}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
-              </View>
-
-              {/* Save button */}
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search for a song..."
+                placeholderTextColor={colors.textMuted + '80'}
+                onSubmitEditing={searchSongs}
+                returnKeyType="search"
+              />
               <TouchableOpacity
-                style={[styles.saveButton, loading && styles.disabledButton]}
-                onPress={saveEntry}
-                disabled={loading}
+                style={[styles.searchButton, (!query.trim() || loading) && styles.disabledButton]}
+                onPress={searchSongs}
+                disabled={loading || !query.trim()}
               >
-                <Text style={styles.saveButtonText}>
-                  {loading ? 'Saving...' : existingEntry ? 'Update Entry' : 'Save Entry'}
-                </Text>
+                {loading ? (
+                  <ActivityIndicator size="small" color={colors.bg} />
+                ) : (
+                  <Text style={styles.searchButtonText}>Search</Text>
+                )}
               </TouchableOpacity>
             </View>
-          )}
 
-          {/* Message */}
-          {message && (
-            <View style={[styles.messageContainer, message.type === 'error' && styles.errorMessage]}>
-              <Text style={styles.messageText}>{message.text}</Text>
+            {tracks.length > 0 && !selectedTrack && (
+              <View style={styles.resultsContainer}>
+                {tracks.slice(0, 5).map((track) => (
+                  <TouchableOpacity
+                    key={track.id}
+                    style={styles.trackItem}
+                    onPress={() => {
+                      setSelectedTrack(track);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  >
+                    {track.albumArt ? (
+                      <Image source={{ uri: track.albumArt }} style={styles.trackAlbumArt} />
+                    ) : null}
+                    <View style={styles.trackInfo}>
+                      <Text style={styles.trackName} numberOfLines={1}>
+                        {track.name}
+                      </Text>
+                      <Text style={styles.trackArtist} numberOfLines={1}>
+                        {track.artist}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                {renderSpotifyAttribution()}
+              </View>
+            )}
+
+            {selectedTrack && (
+              <View style={styles.selectedContainer}>
+                <View style={styles.selectedTrack}>
+                  {selectedTrack.albumArt ? (
+                    <Image source={{ uri: selectedTrack.albumArt }} style={styles.selectedAlbumArt} />
+                  ) : null}
+                  <View style={styles.selectedInfo}>
+                    <Text style={styles.selectedName}>{selectedTrack.name}</Text>
+                    <Text style={styles.selectedArtist}>{selectedTrack.artist}</Text>
+                    <TouchableOpacity onPress={() => setSelectedTrack(null)}>
+                      <Text style={styles.changeLink}>Change song</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <MoodPicker selected={mood} onSelect={setMood} />
+
+                <View style={styles.notesContainer}>
+                  <Text style={styles.label}>Notes (optional)</Text>
+                  <TextInput
+                    style={styles.notesInput}
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="What made this song special today?"
+                    placeholderTextColor={colors.textMuted + '80'}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.saveButton, loading && styles.disabledButton]}
+                  onPress={saveEntry}
+                  disabled={loading}
+                >
+                  <Text style={styles.saveButtonText}>
+                    {loading ? 'Saving...' : existingEntry ? 'Update Entry' : 'Save Entry'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {message && (
+              <View style={[styles.messageContainer, message.type === 'error' && styles.errorMessage]}>
+                <Text style={styles.messageText}>{message.text}</Text>
+              </View>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        <MilestoneModal
+          visible={showMilestone}
+          milestone={milestoneData}
+          onClose={() => {
+            setShowMilestone(false);
+            setMilestoneData(null);
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ── Welcome state (no entry yet) ────────────────────────────────────────────
+
+  if (!existingEntry) {
+    return (
+      <SafeAreaView style={styles.container} edges={[]}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+          }
+        >
+          {renderMilestoneBanner()}
+          {renderNextMilestone()}
+          {renderHeroHeader()}
+          {renderStreakBadge()}
+
+          <View style={styles.ctaCard}>
+            <TouchableOpacity
+              style={styles.birdButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setShowForm(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <ThemeBird size={96} />
+            </TouchableOpacity>
+            <Text style={styles.ctaTitle}>No song yet</Text>
+            <Text style={styles.ctaSubtitle}>What song will hold today together?</Text>
+            <TouchableOpacity
+              style={styles.addSongButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setShowForm(true);
+              }}
+            >
+              <Text style={styles.addSongButtonText}>Add today's song</Text>
+            </TouchableOpacity>
+          </View>
+
+          {renderFriendsToday()}
+          {renderNavigationHints()}
+          {renderOnThisDay()}
+        </ScrollView>
+
+        <MilestoneModal
+          visible={showMilestone}
+          milestone={milestoneData}
+          onClose={() => {
+            setShowMilestone(false);
+            setMilestoneData(null);
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ── Existing entry view ──────────────────────────────────────────────────────
+
+  return (
+    <SafeAreaView style={styles.container} edges={[]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+        }
+      >
+        {renderMilestoneBanner()}
+        {renderNextMilestone()}
+        {renderHeroHeader()}
+        {renderStreakBadge()}
+
+        <View style={styles.entryCard}>
+          {existingEntry.albumArt && (
+            <View style={styles.albumArtWrapper}>
+              <View style={styles.albumArtGlow} />
+              <Image
+                source={{ uri: existingEntry.albumArt }}
+                style={styles.heroAlbumArt}
+              />
             </View>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+
+          <View style={styles.songInfoCenter}>
+            <Text style={styles.heroSongTitle}>{existingEntry.songTitle}</Text>
+            <Text style={styles.heroArtist}>{existingEntry.artist}</Text>
+
+            {existingEntry.mood && (
+              <View style={styles.moodBadge}>
+                <Text style={styles.moodBadgeText}>{existingEntry.mood}</Text>
+              </View>
+            )}
+
+            {renderSpotifyAttribution()}
+          </View>
+
+          {existingEntry.people && existingEntry.people.length > 0 && (
+            <View style={styles.peopleSection}>
+              <Text style={styles.peopleSectionLabel}>With</Text>
+              <View style={styles.peopleRow}>
+                {existingEntry.people.map((person) => (
+                  <View key={person.id} style={styles.personTag}>
+                    <Text style={styles.personTagText}>{person.name}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {renderFriendsToday()}
+        </View>
+
+        {existingEntry.notes && (
+          <View style={styles.notesCard}>
+            <Text style={styles.notesCardText}>{existingEntry.notes}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowForm(true);
+              }}
+            >
+              <Text style={styles.editLink}>Edit today</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.changeSongButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowForm(true);
+          }}
+        >
+          <Text style={styles.changeSongButtonText}>Change Song</Text>
+        </TouchableOpacity>
+
+        {renderNavigationHints()}
+        {renderOnThisDay()}
+      </ScrollView>
+
+      <MilestoneModal
+        visible={showMilestone}
+        milestone={milestoneData}
+        onClose={() => {
+          setShowMilestone(false);
+          setMilestoneData(null);
+        }}
+      />
     </SafeAreaView>
   );
 }
+
+// ── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
   },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  birdEmoji: {
-    fontSize: 80,
-    marginBottom: spacing.md,
+    gap: spacing.md,
   },
   loadingText: {
     color: colors.textMuted,
     fontSize: fontSize.md,
   },
-  welcomeContent: {
+
+  // Scroll
+  scrollContent: {
     padding: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
-  entryContent: {
-    padding: spacing.lg,
+
+  // Milestone banner
+  milestoneBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.accent + '20',
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.accent + '30',
+    gap: spacing.md,
   },
-  header: {
+  milestoneEmoji: {
+    fontSize: 28,
+  },
+  milestoneMessage: {
+    color: colors.text,
+    fontSize: fontSize.md,
+    fontWeight: '500',
+  },
+  milestoneDate: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    marginTop: 2,
+  },
+
+  // Next milestone
+  nextMilestoneCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.accent + '10',
+  },
+  nextMilestoneLabel: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    marginBottom: 4,
+  },
+  nextMilestoneMessage: {
+    color: colors.text,
+    fontSize: fontSize.md,
+    fontWeight: '500',
+  },
+  progressSection: {
+    marginTop: spacing.sm,
+  },
+  progressLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: 4,
   },
-  greeting: {
-    fontSize: fontSize.xxl,
+  progressLabelText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+  },
+  progressBarBg: {
+    flexDirection: 'row',
+    height: 8,
+    backgroundColor: colors.bg,
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.full,
+  },
+
+  // Hero header
+  heroHeader: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  heroDate: {
+    fontSize: fontSize.xxxl,
     fontWeight: 'bold',
     color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  heroSubtitle: {
+    fontSize: fontSize.lg,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+
+  // Streak
+  streakContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   streakBadge: {
     backgroundColor: colors.surface,
@@ -484,30 +820,108 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '500',
   },
-  ctaContainer: {
+
+  // CTA card (no entry)
+  ctaCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xxl,
+    padding: spacing.xl,
     alignItems: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  birdButton: {
     marginBottom: spacing.lg,
   },
-  largeBirdEmoji: {
-    fontSize: 120,
+  birdButton: {
+    marginBottom: spacing.md,
   },
-  ctaText: {
+  ctaTitle: {
     fontSize: fontSize.xl,
     fontWeight: '600',
     color: colors.text,
-    textAlign: 'center',
     marginBottom: spacing.xs,
   },
-  ctaSubtext: {
+  ctaSubtitle: {
     fontSize: fontSize.md,
     color: colors.textMuted,
     textAlign: 'center',
+    marginBottom: spacing.lg,
   },
+  addSongButton: {
+    backgroundColor: colors.accent,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.full,
+  },
+  addSongButtonText: {
+    color: colors.bg,
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+
+  // Friends today
+  friendsTodaySection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  friendAvatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  friendAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: colors.bg,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+  },
+  friendAvatarImage: {
+    width: '100%' as any,
+    height: '100%' as any,
+  },
+  friendAvatarPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+  },
+  friendAvatarInitial: {
+    color: colors.text,
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+  },
+  friendsTodayText: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+  },
+
+  // Spotify attribution
+  spotifyAttribution: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    opacity: 0.7,
+  },
+
+  // Nav hints
+  navHints: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    marginVertical: spacing.md,
+  },
+  navHintText: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+  },
+
+  // On This Day
   onThisDaySection: {
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
   },
   sectionTitle: {
     fontSize: fontSize.lg,
@@ -546,63 +960,163 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textMuted,
   },
+  memoryNotes: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+
+  // Entry card (existing entry)
   entryCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.xxl,
     padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.accent,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+
+  // Enhanced album art
+  albumArtWrapper: {
+    alignSelf: 'center',
     marginBottom: spacing.lg,
+    position: 'relative',
   },
-  entryLabel: {
-    fontSize: fontSize.sm,
-    color: colors.accent,
-    marginBottom: spacing.md,
-    fontWeight: '500',
+  albumArtGlow: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderRadius: borderRadius.xl + 4,
+    backgroundColor: colors.accent,
+    opacity: 0.2,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.accent,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 24,
+      },
+    }),
   },
-  entryMain: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
+  heroAlbumArt: {
+    width: ALBUM_ART_SIZE,
+    height: ALBUM_ART_SIZE,
+    borderRadius: borderRadius.xl,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
-  entryAlbumArt: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius.lg,
+
+  // Song info (centered, web-style)
+  songInfoCenter: {
+    alignItems: 'center',
+    marginBottom: spacing.sm,
   },
-  entryDetails: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  entrySong: {
-    fontSize: fontSize.lg,
+  heroSongTitle: {
+    fontSize: fontSize.xxl,
     fontWeight: 'bold',
     color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
   },
-  entryArtist: {
-    fontSize: fontSize.md,
+  heroArtist: {
+    fontSize: fontSize.xl,
     color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
   },
-  entryNotes: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-    fontStyle: 'italic',
-  },
-  editButton: {
-    paddingVertical: spacing.sm,
+
+  // Mood badge
+  moodBadge: {
+    backgroundColor: colors.accent + '1A',
+    paddingVertical: 4,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    alignSelf: 'flex-start',
+    borderRadius: borderRadius.full,
+    marginTop: spacing.xs,
   },
-  editButtonText: {
+  moodBadgeText: {
     color: colors.accent,
     fontSize: fontSize.sm,
     fontWeight: '500',
   },
-  // Form styles
-  formContainer: {
-    flex: 1,
+
+  // People/tags
+  peopleSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.bg + '40',
   },
+  peopleSectionLabel: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  peopleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  personTag: {
+    backgroundColor: colors.card,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+  },
+  personTagText: {
+    color: colors.text,
+    fontSize: fontSize.sm,
+  },
+
+  // Notes card
+  notesCard: {
+    backgroundColor: colors.surface + 'AA',
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  notesCardText: {
+    color: colors.text,
+    fontSize: fontSize.md,
+    lineHeight: 24,
+    opacity: 0.85,
+  },
+  editLink: {
+    color: colors.accent,
+    fontSize: fontSize.sm,
+    marginTop: spacing.sm,
+  },
+
+  // Change song button
+  changeSongButton: {
+    alignSelf: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    marginBottom: spacing.sm,
+  },
+  changeSongButtonText: {
+    color: colors.accent,
+    fontSize: fontSize.sm,
+    fontWeight: '500',
+  },
+
+  // ── Form styles ──────────────────────────────────────────────────────────────
+
   formContent: {
     padding: spacing.lg,
   },
@@ -755,4 +1269,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

@@ -97,7 +97,7 @@ export default function SpotifyDataPrimerScreen({ onContinue }: SpotifyDataPrime
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={12} currentStep={3} className="pb-8" />
+      <ProgressDots totalSteps={13} currentStep={5} className="pb-8" />
     </div>
   )
 }

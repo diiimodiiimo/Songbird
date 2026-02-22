@@ -4,6 +4,9 @@ import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
 import { getUserIdFromClerk } from '@/lib/clerk-sync'
 
+const PROFILE_FIELDS = 'id, email, name, username, image, bio, gender, theme, onboardingCompletedAt, favoriteArtists, favoriteSongs, isPremium, isFoundingMember, inviteCode'
+const PROFILE_FIELDS_MINIMAL = 'id, email, name, username, image, bio, gender, favoriteArtists, favoriteSongs'
+
 export async function GET() {
   try {
     const { userId: clerkUserId } = await auth()
@@ -11,9 +14,6 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('[profile] Clerk user ID:', clerkUserId)
-
-    // Initialize Supabase first to catch any initialization errors
     let supabase
     try {
       supabase = getSupabase()
@@ -21,112 +21,80 @@ export async function GET() {
       console.error('[profile] Failed to initialize Supabase:', supabaseError)
       return NextResponse.json({ 
         error: 'Database connection failed', 
-        message: supabaseError?.message || 'Failed to initialize Supabase client. Check environment variables.' 
+        message: supabaseError?.message || 'Failed to initialize Supabase client.' 
       }, { status: 500 })
     }
 
     const userId = await getUserIdFromClerk(clerkUserId)
-    console.log('[profile] Database user ID:', userId)
-    
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
-    
-    // DISABLED SYNC - Don't sync Clerk data to avoid overwriting custom usernames/images
-    // Users can manually update their profile if needed
 
-    console.log('[profile] Querying Supabase for user:', userId)
-    
-    // Try multiple query strategies to find the user
     let user = null
-    let error = null
-    
-    // Strategy 1: Query by id
+    let queryError = null
+
+    // Try full field set first, fall back to minimal if columns don't exist
     let result = await supabase
       .from('users')
-      .select('id, email, name, username, image, bio, gender, favoriteArtists, favoriteSongs')
+      .select(PROFILE_FIELDS)
       .eq('id', userId)
       .maybeSingle()
-    
-    if (result.error) {
-      console.error('[profile] Query by id failed:', result.error)
-      error = result.error
-    } else if (result.data) {
-      user = result.data
-      console.log('[profile] Found user by id:', user.username || user.email)
-    }
-    
-    // Strategy 2: If not found, try by clerkId
-    if (!user && clerkUserId) {
-      console.log('[profile] Trying query by clerkId:', clerkUserId)
+
+    if (result.error && (result.error.code === 'PGRST204' || result.error.message?.includes('column'))) {
       result = await supabase
         .from('users')
-        .select('id, email, name, username, image, bio, gender, favoriteArtists, favoriteSongs')
+        .select(PROFILE_FIELDS_MINIMAL)
+        .eq('id', userId)
+        .maybeSingle()
+    }
+
+    if (result.error) {
+      queryError = result.error
+    } else if (result.data) {
+      user = result.data
+    }
+
+    // Fallback: try by clerkId
+    if (!user && !queryError) {
+      const fallback = await supabase
+        .from('users')
+        .select(PROFILE_FIELDS_MINIMAL)
         .eq('clerkId', clerkUserId)
         .maybeSingle()
-      
-      if (result.error) {
-        console.error('[profile] Query by clerkId failed:', result.error)
-        if (!error) error = result.error
-      } else if (result.data) {
-        user = result.data
-        console.log('[profile] Found user by clerkId:', user.username || user.email)
-      }
+
+      if (fallback.data) user = fallback.data
+      if (fallback.error && !queryError) queryError = fallback.error
     }
-    
-    // Strategy 3: If still not found, try by email
+
+    // Fallback: try by email
     if (!user) {
-      const { currentUser } = await import('@clerk/nextjs/server')
       const clerkUser = await currentUser()
       const email = clerkUser?.emailAddresses?.[0]?.emailAddress
-      
+
       if (email) {
-        console.log('[profile] Trying query by email:', email)
-        result = await supabase
+        const emailResult = await supabase
           .from('users')
-          .select('id, email, name, username, image, bio, gender, favoriteArtists, favoriteSongs')
+          .select(PROFILE_FIELDS_MINIMAL)
           .eq('email', email)
           .maybeSingle()
-        
-        if (result.error) {
-          console.error('[profile] Query by email failed:', result.error)
-          if (!error) error = result.error
-        } else if (result.data) {
-          user = result.data
-          console.log('[profile] Found user by email:', user.username || user.email)
-        }
+
+        if (emailResult.data) user = emailResult.data
+        if (emailResult.error && !queryError) queryError = emailResult.error
       }
     }
 
-    if (error && !user) {
-      console.error('[profile] All query strategies failed. Last error:', {
-        error: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        userId,
-        clerkUserId,
-      })
+    if (queryError && !user) {
+      console.error('[profile] Query failed:', queryError.message)
       return NextResponse.json({ 
         error: 'Failed to fetch user from database', 
-        message: error.message 
+        message: queryError.message 
       }, { status: 500 })
     }
 
     if (!user) {
-      console.error('[profile] User not found in database after all strategies:', { userId, clerkUserId })
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    console.log('[profile] Successfully fetched user:', user.username || user.email)
-    console.log('[profile] User image data:', {
-      image: user.image,
-      hasImage: !!user.image,
-      imageLength: user.image?.length,
-      imageType: typeof user.image,
-    })
-
-    // Parse JSON fields for response
     const responseUser = {
       ...user,
       favoriteArtists: user.favoriteArtists ? JSON.parse(user.favoriteArtists) : [],
@@ -137,7 +105,7 @@ export async function GET() {
     response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=120')
     return response
   } catch (error: any) {
-    console.error('Error fetching profile:', error?.message || error)
+    console.error('[profile] Error:', error?.message || error)
     return NextResponse.json(
       { error: 'Failed to fetch profile', message: error?.message },
       { status: 500 }
@@ -197,6 +165,9 @@ const updateProfileSchema = z.object({
   theme: z
     .enum(validThemes)
     .optional(),
+  profileVisible: z
+    .boolean()
+    .optional(),
 })
 
 export async function PUT(request: Request) {
@@ -216,7 +187,6 @@ export async function PUT(request: Request) {
 
     const supabase = getSupabase()
 
-    // Check if username is already taken (if provided)
     if (data.username) {
       const { data: existingUser } = await supabase
         .from('users')
@@ -233,7 +203,6 @@ export async function PUT(request: Request) {
       }
     }
 
-    // Build update object
     const updateData: Record<string, any> = {
       updatedAt: new Date().toISOString(),
     }
@@ -245,19 +214,48 @@ export async function PUT(request: Request) {
     if (data.favoriteSongs !== undefined) updateData.favoriteSongs = JSON.stringify(data.favoriteSongs || [])
     if (data.theme !== undefined) updateData.theme = data.theme
 
-    const { data: updatedUser, error } = await supabase
+    // Try update; if it fails due to missing column, retry without optional columns
+    let updatedUser = null
+    const { data: result, error: err1 } = await supabase
       .from('users')
       .update(updateData)
       .eq('id', userId)
-      .select('id, email, name, username, image, bio, gender, favoriteArtists, favoriteSongs')
+      .select(PROFILE_FIELDS_MINIMAL)
       .single()
 
-    if (error) {
-      console.error('[profile] Update error:', error)
-      throw error
+    if (err1) {
+      if (err1.code === '42703' || err1.code === 'PGRST204' || err1.message?.includes('column')) {
+        delete updateData.theme
+        const { data: result2, error: err2 } = await supabase
+          .from('users')
+          .update(updateData)
+          .eq('id', userId)
+          .select(PROFILE_FIELDS_MINIMAL)
+          .single()
+
+        if (err2) {
+          console.error('[profile] Update failed:', err2.message)
+          return NextResponse.json(
+            { error: err2.message || 'Failed to update profile' },
+            { status: 500 }
+          )
+        }
+        updatedUser = result2
+      } else {
+        console.error('[profile] Update failed:', err1.message)
+        return NextResponse.json(
+          { error: err1.message || 'Failed to update profile' },
+          { status: 500 }
+        )
+      }
+    } else {
+      updatedUser = result
     }
 
-    // Parse JSON fields for response
+    if (!updatedUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     const responseUser = {
       ...updatedUser,
       favoriteArtists: updatedUser.favoriteArtists ? JSON.parse(updatedUser.favoriteArtists) : [],
@@ -272,7 +270,7 @@ export async function PUT(request: Request) {
         { status: 400 }
       )
     }
-    console.error('Error updating profile:', error?.message || error)
+    console.error('[profile] Error:', error?.message || error)
     return NextResponse.json(
       { error: 'Failed to update profile', message: error?.message },
       { status: 500 }

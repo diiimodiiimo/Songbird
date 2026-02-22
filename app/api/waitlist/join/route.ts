@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         source: finalSource,
         referralCode: referralCode || null,
         joinedAt: new Date().toISOString(),
-        foundingFlockEligible: false,
+        foundingFlockEligible: true,
       })
       .select()
       .single()

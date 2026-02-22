@@ -96,7 +96,7 @@ export default function AttributionScreen({ onContinue, onSkip }: AttributionScr
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={12} currentStep={10} className="pb-8" />
+      <ProgressDots totalSteps={13} currentStep={10} className="pb-8" />
     </div>
   )
 }

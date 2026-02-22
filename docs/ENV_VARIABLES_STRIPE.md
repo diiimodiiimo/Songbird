@@ -74,3 +74,4 @@ After setting up your `.env.local`:
 3. **Should show**: `allChecksPassed: true`
 
 
+

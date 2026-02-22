@@ -14,3 +14,4 @@ CREATE INDEX IF NOT EXISTS "users_isFoundingMember_idx" ON "users"("isFoundingMe
 CREATE INDEX IF NOT EXISTS "users_stripeCustomerId_idx" ON "users"("stripeCustomerId");
 
 
+

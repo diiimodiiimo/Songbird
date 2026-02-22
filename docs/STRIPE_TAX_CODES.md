@@ -128,3 +128,4 @@ If you want Stripe to handle tax automatically:
 **For now**: You can skip tax codes if you're just testing. Add them when you're ready to go live.
 
 
+

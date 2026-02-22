@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useUser, SignOutButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import Notifications from './Notifications'
+import WhatsNew from './WhatsNew'
 import { ThemeBirdLogo } from './ThemeBird'
 
 export default function Navigation() {
@@ -24,8 +25,11 @@ export default function Navigation() {
         <div className="flex items-center gap-4">
           {mounted && isLoaded && user && (
             <>
+              <div className="hidden sm:block">
+                <WhatsNew />
+              </div>
               <Notifications />
-              <span className="text-text-muted text-sm">{user.firstName || user.emailAddresses[0]?.emailAddress}</span>
+              <span className="text-text-muted text-sm hidden sm:inline">{user.firstName || user.emailAddresses[0]?.emailAddress}</span>
               <SignOutButton redirectUrl="/home">
                 <button
                   className="px-4 py-2 bg-white/5 border border-white/20 rounded-lg hover:bg-white/10 transition-colors text-white text-sm"

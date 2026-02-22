@@ -8,6 +8,7 @@ import ThemeBird from './ThemeBird'
 import SpotifyAttribution from './SpotifyAttribution'
 import MilestoneModal from './MilestoneModal'
 import { UpgradePrompt } from './UpgradePrompt'
+import InfoTooltip from './InfoTooltip'
 import { getLocalDateString, isToday as isTodayLocal, parseLocalDate, getLocalStartOfDay } from '@/lib/date-utils'
 
 interface Track {
@@ -250,7 +251,15 @@ export default function AddEntryTab() {
               <div className="flex items-center gap-2">
                 <span className="text-2xl">🔥</span>
                 <div>
-                  <div className="font-bold text-accent text-lg">{currentStreak} day streak</div>
+                  <div className="font-bold text-accent text-lg flex items-center gap-1.5">
+                    {currentStreak} day streak
+                    <InfoTooltip title="How Streaks Work" iconSize={14}>
+                      <p>Your streak counts consecutive days with a logged song.</p>
+                      <p><strong>Keep it alive:</strong> Log at least one song each day before midnight in your timezone.</p>
+                      <p><strong>What counts:</strong> Only same-day entries count. Backdating an entry to yesterday won't save a broken streak.</p>
+                      <p><strong>Rewards:</strong> Streaks unlock bird themes at 7, 14, 30, 50, 100, and 365 days. Check Profile → Your Flock to see progress.</p>
+                    </InfoTooltip>
+                  </div>
                   {existingEntry ? (
                     <div className="text-sm text-text/70">✓ Logged today</div>
                   ) : !existingEntry && hoursUntilMidnight < 3 && currentStreak > 0 ? (
@@ -540,8 +549,8 @@ export default function AddEntryTab() {
             releaseDate: selectedTrack.releaseDate,
             trackId: selectedTrack.id,
             uri: selectedTrack.uri,
-            notes, // Preserve notes
-            mood: selectedMood, // Preserve mood
+            notes: notes || undefined,
+            mood: selectedMood || undefined,
             peopleNames: peopleNames.filter((name) => name.trim().length > 0),
           }),
         })
@@ -811,8 +820,13 @@ export default function AddEntryTab() {
             </div>
 
             <div className="mb-4">
-              <label className="block mb-2">
+              <label className="block mb-2 flex items-center gap-1.5">
                 People in Your Day <span className="text-sm text-primary/60">(Private)</span>
+                <InfoTooltip title="People in Your Day" iconSize={14}>
+                  <p>A private record of who you were with today. Only you can see these tags.</p>
+                  <p>You can tag anyone — friends on SongBird or people who aren't on the app. Great for remembering "I was at dinner with Sarah" or "road trip with Mom."</p>
+                  <p className="text-xs italic">Different from Mentions below, which notify your friends.</p>
+                </InfoTooltip>
               </label>
               
               {/* Tagged people display */}
@@ -951,8 +965,13 @@ export default function AddEntryTab() {
             </div>
 
             <div className="mb-4">
-              <label className="block mb-2">
+              <label className="block mb-2 flex items-center gap-1.5">
                 Mention Friends <span className="text-sm text-primary/60">(They'll be notified)</span>
+                <InfoTooltip title="Mention Friends" iconSize={14}>
+                  <p>Mentions are social — the friend gets a notification and can see they were included in your entry.</p>
+                  <p>Use this when you want a friend to know you thought of them, or to share a moment together.</p>
+                  <p className="text-xs italic">Only SongBird friends can be mentioned. Use "People in Your Day" above for private tags.</p>
+                </InfoTooltip>
               </label>
               
               {/* Selected mentions display */}
@@ -1053,20 +1072,32 @@ export default function AddEntryTab() {
 
             {/* Mood Picker - Optional, after notes, before save */}
             <div className="mb-4">
-              <label className="block mb-2 text-text/80">
+              <label className="block mb-2 text-text/80 flex items-center gap-1.5">
                 How did today feel? <span className="text-sm text-text/60 font-normal">(Optional)</span>
+                <InfoTooltip title="Why Track Mood?" iconSize={14}>
+                  <p>Mood tags help SongBird find patterns between your emotions and music over time.</p>
+                  <p>For example, you might discover you listen to more upbeat music on good days, or that certain artists appear when you're feeling reflective.</p>
+                  <p>These patterns show up in your Insights and Wrapped summary.</p>
+                </InfoTooltip>
               </label>
               {!showMoodPicker ? (
                 <button
                   onClick={() => setShowMoodPicker(true)}
                   className="w-full px-4 py-2 bg-surface border border-text/20 rounded-lg text-text/60 hover:bg-surface/80 transition-colors text-left"
                 >
-                  Add mood
+                  {selectedMood ? (
+                    <span className="flex items-center gap-2">
+                      <span className="text-2xl">{selectedMood}</span>
+                      <span className="text-text/40 text-sm">Tap to change</span>
+                    </span>
+                  ) : (
+                    'Add mood'
+                  )}
                 </button>
               ) : (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    {['😊', '😌', '😢', '🔥', '😴', '🎉'].map((mood) => (
+                  <div className="grid grid-cols-4 gap-2">
+                    {['😊', '😌', '😢', '🔥', '😴', '🎉', '❤️', '😤'].map((mood) => (
                       <button
                         key={mood}
                         onClick={() => {
@@ -1083,15 +1114,44 @@ export default function AddEntryTab() {
                       </button>
                     ))}
                   </div>
-                  <button
-                    onClick={() => {
-                      setShowMoodPicker(false)
-                      setSelectedMood(null)
-                    }}
-                    className="text-sm text-text/60 hover:text-text transition-colors"
-                  >
-                    Skip
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Or type any emoji..."
+                      className="flex-1 px-3 py-2 bg-surface border border-text/20 rounded-lg text-2xl text-center focus:border-accent focus:outline-none"
+                      maxLength={4}
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value.trim()
+                        if (val) {
+                          const picked = Array.from(val)[0]
+                          if (picked && picked.charCodeAt(0) > 127) {
+                            setSelectedMood(picked)
+                            setShowMoodPicker(false)
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => {
+                        setShowMoodPicker(false)
+                        setSelectedMood(null)
+                      }}
+                      className="text-sm text-text/60 hover:text-text transition-colors"
+                    >
+                      Skip
+                    </button>
+                    {selectedMood && (
+                      <button
+                        onClick={() => setShowMoodPicker(false)}
+                        className="text-sm text-accent hover:text-accent/80 transition-colors font-medium"
+                      >
+                        Keep {selectedMood}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
               {selectedMood && !showMoodPicker && (

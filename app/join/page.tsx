@@ -90,10 +90,8 @@ function SimpleWaitlistContent() {
 
       const data = await res.json()
 
-      if (res.ok) {
-        setSuccess(true)
-        setEmail('')
-        setName('')
+      if (res.ok && data.url) {
+        window.location.href = data.url
       } else {
         setError(data.error || 'Failed to reserve spot')
       }

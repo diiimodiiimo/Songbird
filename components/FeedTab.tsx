@@ -8,6 +8,7 @@ import Link from 'next/link'
 import ThemeBird from './ThemeBird'
 import InviteFriendsCTA from './InviteFriendsCTA'
 import SpotifyAttribution from './SpotifyAttribution'
+import SongShareCard from './SongShareCard'
 import { trackTabView } from '@/lib/analytics-client'
 
 interface Comment {
@@ -134,6 +135,7 @@ export default function FeedTab() {
   const [friendsWhoLoggedToday, setFriendsWhoLoggedToday] = useState(0)
   const [unreadFeedItems, setUnreadFeedItems] = useState(0)
   const [seenEntryIds, setSeenEntryIds] = useState<Set<string>>(new Set())
+  const [sharingEntry, setSharingEntry] = useState<FeedEntry | null>(null)
 
   const fetchFeed = useCallback(async (initialLoad: boolean = false) => {
     if (!isLoaded || !isSignedIn) {
@@ -573,8 +575,19 @@ export default function FeedTab() {
                   </span>
                 </button>
 
-                {/* Listen Buttons */}
+                {/* Listen & Share Buttons */}
                 <div className="flex items-center gap-2 ml-auto">
+                  {/* Share */}
+                  <button
+                    onClick={() => setSharingEntry(entry)}
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-accent/20 text-accent hover:bg-accent/30 transition-all"
+                    title="Share song card"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935-2.186 2.25 2.25 0 0 0-3.935 2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
+                    </svg>
+                    <span className="text-sm font-medium hidden sm:inline">Share</span>
+                  </button>
                   {/* Spotify */}
                   <a
                     href={`https://open.spotify.com/track/${entry.trackId}`}
@@ -725,6 +738,19 @@ export default function FeedTab() {
         <div className="py-8 text-center">
           <p className="text-text/40 text-sm">You've reached the end of your feed</p>
         </div>
+      )}
+
+      {/* Song Share Card Modal */}
+      {sharingEntry && (
+        <SongShareCard
+          songTitle={sharingEntry.songTitle}
+          artist={sharingEntry.artist}
+          albumArt={sharingEntry.albumArt}
+          albumTitle={sharingEntry.albumTitle}
+          date={sharingEntry.date}
+          username={sharingEntry.user.username || sharingEntry.user.name || sharingEntry.user.email.split('@')[0]}
+          onClose={() => setSharingEntry(null)}
+        />
       )}
     </div>
   )

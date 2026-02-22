@@ -8,14 +8,14 @@ interface AviaryBirdProps {
   bird: AviaryBirdType
   size: 'small' | 'medium' | 'large'
   position?: { x: number; y: number }
+  hasUnseenSong?: boolean
   onTap: () => void
 }
 
-export function AviaryBird({ bird, size, position, onTap }: AviaryBirdProps) {
+export function AviaryBird({ bird, size, position, hasUnseenSong, onTap }: AviaryBirdProps) {
   const { user, latestSong, isCurrentUser } = bird
   const theme = getThemeById(user.theme)
   
-  // Check if song was logged today
   const hasLoggedToday = latestSong && isToday(new Date(latestSong.createdAt))
 
   const sizeClasses = {
@@ -52,8 +52,16 @@ export function AviaryBird({ bird, size, position, onTap }: AviaryBirdProps) {
           className="object-contain drop-shadow-lg"
         />
         
-        {/* Activity indicator - musical note for logged today */}
-        {hasLoggedToday && (
+        {/* Unseen song notification dot */}
+        {hasUnseenSong && (
+          <span 
+            className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-primary rounded-full ring-2 ring-bg animate-pulse"
+            aria-label="New song"
+          />
+        )}
+        
+        {/* Activity indicator - musical note for logged today (only if already seen) */}
+        {hasLoggedToday && !hasUnseenSong && (
           <span 
             className="absolute -top-1 -right-1 text-primary animate-bounce text-sm"
             aria-hidden="true"

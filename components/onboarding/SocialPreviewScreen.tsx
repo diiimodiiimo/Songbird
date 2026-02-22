@@ -57,7 +57,7 @@ export default function SocialPreviewScreen({ onContinue, onSkip }: SocialPrevie
       </div>
 
       {/* Progress indicator */}
-      <ProgressDots totalSteps={5} currentStep={3} className="mb-8" />
+      <ProgressDots totalSteps={13} currentStep={3} className="mb-8" />
 
       {/* CTA buttons */}
       <div className="w-full max-w-sm mx-auto pb-8 space-y-3">
@@ -77,5 +77,6 @@ export default function SocialPreviewScreen({ onContinue, onSkip }: SocialPrevie
     </div>
   )
 }
+
 
 

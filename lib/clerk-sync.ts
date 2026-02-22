@@ -38,22 +38,16 @@ function generateInviteCode(): string {
  * @returns The database users.id field, or null if user not found/can't be created
  */
 export async function getUserIdFromClerk(clerkUserId: string): Promise<string | null> {
-  if (!clerkUserId) {
-    console.log('[clerk-sync] No clerkUserId provided')
-    return null
-  }
+  if (!clerkUserId) return null
 
-  // Check cache first
   const cached = userIdCache.get(clerkUserId)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log('[clerk-sync] Cache hit for:', clerkUserId)
     return cached.id
   }
 
   const supabase = getSupabase()
 
   try {
-    console.log('[clerk-sync] Looking up user:', clerkUserId)
 
     // Try to find user by id or clerkId
     const { data: user, error } = await supabase
@@ -69,12 +63,9 @@ export async function getUserIdFromClerk(clerkUserId: string): Promise<string | 
     }
 
     if (user) {
-      console.log('[clerk-sync] Found user by id/clerkId:', user.id)
       userIdCache.set(clerkUserId, { id: user.id, timestamp: Date.now() })
       return user.id
     }
-
-    console.log('[clerk-sync] User not found by id/clerkId, trying email lookup')
 
     // If not found, get email from Clerk and look up by email
     const { currentUser } = await import('@clerk/nextjs/server')
@@ -82,7 +73,6 @@ export async function getUserIdFromClerk(clerkUserId: string): Promise<string | 
 
     if (clerkUser?.emailAddresses?.[0]?.emailAddress) {
       const email = clerkUser.emailAddresses[0].emailAddress
-      console.log('[clerk-sync] Looking up by email:', email)
 
       const { data: userByEmail, error: emailError } = await supabase
         .from('users')
@@ -96,8 +86,6 @@ export async function getUserIdFromClerk(clerkUserId: string): Promise<string | 
       }
 
       if (userByEmail) {
-        console.log('[clerk-sync] Found user by email:', userByEmail.id)
-
         // Sync Clerk data to database user - ONLY if database doesn't have it
         const updateData: Record<string, any> = {
           clerkId: clerkUserId,
@@ -131,10 +119,7 @@ export async function getUserIdFromClerk(clerkUserId: string): Promise<string | 
         return userByEmail.id
       }
 
-      // User doesn't exist - create them
-      console.log('[clerk-sync] User not found, creating new user for:', email)
-
-      const newUserId = clerkUserId // Use Clerk ID as database ID
+      const newUserId = clerkUserId
       const inviteCode = generateInviteCode()
       
       const { data: newUser, error: createError } = await supabase
@@ -159,7 +144,6 @@ export async function getUserIdFromClerk(clerkUserId: string): Promise<string | 
       if (createError) {
         // Handle unique constraint - user might have been created concurrently
         if (createError.code === '23505') {
-          console.log('[clerk-sync] User already exists, retrying lookup')
           const { data: existingUser } = await supabase
             .from('users')
             .select('id')
@@ -176,12 +160,10 @@ export async function getUserIdFromClerk(clerkUserId: string): Promise<string | 
         throw createError
       }
 
-      console.log('[clerk-sync] Created new user:', newUser.id)
       userIdCache.set(clerkUserId, { id: newUser.id, timestamp: Date.now() })
       return newUser.id
     }
 
-    console.log('[clerk-sync] No email found for Clerk user')
     return null
   } catch (error: any) {
     console.error('[clerk-sync] Error:', error?.message || error)

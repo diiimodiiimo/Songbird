@@ -27,3 +27,4 @@ COMMENT ON COLUMN users."notifyOnThisDay" IS 'Notify about On This Day memories'
 
 
 
+

@@ -109,7 +109,7 @@ export default function DemographicsScreen({ onContinue }: DemographicsScreenPro
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={12} currentStep={1} className="pb-8" />
+      <ProgressDots totalSteps={13} currentStep={0} className="pb-8" />
     </div>
   )
 }

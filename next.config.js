@@ -1,5 +1,12 @@
 /** @type {import('next').NextConfig} */
+
+const isCapacitorBuild = process.env.CAPACITOR_BUILD === 'true';
+
 const nextConfig = {
+  ...(isCapacitorBuild && {
+    output: 'export',
+    trailingSlash: true,
+  }),
   env: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_Y2hhcm1pbmcta2l3aS0zOS5jbGVyay5hY2NvdW50cy5kZXYk',
     CLERK_SECRET_KEY: 'sk_test_ItopDjxx3irW16Y07vAItJ681quUhnaPTTlyRjs9od',
@@ -16,6 +23,7 @@ const nextConfig = {
     // SUPABASE_SERVICE_ROLE_KEY: 'your-service-role-key-here', // Add this from Supabase Dashboard > Settings > API > service_role key
   },
   images: {
+    ...(isCapacitorBuild && { unoptimized: true }),
     remotePatterns: [
       {
         protocol: 'https',

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import ThemeBird from './ThemeBird'
+import FeatureSpotlight from './FeatureSpotlight'
 
 interface LeaderboardData {
   topArtists: Array<{ artist: string; count: number }>
@@ -141,6 +142,21 @@ export default function LeaderboardTab() {
 
   return (
     <div className="h-full overflow-y-auto">
+      {/* First-visit explainer */}
+      <div className="px-4 pt-3">
+        <FeatureSpotlight
+          featureId="leaderboard-intro"
+          title="Global Charts"
+          description="See the most-logged songs and artists across all SongBird users. The Global Song of the Day is the song most people logged yesterday."
+          icon="🏆"
+          tips={[
+            'When there\'s a tie, the song logged first wins',
+            'Use time filters to see trends across different periods',
+            'Toggle between artists and songs with the view switcher',
+          ]}
+        />
+      </div>
+
       {/* Tab Switcher */}
       <div className="sticky top-0 bg-bg z-10 px-4 py-3 border-b border-surface">
         <div className="flex gap-2">

@@ -5,3 +5,4 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS gender VARCHAR(50);
 COMMENT ON COLUMN users.gender IS 'User gender: male, female, non-binary, or prefer-not-to-say';
 
 
+

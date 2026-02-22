@@ -71,6 +71,7 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
   const [loadingVibes, setLoadingVibes] = useState(false)
   const [showBirdsSection, setShowBirdsSection] = useState(false)
   const [unlockedBirds, setUnlockedBirds] = useState<Array<{ birdId: string; isUnlocked: boolean }>>([])
+  const [profileVisible, setProfileVisible] = useState(true)
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deletingAccount, setDeletingAccount] = useState(false)
@@ -246,7 +247,8 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
         setBio(dbUser.bio || '')
         setSelectedArtists(dbUser.favoriteArtists || [])
         setSelectedSongs(dbUser.favoriteSongs || [])
-        setMessage(null) // Clear any previous errors
+        setProfileVisible(dbUser.profileVisible !== false)
+        setMessage(null)
       } else {
         // API returned an error
         const errorMessage = data.error || data.message || `HTTP ${res.status}: ${res.statusText}`
@@ -825,6 +827,65 @@ export default function ProfileTab({ onNavigateToAddEntry, onBack }: { onNavigat
                   <p className="text-xs text-text/60 mt-1">Email cannot be changed</p>
                 </div>
               </div>
+            </div>
+
+            {/* Profile Discoverability */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-text/80">
+                  <span className="flex items-center gap-2">
+                    <span className="text-lg">👁️</span>
+                    Profile Discoverable
+                  </span>
+                </label>
+                <button
+                  onClick={async () => {
+                    const newVal = !profileVisible
+                    setProfileVisible(newVal)
+                    try {
+                      await fetch('/api/profile', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ profileVisible: newVal }),
+                      })
+                    } catch (err) {
+                      console.error('Failed to update profile visibility:', err)
+                      setProfileVisible(!newVal)
+                    }
+                  }}
+                  className={`relative w-12 h-7 rounded-full transition-colors ${
+                    profileVisible ? 'bg-accent' : 'bg-surface border border-text/20'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full transition-transform shadow ${
+                    profileVisible ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+              <p className="text-xs text-text/60 mt-1">
+                {profileVisible
+                  ? 'Other users with mutual friends can find you'
+                  : 'Your profile is hidden from suggested users'}
+              </p>
+            </div>
+
+            {/* Help & FAQ */}
+            <div>
+              <label className="block mb-2 text-sm font-medium text-text/80">
+                <span className="flex items-center gap-2">
+                  <span className="text-lg">❓</span>
+                  Help & FAQ
+                </span>
+              </label>
+              <Link
+                href="/help"
+                className="w-full px-4 py-3 bg-surface border border-text/20 text-text font-medium rounded-lg hover:bg-surface/80 transition-colors flex items-center justify-between"
+              >
+                <span>Browse common questions</span>
+                <svg className="w-4 h-4 text-text/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
             </div>
 
             {/* Tutorial / How it Works */}

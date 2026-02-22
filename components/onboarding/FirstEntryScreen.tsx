@@ -205,7 +205,7 @@ export default function FirstEntryScreen({ onContinue, onSkip }: FirstEntryScree
         </div>
 
         {/* Progress dots */}
-        <ProgressDots totalSteps={12} currentStep={5} className="pb-8" />
+        <ProgressDots totalSteps={13} currentStep={7} className="pb-8" />
       </div>
     )
   }
@@ -354,7 +354,7 @@ export default function FirstEntryScreen({ onContinue, onSkip }: FirstEntryScree
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={12} currentStep={5} className="pb-6" />
+      <ProgressDots totalSteps={13} currentStep={7} className="pb-6" />
     </div>
   )
 }

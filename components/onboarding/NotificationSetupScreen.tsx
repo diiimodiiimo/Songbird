@@ -130,7 +130,7 @@ export default function NotificationSetupScreen({ onContinue, onSkip }: Notifica
       </div>
 
       {/* Progress dots */}
-      <ProgressDots totalSteps={12} currentStep={9} className="pb-8" />
+      <ProgressDots totalSteps={13} currentStep={6} className="pb-8" />
     </div>
   )
 }

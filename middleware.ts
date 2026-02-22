@@ -18,16 +18,17 @@ export default clerkMiddleware(async (auth, req) => {
   
   // If user is not authenticated and trying to access a protected route
   if (!userId && !isPublic) {
-    // Check if waitlist mode is enabled
     const waitlistEnabled = process.env.WAITLIST_MODE_ENABLED === 'true'
+    const hasInviteCode = req.nextUrl.searchParams.has('invite')
     
-    if (waitlistEnabled) {
-      // Redirect to waitlist instead of home
+    if (waitlistEnabled && !hasInviteCode) {
       const waitlistUrl = new URL('/waitlist', req.url)
       return NextResponse.redirect(waitlistUrl)
     } else {
-      // Redirect to home page for sign in/sign up
       const homeUrl = new URL('/home', req.url)
+      if (hasInviteCode) {
+        homeUrl.searchParams.set('invite', req.nextUrl.searchParams.get('invite')!)
+      }
       return NextResponse.redirect(homeUrl)
     }
   }

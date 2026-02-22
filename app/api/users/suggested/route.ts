@@ -129,14 +129,16 @@ export async function GET(request: Request) {
       }
     })
 
+    // Only show users who have at least one mutual friend
+    const withMutuals = usersWithMutuals.filter(u => u.mutualFriends > 0)
+
     // Sort by mutual friends descending, then by name alphabetically
-    usersWithMutuals.sort((a, b) => {
+    withMutuals.sort((a, b) => {
       if (b.mutualFriends !== a.mutualFriends) return b.mutualFriends - a.mutualFriends
       return (a.name || a.username || '').localeCompare(b.name || b.username || '')
     })
 
-    // Limit results
-    const result = usersWithMutuals.slice(0, limit)
+    const result = withMutuals.slice(0, limit)
 
     return NextResponse.json({ users: result }, {
       headers: await getRateLimitHeaders(clerkUserId, 'READ'),
@@ -149,4 +151,5 @@ export async function GET(request: Request) {
     )
   }
 }
+
 

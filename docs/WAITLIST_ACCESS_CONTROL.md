@@ -60,3 +60,4 @@ If you later want to restrict signups to waitlist users only, you would need to:
 This gives you flexibility and doesn't disrupt current users.
 
 
+

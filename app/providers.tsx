@@ -3,10 +3,9 @@
 import { ClerkProvider } from '@clerk/nextjs'
 import { ThemeProvider } from '@/lib/theme'
 import PushNotifications from '@/components/PushNotifications'
+import CapacitorInit from '@/components/CapacitorInit'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  // Get publishable key from environment variable
-  // Fallback to the key from next.config.js if env var isn't set
   const publishableKey = 
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 
     'pk_test_Y2hhcm1pbmcta2l3aS0zOS5jbGVyay5hY2NvdW50cy5kZXYk'
@@ -27,6 +26,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ThemeProvider>
         {children}
         <PushNotifications />
+        <CapacitorInit />
       </ThemeProvider>
     </ClerkProvider>
   )

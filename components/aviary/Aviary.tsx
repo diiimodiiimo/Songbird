@@ -6,15 +6,17 @@ import { SongPreviewModal } from './SongPreviewModal'
 import { ContactsDiscovery } from './ContactsDiscovery'
 import { SuggestedUsers } from './SuggestedUsers'
 import { EmptyAviary } from './EmptyAviary'
+import FeatureSpotlight from '@/components/FeatureSpotlight'
 import type { AviaryData, AviaryBird as AviaryBirdType } from '@/types/aviary'
 
 interface AviaryProps {
   data: AviaryData
+  showHeader?: boolean
 }
 
 const VIEWED_ENTRIES_KEY = 'aviary_viewed_entries'
 
-export function Aviary({ data }: AviaryProps) {
+export function Aviary({ data, showHeader = true }: AviaryProps) {
   const [selectedBird, setSelectedBird] = useState<AviaryBirdType | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [viewedEntryIds, setViewedEntryIds] = useState<Set<string>>(new Set())
@@ -127,10 +129,27 @@ export function Aviary({ data }: AviaryProps) {
   return (
     <div className="flex flex-col min-h-[calc(100vh-180px)]">
       {/* Header */}
-      <header className="text-center mb-6 px-4">
-        <h1 className="text-2xl sm:text-3xl font-bold text-text mb-2">The Aviary</h1>
-        <p className="text-text-muted text-sm sm:text-base">See what your flock is listening to</p>
-      </header>
+      {showHeader && (
+        <header className="text-center mb-6 px-4">
+          <h1 className="text-2xl sm:text-3xl font-bold text-text mb-2">The Aviary</h1>
+          <p className="text-text-muted text-sm sm:text-base">See what your flock is listening to</p>
+        </header>
+      )}
+
+      {/* First-visit explainer */}
+      <div className="px-4">
+        <FeatureSpotlight
+          featureId="aviary-intro"
+          title="Welcome to the Aviary"
+          description="This is where your friends' birds live. Each friend appears as their chosen bird species — tap one to see what song they logged today."
+          icon="🪺"
+          tips={[
+            'A glowing dot means they posted a new song you haven\'t seen',
+            'Friends are grouped by "New Songs" (unread) and "Your Flock" (seen)',
+            'Use the search bar to find a specific friend',
+          ]}
+        />
+      </div>
 
       {/* Search/Filter Bar */}
       {friends.length > 0 && (
@@ -183,6 +202,7 @@ export function Aviary({ data }: AviaryProps) {
                   <AviaryBirdComponent
                     bird={friend}
                     size="medium"
+                    hasUnseenSong={true}
                     onTap={() => handleBirdTap(friend)}
                   />
                 </div>
@@ -206,6 +226,7 @@ export function Aviary({ data }: AviaryProps) {
                   <AviaryBirdComponent
                     bird={friend}
                     size="medium"
+                    hasUnseenSong={false}
                     onTap={() => handleBirdTap(friend)}
                   />
                 </div>

@@ -8,6 +8,7 @@ import Link from 'next/link'
 import ThemeBird from './ThemeBird'
 import SpotifyAttribution from './SpotifyAttribution'
 import SongbirdFlight from './SongbirdFlight'
+import AnalyticsTab from './AnalyticsTab'
 import { getLocalDateString } from '@/lib/date-utils'
 
 interface Entry {
@@ -67,6 +68,7 @@ export default function MemoryTab() {
   const [flightInsight, setFlightInsight] = useState<string | null>(null)
   const [loadingFlightInsight, setLoadingFlightInsight] = useState(false)
   const [recentDaysOpen, setRecentDaysOpen] = useState(false)
+  const [statsOpen, setStatsOpen] = useState(false)
 
   // Fetch On This Day entries
   useEffect(() => {
@@ -75,7 +77,7 @@ export default function MemoryTab() {
     }
   }, [selectedDate, isLoaded, user])
 
-  // Fetch recent entries (last 14)
+  // Fetch recent entries (last 14) and total count
   useEffect(() => {
     if (isLoaded && user) {
       fetchRecentEntries()
@@ -576,6 +578,60 @@ export default function MemoryTab() {
               </div>
               <p className="text-text/60">No recent entries yet.</p>
               <p className="text-text/40 text-sm mt-1">Start logging songs to see them here!</p>
+            </div>
+          )}
+        </div>
+      </div>
+      {/* Your Stats Section */}
+      <div className="border-t border-surface/50 pt-6 mt-6">
+        <button
+          onClick={() => setStatsOpen(!statsOpen)}
+          className="w-full flex items-center justify-between py-2 group"
+        >
+          <h2 className="text-xl sm:text-2xl font-bold group-hover:text-accent transition-colors">Your Stats</h2>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`text-text/40 transition-transform duration-300 ${statsOpen ? 'rotate-180' : ''}`}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            statsOpen ? 'max-h-[5000px] opacity-100 mt-4' : 'max-h-0 opacity-0'
+          }`}
+        >
+          {(milestoneData?.stats.entryCount ?? 0) >= 30 ? (
+            <AnalyticsTab />
+          ) : (
+            <div className="text-center py-12 bg-surface rounded-xl">
+              <div className="flex justify-center mb-4">
+                <ThemeBird size={72} state="curious" />
+              </div>
+              <h3 className="text-lg font-semibold text-text mb-2">Unlock Your Stats</h3>
+              <p className="text-text/60 mb-4 max-w-sm mx-auto">
+                Log 30 songs to unlock your personal analytics — top artists, top songs, and more.
+              </p>
+              <div className="max-w-xs mx-auto">
+                <div className="flex justify-between text-sm text-text/60 mb-1">
+                  <span>{milestoneData?.stats.entryCount ?? 0} / 30 songs logged</span>
+                  <span>{Math.round(((milestoneData?.stats.entryCount ?? 0) / 30) * 100)}%</span>
+                </div>
+                <div className="w-full bg-bg rounded-full h-3">
+                  <div 
+                    className="bg-accent h-3 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, ((milestoneData?.stats.entryCount ?? 0) / 30) * 100)}%` }}
+                  />
+                </div>
+              </div>
             </div>
           )}
         </div>
