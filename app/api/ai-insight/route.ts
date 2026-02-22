@@ -37,10 +37,8 @@ interface HistoricalContext {
   artistTotalPlays: { [artist: string]: number }
   songAppearedBefore: boolean
   previousSongDate?: string
-  personGenrePatterns: { [person: string]: { [genre: string]: number } }
-  consecutiveYearsSameGenre: number
-  userFirstEntryYear: number
   totalEntries: number
+  userFirstEntryYear: number
 }
 
 // ============================================================================
@@ -62,57 +60,38 @@ function simplifyGenre(genre: string): string {
   if (g.includes('electronic') || g.includes('edm') || g.includes('house') || g.includes('techno')) return 'electronic'
   if (g.includes('indie')) return 'indie'
   if (g.includes('jazz')) return 'jazz'
-  if (g.includes('classical')) return 'classical'
   if (g.includes('latin') || g.includes('reggaeton')) return 'latin'
-  if (g.includes('afro')) return 'afrobeats'
   return genre.split(' ')[0]
 }
 
-function extractNoteHighlights(notes: string): string[] {
+function extractNoteKeywords(notes: string): string[] {
   if (!notes) return []
-  const highlights: string[] = []
   const lower = notes.toLowerCase()
+  const keywords: string[] = []
   
-  // Life events
-  const lifeEvents = [
+  const terms = [
     'birthday', 'wedding', 'graduation', 'christmas', 'new year', 'thanksgiving',
     'super bowl', 'concert', 'festival', 'vacation', 'road trip', 'first date',
-    'breakup', 'anniversary', 'funeral', 'prom', 'homecoming', 'party'
+    'breakup', 'anniversary', 'party', 'exam', 'midterm', 'final', 'interview',
+    'happy', 'sad', 'stressed', 'anxious', 'excited', 'tired', 'sick', 'hungover',
+    'miserable', 'amazing', 'perfect', 'terrible', 'rough', 'great', 'awful'
   ]
-  lifeEvents.forEach(e => { if (lower.includes(e)) highlights.push(e) })
   
-  // Feelings/states
-  const feelings = [
-    'happy', 'sad', 'stressed', 'anxious', 'excited', 'tired', 'sick',
-    'hungover', 'drunk', 'high', 'bored', 'lonely', 'grateful', 'nostalgic',
-    'miserable', 'amazing', 'perfect', 'terrible', 'rough', 'good day', 'bad day'
-  ]
-  feelings.forEach(f => { if (lower.includes(f)) highlights.push(f) })
-  
-  // School/work
-  const schoolWork = [
-    'exam', 'midterm', 'final', 'test', 'homework', 'project', 'deadline',
-    'interview', 'meeting', 'presentation', 'work', 'class', 'school', 'college'
-  ]
-  schoolWork.forEach(s => { if (lower.includes(s)) highlights.push(s) })
-  
-  return highlights.slice(0, 3) // max 3 highlights
+  terms.forEach(t => { if (lower.includes(t)) keywords.push(t) })
+  return keywords.slice(0, 2)
 }
 
 // ============================================================================
-// DATA FETCHING - Get historical context from full database
+// DATA FETCHING
 // ============================================================================
 
 async function getHistoricalContext(
   userId: string,
   currentArtists: string[],
-  currentSong: string,
-  currentPeople: string[],
-  currentGenres: string[]
+  currentSong: string
 ): Promise<HistoricalContext> {
   const supabase = getSupabase()
   
-  // Fetch user's full entry history (limited fields for performance)
   const { data: allEntries } = await supabase
     .from('entries')
     .select('artist, songTitle, date')
@@ -122,64 +101,28 @@ async function getHistoricalContext(
   
   const entries = allEntries || []
   
-  // Count total plays per artist
   const artistTotalPlays: { [artist: string]: number } = {}
   entries.forEach((e: any) => {
     artistTotalPlays[e.artist] = (artistTotalPlays[e.artist] || 0) + 1
   })
   
-  // Check if this exact song has appeared before
   const previousOccurrence = entries.find((e: any) => 
     e.songTitle === currentSong && e.artist === currentArtists[0]
   )
-  const songAppearedBefore = !!previousOccurrence
-  const previousSongDate = previousOccurrence?.date
   
-  // Get first entry year
   const oldestEntry = entries[entries.length - 1]
   const userFirstEntryYear = oldestEntry 
     ? new Date(oldestEntry.date).getFullYear() 
     : new Date().getFullYear()
   
-  // Person-genre patterns (need to fetch person_references)
-  const personGenrePatterns: { [person: string]: { [genre: string]: number } } = {}
-  
-  if (currentPeople.length > 0) {
-    // Get entries where these people were tagged
-    const { data: personRefs } = await supabase
-      .from('person_references')
-      .select('name, entryId')
-      .in('name', currentPeople)
-      .limit(500)
-    
-    if (personRefs && personRefs.length > 0) {
-      const entryIds = personRefs.map((p: any) => p.entryId)
-      const { data: taggedEntries } = await supabase
-        .from('entries')
-        .select('id, artist')
-        .in('id', entryIds)
-        .limit(500)
-      
-      // We'd need to fetch genres for these artists too
-      // For now, just count artist associations per person
-      // This is a simplified version - full implementation would cache genres
-    }
-  }
-  
   return {
     artistTotalPlays,
-    songAppearedBefore,
-    previousSongDate,
-    personGenrePatterns,
-    consecutiveYearsSameGenre: 0, // would need more complex calculation
-    userFirstEntryYear,
+    songAppearedBefore: !!previousOccurrence,
+    previousSongDate: previousOccurrence?.date,
     totalEntries: entries.length,
+    userFirstEntryYear,
   }
 }
-
-// ============================================================================
-// BUILD ENTRIES WITH GENRES
-// ============================================================================
 
 async function buildEntries(
   artists: string[],
@@ -191,7 +134,6 @@ async function buildEntries(
   const entries: YearEntry[] = []
   const artistGenreMap: { [key: string]: string } = {}
   
-  // Fetch genres from Spotify
   try {
     await getAccessToken()
     const uniqueArtists = Array.from(new Set(artists))
@@ -203,13 +145,9 @@ async function buildEntries(
         if (spotifyArtist?.genres && spotifyArtist.genres.length > 0) {
           artistGenreMap[artist] = simplifyGenre(spotifyArtist.genres[0])
         }
-      } catch (err) {
-        // continue
-      }
+      } catch (err) { /* continue */ }
     }
-  } catch (err) {
-    // continue without genres
-  }
+  } catch (err) { /* continue */ }
   
   for (let i = 0; i < artists.length; i++) {
     entries.push({
@@ -218,365 +156,452 @@ async function buildEntries(
       artist: artists[i] || '',
       genre: artistGenreMap[artists[i]] || undefined,
       notes: notes[i] || undefined,
-      people: [], // Will be filled per-entry if we have that data
+      people: [],
     })
   }
   
-  // Sort by year descending (newest first)
   entries.sort((a, b) => b.year - a.year)
   
-  const allGenres = Object.values(artistGenreMap)
-  
-  return { entries, genres: allGenres }
+  return { entries, genres: Object.values(artistGenreMap) }
 }
 
 // ============================================================================
-// NARRATIVE GENERATION
+// MULTI-YEAR STRUCTURAL TEMPLATES - Each one is COMPLETELY different
 // ============================================================================
 
-function generateMultiYearNarrative(
-  entries: YearEntry[], 
-  allPeople: string[],
+type MultiYearTemplate = (
+  entries: YearEntry[],
+  people: string[],
   history: HistoricalContext
-): string {
-  if (entries.length === 0) return ''
+) => string | null
+
+const multiYearTemplates: MultiYearTemplate[] = [
   
-  const newest = entries[0]
-  const oldest = entries[entries.length - 1]
-  const yearSpan = newest.year - oldest.year + 1
-  
-  // Analyze patterns
-  const genreByYear: { [year: number]: string } = {}
-  entries.forEach(e => { if (e.genre) genreByYear[e.year] = e.genre })
-  
-  const genres = entries.map(e => e.genre).filter(g => g) as string[]
-  const uniqueGenres = Array.from(new Set(genres))
-  const dominantGenre = genres.length > 0
-    ? Object.entries(genres.reduce((acc, g) => { acc[g] = (acc[g] || 0) + 1; return acc }, {} as {[k:string]:number}))
-        .sort((a, b) => b[1] - a[1])[0]?.[0]
-    : null
-  
-  const genreOutliers = dominantGenre 
-    ? entries.filter(e => e.genre && e.genre !== dominantGenre)
-    : []
-  const genreConsistent = dominantGenre
-    ? entries.filter(e => e.genre === dominantGenre)
-    : []
-  
-  // Check for repeating artists
-  const artistCounts: { [a: string]: YearEntry[] } = {}
-  entries.forEach(e => {
-    if (!artistCounts[e.artist]) artistCounts[e.artist] = []
-    artistCounts[e.artist].push(e)
-  })
-  const repeatingArtist = Object.entries(artistCounts).find(([_, ents]) => ents.length >= 2)
-  
-  // Extract note highlights across years
-  const allNoteHighlights: { year: number, highlights: string[] }[] = []
-  entries.forEach(e => {
-    if (e.notes) {
-      const highlights = extractNoteHighlights(e.notes)
-      if (highlights.length > 0) {
-        allNoteHighlights.push({ year: e.year, highlights })
-      }
-    }
-  })
-  
-  // Build narrative
-  let narrative = ''
-  
-  // --- OPENING: Set the scene with years ---
-  if (yearSpan >= 3) {
-    narrative += `${yearSpan} years of this date. `
-  }
-  
-  // --- SECTION 1: Start with most recent ---
-  narrative += `This year it was "${newest.song}" by ${newest.artist}`
-  
-  // Add historical depth for the artist
-  const artistTotal = history.artistTotalPlays[newest.artist] || 0
-  if (artistTotal >= 10) {
-    narrative += `, who you've logged ${artistTotal} times overall`
-  } else if (artistTotal >= 5) {
-    narrative += `, a regular in your rotation`
-  }
-  narrative += '. '
-  
-  // --- SECTION 2: Walk through the years with patterns ---
-  if (entries.length === 2) {
-    const prev = entries[1]
-    if (newest.genre && prev.genre && newest.genre === prev.genre) {
-      narrative += `Last year was also ${newest.genre} with "${prev.song}" by ${prev.artist}. `
-    } else if (newest.genre && prev.genre) {
-      narrative += `${prev.year} went a different direction with ${prev.genre} from ${prev.artist}. `
-    } else {
-      narrative += `Before that in ${prev.year}, it was ${prev.artist} with "${prev.song}". `
-    }
-  } else if (entries.length >= 3) {
-    // Multiple years - find the story
+  // STRUCTURE 1: Lead with the outlier year
+  (entries, people, history) => {
+    const genres = entries.map(e => e.genre).filter(g => g) as string[]
+    const genreCounts: {[g:string]: number} = {}
+    genres.forEach(g => { genreCounts[g] = (genreCounts[g] || 0) + 1 })
+    const sorted = Object.entries(genreCounts).sort((a,b) => b[1] - a[1])
     
-    if (repeatingArtist) {
-      const [artist, artistEntries] = repeatingArtist
-      const years = artistEntries.map(e => e.year).sort((a, b) => b - a)
-      const songs = artistEntries.map(e => `"${e.song}"`).join(' and ')
-      narrative += `${artist} keeps coming back on this date, showing up in ${years.join(' and ')} with ${songs}. `
-      
-      const others = entries.filter(e => e.artist !== artist)
-      if (others.length === 1) {
-        narrative += `The only exception was ${others[0].year} when you went with ${others[0].artist}. `
-      } else if (others.length > 1) {
-        const otherStr = others.map(e => `${e.artist} in ${e.year}`).join(', ')
-        narrative += `${otherStr} filled in the other years. `
-      }
-    } else if (dominantGenre && genreConsistent.length >= 2 && genreOutliers.length >= 1) {
-      // Genre pattern with outliers
-      const consistentYears = genreConsistent.map(e => e.year).sort((a, b) => b - a)
-      const consistentArtists = genreConsistent.map(e => e.artist).join(', ')
-      
-      narrative += `${dominantGenre} runs deep on this date, with ${consistentArtists} holding it down in ${consistentYears.join(', ')}. `
-      
-      const outlier = genreOutliers[0]
-      narrative += `But ${outlier.year} broke the pattern with ${outlier.genre} from ${outlier.artist}'s "${outlier.song}". `
-    } else {
-      // No clear pattern - tell the journey
-      const middle = entries.slice(1, -1)
-      
-      narrative += `Going back: `
-      const journey = entries.slice(1).map(e => {
-        let part = `${e.year} was ${e.artist}`
-        if (e.genre && e.genre !== newest.genre) {
-          part += ` (${e.genre})`
-        }
-        return part
-      })
-      narrative += journey.join(', ') + '. '
+    if (sorted.length < 2) return null
+    
+    const dominant = sorted[0][0]
+    const outlier = entries.find(e => e.genre && e.genre !== dominant)
+    if (!outlier) return null
+    
+    const dominantEntries = entries.filter(e => e.genre === dominant)
+    
+    let s = `${outlier.year} was the odd one out. While ${dominantEntries.map(e => e.year).join(', ')} all went ${dominant}, you picked ${outlier.artist}'s "${outlier.song}" that year`
+    if (outlier.genre) s += `, pure ${outlier.genre}`
+    s += '.'
+    
+    if (outlier.notes) {
+      const kw = extractNoteKeywords(outlier.notes)
+      if (kw.length > 0) s += ` Your notes say "${kw[0]}" so maybe that explains it.`
     }
-  }
-  
-  // --- SECTION 3: Note highlights (life context) ---
-  if (allNoteHighlights.length > 0) {
-    const highlight = allNoteHighlights[0]
-    const eventText = highlight.highlights[0]
-    if (eventText) {
-      narrative += `Your notes from ${highlight.year} mention "${eventText}" so that song carries that memory now. `
+    
+    if (people.length > 0) s += ` ${people[0]} was around that year.`
+    
+    return s
+  },
+
+  // STRUCTURE 2: Lead with a person
+  (entries, people, history) => {
+    if (people.length === 0) return null
+    
+    const person = people[0]
+    const newest = entries[0]
+    
+    let s = `${person} shows up in these memories.`
+    s += ` This year it was "${newest.song}" by ${newest.artist}`
+    
+    if (entries.length > 1) {
+      const others = entries.slice(1).map(e => `${e.artist} in ${e.year}`).join(', ')
+      s += `, before that you had ${others}`
     }
-  }
-  
-  // --- SECTION 4: People ---
-  if (allPeople.length > 0) {
-    if (allPeople.length === 1) {
-      narrative += `${allPeople[0]} was part of at least one of these moments. `
-    } else {
-      narrative += `${allPeople.slice(0, 2).join(' and ')} show up in these memories. `
-    }
-  }
-  
-  // --- SECTION 5: Song history ---
-  if (history.songAppearedBefore && history.previousSongDate) {
+    s += '.'
+    
+    const totalPlays = history.artistTotalPlays[newest.artist] || 0
+    if (totalPlays >= 10) s += ` ${newest.artist} is one of your regulars with ${totalPlays} total plays.`
+    
+    return s
+  },
+
+  // STRUCTURE 3: Lead with repeated song
+  (entries, people, history) => {
+    if (!history.songAppearedBefore || !history.previousSongDate) return null
+    
+    const newest = entries[0]
     const prevDate = new Date(history.previousSongDate)
     const monthName = prevDate.toLocaleString('default', { month: 'long' })
-    narrative += `"${newest.song}" actually showed up before, back in ${monthName} ${prevDate.getFullYear()}. `
-  }
+    
+    let s = `You've played "${newest.song}" before. Back in ${monthName} ${prevDate.getFullYear()}, same track.`
+    s += ` ${newest.artist} clearly has staying power for you`
+    
+    const totalPlays = history.artistTotalPlays[newest.artist] || 0
+    if (totalPlays >= 5) s += `, ${totalPlays} plays total`
+    s += '.'
+    
+    if (entries.length > 1) {
+      s += ` The other years on this date went different: ${entries.slice(1).map(e => `${e.artist} (${e.year})`).join(', ')}.`
+    }
+    
+    return s
+  },
+
+  // STRUCTURE 4: Lead with artist loyalty
+  (entries, people, history) => {
+    const artistCounts: {[a:string]: YearEntry[]} = {}
+    entries.forEach(e => {
+      if (!artistCounts[e.artist]) artistCounts[e.artist] = []
+      artistCounts[e.artist].push(e)
+    })
+    
+    const repeater = Object.entries(artistCounts).find(([_, ents]) => ents.length >= 2)
+    if (!repeater) return null
+    
+    const [artist, artistEntries] = repeater
+    const years = artistEntries.map(e => e.year).sort((a,b) => b - a)
+    const songs = artistEntries.map(e => `"${e.song}"`)
+    
+    let s = `${artist} owns this date. ${years.join(' and ')} both went to them`
+    s += `, with ${songs.join(' and ')}`
+    
+    const totalPlays = history.artistTotalPlays[artist] || 0
+    if (totalPlays >= 15) s += `. They're in your top artists overall with ${totalPlays} plays`
+    s += '.'
+    
+    const others = entries.filter(e => e.artist !== artist)
+    if (others.length > 0) {
+      s += ` ${others.map(e => `${e.year} was ${e.artist}`).join(', ')}.`
+    }
+    
+    if (people.length > 0) s += ` ${people[0]} was there for at least one.`
+    
+    return s
+  },
+
+  // STRUCTURE 5: Lead with notes/life event
+  (entries, people, history) => {
+    for (const e of entries) {
+      if (e.notes) {
+        const kw = extractNoteKeywords(e.notes)
+        if (kw.length > 0) {
+          let s = `${e.year} had "${kw[0]}" energy based on your notes. The song was "${e.song}" by ${e.artist}.`
+          
+          const others = entries.filter(x => x.year !== e.year)
+          if (others.length > 0) {
+            s += ` Other years: ${others.map(x => `${x.artist} in ${x.year}`).join(', ')}.`
+          }
+          
+          if (e.genre) {
+            const sameGenre = entries.filter(x => x.genre === e.genre && x.year !== e.year)
+            if (sameGenre.length > 0) {
+              s += ` The ${e.genre} theme also showed up in ${sameGenre.map(x => x.year).join(', ')}.`
+            }
+          }
+          
+          if (people.length > 0) s += ` ${people[0]} is tagged somewhere in here.`
+          
+          return s
+        }
+      }
+    }
+    return null
+  },
+
+  // STRUCTURE 6: Chronological journey (oldest to newest)
+  (entries, people, history) => {
+    if (entries.length < 3) return null
+    
+    const sorted = [...entries].sort((a,b) => a.year - b.year) // oldest first
+    const oldest = sorted[0]
+    const newest = sorted[sorted.length - 1]
+    
+    let s = `It started in ${oldest.year} with ${oldest.artist}'s "${oldest.song}".`
+    
+    const middle = sorted.slice(1, -1)
+    if (middle.length === 1) {
+      s += ` Then ${middle[0].year} brought ${middle[0].artist}.`
+    } else if (middle.length > 1) {
+      s += ` ${middle.map(e => `${e.year} was ${e.artist}`).join(', ')}.`
+    }
+    
+    s += ` Now in ${newest.year}, it's "${newest.song}" by ${newest.artist}.`
+    
+    if (oldest.genre && newest.genre) {
+      if (oldest.genre === newest.genre) {
+        s += ` Still ${oldest.genre} after all these years.`
+      } else {
+        s += ` Went from ${oldest.genre} to ${newest.genre}.`
+      }
+    }
+    
+    return s
+  },
+
+  // STRUCTURE 7: Genre consistency focus
+  (entries, people, history) => {
+    const genres = entries.map(e => e.genre).filter(g => g) as string[]
+    const uniqueGenres = Array.from(new Set(genres))
+    
+    if (uniqueGenres.length !== 1 || genres.length < 3) return null
+    
+    const genre = uniqueGenres[0]
+    const artists = entries.map(e => e.artist)
+    
+    let s = `${genre} every single year. ${entries.map(e => `${e.year}: ${e.artist}`).join('. ')}.`
+    s += ` You know what you like on this date.`
+    
+    const topArtist = artists.sort((a,b) => 
+      (history.artistTotalPlays[b] || 0) - (history.artistTotalPlays[a] || 0)
+    )[0]
+    const plays = history.artistTotalPlays[topArtist] || 0
+    if (plays >= 10) s += ` ${topArtist} leads with ${plays} total plays.`
+    
+    if (people.length > 0) s += ` ${people[0]} shares some of these.`
+    
+    return s
+  },
+
+  // STRUCTURE 8: Short and punchy (no fluff)
+  (entries, people, history) => {
+    if (entries.length < 2) return null
+    
+    const newest = entries[0]
+    const parts = entries.map(e => `${e.year}: ${e.artist}`)
+    
+    let s = parts.join('. ') + '.'
+    
+    if (people.length > 0) s += ` ${people[0]} involved.`
+    
+    const totalPlays = history.artistTotalPlays[newest.artist] || 0
+    if (totalPlays >= 15) s += ` ${newest.artist} at ${totalPlays} total.`
+    
+    return s
+  },
+
+  // STRUCTURE 9: Question format
+  (entries, people, history) => {
+    const newest = entries[0]
+    const genres = entries.map(e => e.genre).filter(g => g) as string[]
+    const uniqueGenres = Array.from(new Set(genres))
+    
+    let s = `Why ${newest.artist} this year?`
+    
+    if (uniqueGenres.length === 1 && genres.length >= 2) {
+      s += ` Maybe because ${uniqueGenres[0]} has been your go-to on this date.`
+      s += ` ${entries.slice(1).map(e => `${e.year} was also ${e.genre} with ${e.artist}`).join(', ')}.`
+    } else if (entries.length > 1) {
+      s += ` Before this it was ${entries.slice(1).map(e => `${e.artist} in ${e.year}`).join(', ')}.`
+    }
+    
+    if (people.length > 0) s += ` ${people[0]} might know.`
+    
+    return s
+  },
+
+  // STRUCTURE 10: Two-year comparison
+  (entries, people, history) => {
+    if (entries.length !== 2) return null
+    
+    const [newer, older] = entries
+    
+    let s = `${newer.year} vs ${older.year}. `
+    s += `"${newer.song}" by ${newer.artist} this time, "${older.song}" by ${older.artist} before.`
+    
+    if (newer.genre && older.genre) {
+      if (newer.genre === older.genre) {
+        s += ` Both ${newer.genre}.`
+      } else {
+        s += ` ${newer.genre} now, ${older.genre} then.`
+      }
+    }
+    
+    if (people.length > 0) s += ` ${people[0]} was part of one of these.`
+    
+    const newerPlays = history.artistTotalPlays[newer.artist] || 0
+    const olderPlays = history.artistTotalPlays[older.artist] || 0
+    if (newerPlays > olderPlays && newerPlays >= 10) {
+      s += ` ${newer.artist} has become more of a regular since then.`
+    }
+    
+    return s
+  },
+]
+
+// ============================================================================
+// RECENT TEMPLATES - Different structures for "this week" insights
+// ============================================================================
+
+type RecentTemplate = (
+  entries: YearEntry[],
+  people: string[],
+  history: HistoricalContext
+) => string | null
+
+const recentTemplates: RecentTemplate[] = [
   
-  return narrative.trim()
-}
+  // STRUCTURE 1: Artist phase
+  (entries, people, history) => {
+    const artistCounts: {[a:string]: number} = {}
+    entries.forEach(e => { artistCounts[e.artist] = (artistCounts[e.artist] || 0) + 1 })
+    const top = Object.entries(artistCounts).sort((a,b) => b[1] - a[1])[0]
+    
+    if (!top || top[1] < 2) return null
+    
+    const songs = entries.filter(e => e.artist === top[0]).slice(0,2).map(e => `"${e.song}"`)
+    let s = `${top[0]} mode this week. ${songs.join(' and ')} both got plays`
+    
+    const total = history.artistTotalPlays[top[0]] || 0
+    if (total >= 20) s += `, and they're already at ${total} total in your log`
+    s += '.'
+    
+    if (people.length > 0) s += ` ${people[0]} is in the mix.`
+    
+    return s
+  },
+
+  // STRUCTURE 2: Genre lock
+  (entries, people, history) => {
+    const genres = entries.map(e => e.genre).filter(g => g) as string[]
+    const unique = Array.from(new Set(genres))
+    
+    if (unique.length !== 1 || genres.length < 3) return null
+    
+    let s = `Locked into ${unique[0]} right now: ${entries.slice(0,3).map(e => e.artist).join(', ')}.`
+    
+    for (const e of entries.slice(0,3)) {
+      if (e.notes) {
+        const kw = extractNoteKeywords(e.notes)
+        if (kw.length > 0) {
+          s += ` Notes mention "${kw[0]}".`
+          break
+        }
+      }
+    }
+    
+    if (people.length > 0) s += ` ${people[0]} somewhere in there.`
+    
+    return s
+  },
+
+  // STRUCTURE 3: Scatter mode
+  (entries, people, history) => {
+    const unique = Array.from(new Set(entries.map(e => e.artist)))
+    if (unique.length < 4) return null
+    
+    let s = `All over the place this week: ${unique.slice(0,4).join(', ')}.`
+    
+    const genres = entries.map(e => e.genre).filter(g => g) as string[]
+    const uniqueG = Array.from(new Set(genres))
+    if (uniqueG.length >= 2) {
+      s += ` ${uniqueG[0]} to ${uniqueG[1]} and back.`
+    }
+    
+    if (people.length > 0) s += ` ${people[0]} caught some of it.`
+    
+    return s
+  },
+
+  // STRUCTURE 4: Most recent focus
+  (entries, people, history) => {
+    if (entries.length < 1) return null
+    
+    const e = entries[0]
+    let s = `Latest: "${e.song}" by ${e.artist}`
+    
+    const total = history.artistTotalPlays[e.artist] || 0
+    if (total >= 15) s += `, your ${total}th play of them`
+    
+    if (e.genre) s += `. ${e.genre} mood`
+    s += '.'
+    
+    if (entries.length > 1) {
+      s += ` Before that: ${entries.slice(1,3).map(x => x.artist).join(', ')}.`
+    }
+    
+    if (people.length > 0) s += ` ${people[0]} around.`
+    
+    return s
+  },
+
+  // STRUCTURE 5: Notes-led
+  (entries, people, history) => {
+    for (const e of entries.slice(0,3)) {
+      if (e.notes) {
+        const kw = extractNoteKeywords(e.notes)
+        if (kw.length > 0) {
+          let s = `"${kw[0]}" vibes this week.`
+          s += ` "${e.song}" by ${e.artist} fit the mood.`
+          
+          const others = entries.filter(x => x !== e).slice(0,2)
+          if (others.length > 0) {
+            s += ` Also played ${others.map(x => x.artist).join(', ')}.`
+          }
+          
+          return s
+        }
+      }
+    }
+    return null
+  },
+]
+
+// ============================================================================
+// SINGLE DAY / JOURNEY TEMPLATES
+// ============================================================================
 
 function generateSingleDayNarrative(
   entries: YearEntry[], 
-  allPeople: string[],
+  people: string[],
   history: HistoricalContext
 ): string {
   if (entries.length === 0) return ''
   
   if (entries.length === 1) {
     const e = entries[0]
-    let s = `"${e.song}" by ${e.artist}`
+    const total = history.artistTotalPlays[e.artist] || 0
     
-    const artistTotal = history.artistTotalPlays[e.artist] || 0
-    if (artistTotal >= 20) {
-      s += `, one of your most played artists overall`
-    } else if (artistTotal >= 5) {
-      s += `, a familiar name in your log`
-    }
+    // Randomly pick a structure
+    const structures = [
+      () => {
+        let s = `"${e.song}" by ${e.artist}`
+        if (total >= 20) s += `, one of your most played`
+        if (e.genre) s += `. ${e.genre}`
+        if (people.length > 0) s += `. With ${people[0]}`
+        return s + '.'
+      },
+      () => {
+        let s = `${e.artist} got the pick today with "${e.song}"`
+        if (total >= 10) s += `. Play #${total} for them`
+        if (people.length > 0) s += `. ${people[0]} there`
+        return s + '.'
+      },
+      () => {
+        if (e.notes) {
+          const kw = extractNoteKeywords(e.notes)
+          if (kw.length > 0) {
+            return `"${kw[0]}" day. "${e.song}" by ${e.artist} was the soundtrack.${people.length > 0 ? ` ${people[0]} involved.` : ''}`
+          }
+        }
+        return `"${e.song}" by ${e.artist}.${e.genre ? ` ${e.genre}.` : ''}${people.length > 0 ? ` ${people[0]}.` : ''}`
+      },
+    ]
     
-    if (e.genre) {
-      s += `. ${e.genre} mood`
-    }
-    
-    if (allPeople.length > 0) {
-      s += `. With ${allPeople[0]}`
-    }
-    
-    if (e.notes) {
-      const highlights = extractNoteHighlights(e.notes)
-      if (highlights.length > 0) {
-        s += `. Your notes mention "${highlights[0]}"`
-      }
-    }
-    
-    return s + '.'
+    return randomChoice(structures)()
   }
   
-  // Multiple songs same day
-  const artistCounts: { [a: string]: YearEntry[] } = {}
-  entries.forEach(e => {
-    if (!artistCounts[e.artist]) artistCounts[e.artist] = []
-    artistCounts[e.artist].push(e)
-  })
+  // Multiple songs same day - simplified
+  const artists = entries.map(e => e.artist)
+  const unique = Array.from(new Set(artists))
   
-  const sorted = Object.entries(artistCounts).sort((a, b) => b[1].length - a[1].length)
-  const topArtist = sorted[0]
-  
-  if (topArtist[1].length >= 2) {
-    const songs = topArtist[1].map(e => `"${e.song}"`).join(' and ')
-    let s = `${topArtist[0]} on repeat, ${songs} both got plays`
-    
-    if (sorted.length > 1) {
-      s += `. Also threw in some ${sorted.slice(1, 3).map(([a]) => a).join(', ')}`
-    }
-    
-    if (allPeople.length > 0) {
-      s += `. ${allPeople[0]} was there for this`
-    }
-    
-    return s + '.'
+  if (unique.length === 1) {
+    return `${unique[0]} on repeat today. ${entries.map(e => `"${e.song}"`).join(', ')}.${people.length > 0 ? ` ${people[0]} there.` : ''}`
   }
   
-  // Different artists
-  const genres = entries.map(e => e.genre).filter(g => g) as string[]
-  const uniqueGenres = Array.from(new Set(genres))
-  
-  if (uniqueGenres.length === 1 && genres.length >= 2) {
-    return `All ${uniqueGenres[0]} today with ${entries.map(e => e.artist).join(', ')}.${allPeople.length > 0 ? ` ${allPeople[0]} approved.` : ''}`
-  }
-  
-  let s = `${entries.map(e => e.artist).join(', ')} all in one day`
-  if (entries[0].song) {
-    s += `. "${entries[0].song}" kicked it off`
-  }
-  if (allPeople.length > 0) {
-    s += `. ${allPeople[0]} was there`
-  }
-  return s + '.'
-}
-
-function generateRecentNarrative(
-  entries: YearEntry[], 
-  allPeople: string[],
-  history: HistoricalContext
-): string {
-  // RECENT = What you're into RIGHT NOW, current momentum, this week's vibe
-  // Different from On This Day which is historical reflection
-  
-  if (entries.length === 0) return ''
-  
-  const artistCounts: { [a: string]: number } = {}
-  entries.forEach(e => { artistCounts[e.artist] = (artistCounts[e.artist] || 0) + 1 })
-  
-  const sorted = Object.entries(artistCounts).sort((a, b) => b[1] - a[1])
-  const topArtist = sorted[0]
-  const uniqueArtists = Object.keys(artistCounts)
-  
-  const genres = entries.map(e => e.genre).filter(g => g) as string[]
-  const uniqueGenres = Array.from(new Set(genres))
-  
-  // Check for note highlights in recent entries
-  const recentHighlights: string[] = []
-  entries.slice(0, 3).forEach(e => {
-    if (e.notes) {
-      const h = extractNoteHighlights(e.notes)
-      if (h.length > 0) recentHighlights.push(...h)
-    }
-  })
-  
-  // --- PATTERN 1: Same artist multiple times this week ---
-  if (topArtist && topArtist[1] >= 2) {
-    const relevantSongs = entries.filter(e => e.artist === topArtist[0]).slice(0, 2).map(e => `"${e.song}"`)
-    let s = `This week has been a ${topArtist[0]} week. ${relevantSongs.join(' and ')} both got plays`
-    
-    const totalPlays = history.artistTotalPlays[topArtist[0]] || 0
-    if (totalPlays >= 20) {
-      s += `, and they're already one of your top artists all-time`
-    } else if (totalPlays >= 10) {
-      s += `, adding to your ${totalPlays} total plays of them`
-    }
-    
-    // Add context from notes
-    if (recentHighlights.length > 0) {
-      s += `. Sounds like you've had "${recentHighlights[0]}" energy going on`
-    }
-    
-    if (allPeople.length > 0) {
-      s += `. ${allPeople[0]} has been in the picture`
-    }
-    
-    return s + '.'
-  }
-  
-  // --- PATTERN 2: Locked into one genre ---
-  if (uniqueGenres.length === 1 && genres.length >= 3) {
-    let s = `You're in a ${uniqueGenres[0]} pocket right now: ${entries.slice(0, 3).map(e => e.artist).join(', ')}`
-    
-    if (recentHighlights.length > 0) {
-      s += `. Your notes mention "${recentHighlights[0]}" which might explain the mood`
-    }
-    
-    if (allPeople.length > 0) {
-      s += `. ${allPeople[0]} is somewhere in this week`
-    }
-    
-    return s + '.'
-  }
-  
-  // --- PATTERN 3: Variety mode ---
-  if (uniqueArtists.length >= 4) {
-    let s = `Your week has been scattered: ${uniqueArtists.slice(0, 4).join(', ')}`
-    
-    if (uniqueGenres.length >= 2) {
-      s += `. Going from ${uniqueGenres[0]} to ${uniqueGenres[1]} and back`
-    } else {
-      s += `. Different artists but the vibe is consistent`
-    }
-    
-    if (allPeople.length > 0) {
-      s += `. ${allPeople[0]} was around for some of it`
-    }
-    
-    return s + '.'
-  }
-  
-  // --- PATTERN 4: Small sample, focus on most recent ---
-  if (entries.length >= 2) {
-    const newest = entries[0]
-    const second = entries[1]
-    
-    let s = `"${newest.song}" by ${newest.artist} was your most recent`
-    
-    if (newest.artist === second.artist) {
-      s += `, and before that you also played ${newest.artist}`
-    } else if (newest.genre && second.genre && newest.genre === second.genre) {
-      s += `. Before that was ${second.artist}, keeping the ${newest.genre} going`
-    } else {
-      s += `. ${second.artist} came before that`
-    }
-    
-    if (allPeople.length > 0) {
-      s += `. ${allPeople[0]} was part of this stretch`
-    }
-    
-    return s + '.'
-  }
-  
-  // --- FALLBACK: Single recent entry ---
-  const e = entries[0]
-  let s = `"${e.song}" by ${e.artist} is your latest`
-  if (e.genre) {
-    s += `. ${e.genre} mood right now`
-  }
-  if (allPeople.length > 0) {
-    s += `. With ${allPeople[0]}`
-  }
-  return s + '.'
+  return `${unique.join(', ')} today.${people.length > 0 ? ` With ${people[0]}.` : ''}`
 }
 
 function generateJourneyNarrative(
@@ -585,43 +610,81 @@ function generateJourneyNarrative(
   history: HistoricalContext
 ): string {
   if (entryCount === 0) {
-    return "Your first song is waiting. Pick something that matters to you right now."
+    return randomChoice([
+      "First song is waiting. Pick something that matters.",
+      "Your log is empty. What's playing right now?",
+      "No entries yet. Start with whatever you're feeling today.",
+    ])
   }
   
   if (entryCount === 1 && entries.length >= 1) {
     const e = entries[0]
-    return `It starts with "${e.song}" by ${e.artist}. Your first entry. The beginning of the log.`
+    return randomChoice([
+      `Started with "${e.song}" by ${e.artist}. Entry #1.`,
+      `First entry: ${e.artist}. "${e.song}". The log begins.`,
+      `"${e.song}" by ${e.artist} kicks it off.`,
+    ])
   }
   
-  if (entryCount <= 7 && entries.length >= 1) {
+  if (entryCount <= 7) {
     const artists = Array.from(new Set(entries.map(e => e.artist)))
-    const first = entries[entries.length - 1]
-    
     if (artists.length === 1) {
-      return `${entryCount} songs in and it's all ${artists[0]} so far. You know what you like.`
+      return `${entryCount} songs, all ${artists[0]}. Committed.`
     }
-    
-    return `${entryCount} songs logged. Started with "${first.song}" by ${first.artist} and you've been building from there.`
+    return `${entryCount} entries. ${artists.slice(0,3).join(', ')}. Building.`
   }
   
-  if (entryCount <= 30 && entries.length >= 1) {
+  if (entryCount <= 30) {
     const artists = Array.from(new Set(entries.map(e => e.artist)))
-    const genres = Array.from(new Set(entries.map(e => e.genre).filter(g => g)))
-    
-    if (genres.length === 1 && genres[0]) {
-      return `${entryCount} entries, mostly ${genres[0]}. Your taste is taking shape.`
-    }
-    
-    return `${entryCount} entries so far across ${artists.length} different artists. You're building something.`
+    return `${entryCount} songs logged across ${artists.length} artists. Keep going.`
   }
   
-  // 30+ entries
-  const yearsActive = new Date().getFullYear() - history.userFirstEntryYear + 1
-  if (yearsActive >= 2) {
-    return `${entryCount} songs over ${yearsActive} years now. This is becoming a real archive of your life.`
+  return `${entryCount} entries now. This is becoming a real archive.`
+}
+
+// ============================================================================
+// MAIN GENERATOR - Shuffles through templates
+// ============================================================================
+
+function generateMultiYearNarrative(
+  entries: YearEntry[], 
+  people: string[],
+  history: HistoricalContext
+): string {
+  if (entries.length === 0) return ''
+  if (entries.length === 1) return generateSingleDayNarrative(entries, people, history)
+  
+  // Shuffle templates and try each until one works
+  const shuffled = [...multiYearTemplates].sort(() => Math.random() - 0.5)
+  
+  for (const template of shuffled) {
+    const result = template(entries, people, history)
+    if (result) return result
   }
   
-  return `${entryCount} entries and counting. Your musical log is growing.`
+  // Fallback
+  const newest = entries[0]
+  return `"${newest.song}" by ${newest.artist} this year. ${entries.slice(1).map(e => `${e.year}: ${e.artist}`).join(', ')} before.`
+}
+
+function generateRecentNarrative(
+  entries: YearEntry[], 
+  people: string[],
+  history: HistoricalContext
+): string {
+  if (entries.length === 0) return ''
+  
+  // Shuffle templates and try each until one works
+  const shuffled = [...recentTemplates].sort(() => Math.random() - 0.5)
+  
+  for (const template of shuffled) {
+    const result = template(entries, people, history)
+    if (result) return result
+  }
+  
+  // Fallback
+  const e = entries[0]
+  return `"${e.song}" by ${e.artist} recently.${people.length > 0 ? ` ${people[0]} around.` : ''}`
 }
 
 // ============================================================================
@@ -659,35 +722,34 @@ export async function POST(request: Request) {
     const yearsList: number[] = years || artists.map(() => new Date().getFullYear())
     const notesList: string[] = notes || []
 
-    // Build entries with genres
-    const { entries, genres } = await buildEntries(artists, songs, yearsList, peopleList, notesList)
-
-    // Get historical context from full database
-    const history = await getHistoricalContext(
-      prismaUserId,
-      artists,
-      songs[0] || '',
-      peopleList,
-      genres
-    )
-
-    let insight: string
-
-    // Handle journey context (new users)
-    if (context === 'journey' && entryCount !== undefined) {
-      insight = generateJourneyNarrative(entryCount, entries, history)
-      if (insight) {
-        return NextResponse.json({ insight })
+    const { entries } = await buildEntries(artists, songs, yearsList, peopleList, notesList)
+    
+    // Add notes back to entries
+    for (let i = 0; i < entries.length && i < notesList.length; i++) {
+      // Notes were passed in same order as artists, need to match by index in original arrays
+      const originalIndex = artists.indexOf(entries.find((e, idx) => {
+        const origIdx = artists.findIndex((a, j) => a === e.artist && songs[j] === e.song && yearsList[j] === e.year)
+        return origIdx >= 0
+      })?.artist || '')
+      if (originalIndex >= 0 && notesList[originalIndex]) {
+        entries[i].notes = notesList[originalIndex]
       }
     }
 
-    // Handle recent context
+    const history = await getHistoricalContext(prismaUserId, artists, songs[0] || '')
+
+    let insight: string
+
+    if (context === 'journey' && entryCount !== undefined) {
+      insight = generateJourneyNarrative(entryCount, entries, history)
+      return NextResponse.json({ insight })
+    }
+
     if (context === 'recent') {
       insight = generateRecentNarrative(entries, peopleList, history)
       return NextResponse.json({ insight })
     }
 
-    // Multi-year (On This Day) or single day
     const uniqueYears = Array.from(new Set(yearsList))
     if (uniqueYears.length > 1) {
       insight = generateMultiYearNarrative(entries, peopleList, history)
