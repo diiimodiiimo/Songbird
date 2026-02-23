@@ -14,29 +14,6 @@ interface SongShareCardProps {
   onClose: () => void
 }
 
-const INSIGHTS = [
-  "this one just hit different today",
-  "the soundtrack to my whole mood rn",
-  "on repeat. no skip. ever.",
-  "when a song just *gets* you",
-  "found the sound I didn't know I needed",
-  "this is the one. that's it. that's the post.",
-  "main character energy in a song",
-  "if today had a theme song, this is it",
-  "couldn't stop thinking about this one",
-  "vibes: immaculate",
-  "this song understood the assignment",
-  "living in this sound today",
-  "my brain has been playing this all day",
-  "just gonna leave this here",
-  "the one song that made today make sense",
-]
-
-function getInsight(songTitle: string, date: string): string {
-  const hash = songTitle.length + date.charCodeAt(date.length - 1)
-  return INSIGHTS[hash % INSIGHTS.length]
-}
-
 function getDayLabel(dateStr: string): string {
   const [year, month, day] = dateStr.split('T')[0].split('-')
   const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
@@ -108,10 +85,10 @@ export default function SongShareCard({
   const [downloading, setDownloading] = useState(false)
   const { currentTheme } = useTheme()
   const birdLogo = getBirdLogo(currentTheme.id)
-  const insight = getInsight(songTitle, date)
   const dayLabel = getDayLabel(date)
   const accentColor = currentTheme.colors.accent
   const primaryColor = currentTheme.colors.primary
+  const tagline = 'remember your life through music'
 
   const generateImage = useCallback(async () => {
     setDownloading(true)
@@ -260,29 +237,6 @@ export default function SongShareCard({
       const artistY = infoY + titleLines * 68 + 15
       ctx.fillText(artist, W / 2, artistY)
 
-      // === INSIGHT QUOTE ===
-      const insightY = artistY + 80
-
-      // Quote background pill
-      const insightText = `"${insight}"`
-      ctx.font = 'italic 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-      const textW = ctx.measureText(insightText).width
-      const pillW = Math.min(textW + 60, W - 120)
-      const pillH = 56
-      const pillX = (W - pillW) / 2
-      
-      roundedRect(ctx, pillX, insightY - 36, pillW, pillH, pillH / 2)
-      ctx.fillStyle = `rgba(${accentR}, ${accentG}, ${accentB}, 0.12)`
-      ctx.fill()
-      roundedRect(ctx, pillX, insightY - 36, pillW, pillH, pillH / 2)
-      ctx.strokeStyle = `rgba(${accentR}, ${accentG}, ${accentB}, 0.25)`
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-
-      ctx.fillStyle = `rgba(${Math.min(accentR + 60, 255)}, ${Math.min(accentG + 60, 255)}, ${Math.min(accentB + 60, 255)}, 0.85)`
-      ctx.font = 'italic 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-      ctx.fillText(insightText, W / 2, insightY)
-
       // === BOTTOM SECTION ===
       // Date
       ctx.fillStyle = 'rgba(255,255,255,0.4)'
@@ -294,27 +248,47 @@ export default function SongShareCard({
       ctx.font = '600 30px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       ctx.fillText(`@${username}`, W / 2, H - 155)
 
-      // SongBird branding bar at very bottom
-      roundedRect(ctx, W / 2 - 130, H - 100, 260, 44, 22)
+      // SongBird branding bar with bird logo
+      const brandY = H - 110
+      const brandBirdSize = 36
+      const brandText = 'SongBird'
+      ctx.font = '600 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      const brandTextW = ctx.measureText(brandText).width
+      const brandTotalW = brandBirdSize + 10 + brandTextW
+      const brandPillW = brandTotalW + 40
+      
+      roundedRect(ctx, (W - brandPillW) / 2, brandY - 22, brandPillW, 48, 24)
       ctx.fillStyle = 'rgba(255,255,255,0.06)'
       ctx.fill()
 
+      if (birdImg.complete && birdImg.naturalWidth > 0) {
+        const birdX = (W - brandTotalW) / 2
+        ctx.drawImage(birdImg, birdX, brandY - 16, brandBirdSize, brandBirdSize)
+      }
+
       ctx.fillStyle = 'rgba(255,255,255,0.35)'
-      ctx.font = '600 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-      ctx.fillText('🐦  SongBird', W / 2, H - 72)
+      ctx.font = '600 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      ctx.textAlign = 'center'
+      const textX = (W - brandTotalW) / 2 + brandBirdSize + 10 + brandTextW / 2
+      ctx.fillText(brandText, textX, brandY + 8)
+
+      // Tagline
+      ctx.fillStyle = 'rgba(255,255,255,0.25)'
+      ctx.font = 'italic 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      ctx.fillText(tagline, W / 2, brandY + 50)
 
       // === EXPORT ===
       const link = document.createElement('a')
-      link.download = `songbird-${songTitle.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}.png`
-      link.href = canvas.toDataURL('image/png')
+      link.download = `songbird-${songTitle.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}.jpg`
+      link.href = canvas.toDataURL('image/jpeg', 0.95)
       link.click()
 
       if (navigator.share && navigator.canShare) {
         try {
           const blob = await new Promise<Blob>((resolve) => {
-            canvas.toBlob((b) => resolve(b!), 'image/png')
+            canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.95)
           })
-          const file = new File([blob], `songbird-${songTitle}.png`, { type: 'image/png' })
+          const file = new File([blob], `songbird-${songTitle}.jpg`, { type: 'image/jpeg' })
           if (navigator.canShare({ files: [file] })) {
             await navigator.share({
               files: [file],
@@ -335,7 +309,16 @@ export default function SongShareCard({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={onClose}>
-      <div className="bg-surface rounded-2xl overflow-hidden max-w-sm w-full shadow-2xl border border-text/10" onClick={(e) => e.stopPropagation()}>
+      <div className="relative bg-surface rounded-2xl overflow-hidden max-w-sm w-full shadow-2xl border border-text/10" onClick={(e) => e.stopPropagation()}>
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
         {/* Card Preview */}
         <div className="relative aspect-[9/16] bg-gradient-to-b from-bg via-surface to-bg overflow-hidden">
           {/* Ambient glow */}
@@ -346,62 +329,53 @@ export default function SongShareCard({
             }}
           />
 
-          <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 py-8">
-            {/* Bird + Header */}
-            <div className="flex flex-col items-center mb-6">
+          <div className="relative z-10 flex flex-col items-center justify-between h-full px-6 py-6">
+            {/* Top: Bird + Header */}
+            <div className="flex flex-col items-center">
               <Image
                 src={birdLogo}
                 alt="Your bird"
-                width={56}
-                height={56}
+                width={72}
+                height={72}
                 className="object-contain drop-shadow-lg mb-2"
               />
-              <p className="text-xs font-bold tracking-[0.2em] uppercase" style={{ color: accentColor }}>
+              <p className="text-sm font-bold tracking-[0.2em] uppercase" style={{ color: accentColor }}>
                 {dayLabel} song of the day
               </p>
             </div>
 
-            {/* Album Art */}
-            <div className="relative w-44 h-44 sm:w-48 sm:h-48 mb-5">
-              <div 
-                className="absolute -inset-3 rounded-2xl opacity-50 blur-xl"
-                style={{ backgroundColor: accentColor }}
-              />
-              <Image
-                src={albumArt}
-                alt={songTitle}
-                width={192}
-                height={192}
-                className="relative rounded-xl w-full h-full object-cover ring-1 ring-white/10"
-              />
+            {/* Middle: Album Art + Song Info */}
+            <div className="flex flex-col items-center">
+              <div className="relative w-44 h-44 sm:w-48 sm:h-48 mb-4">
+                <div 
+                  className="absolute -inset-3 rounded-2xl opacity-50 blur-xl"
+                  style={{ backgroundColor: accentColor }}
+                />
+                <Image
+                  src={albumArt}
+                  alt={songTitle}
+                  width={192}
+                  height={192}
+                  className="relative rounded-xl w-full h-full object-cover ring-1 ring-white/10"
+                />
+              </div>
+              <h3 className="text-xl font-bold text-text text-center mb-0.5 line-clamp-2 leading-tight">{songTitle}</h3>
+              <p className="text-text/60 text-base text-center">{artist}</p>
             </div>
 
-            {/* Song Info */}
-            <h3 className="text-lg font-bold text-text text-center mb-0.5 line-clamp-2 leading-tight">{songTitle}</h3>
-            <p className="text-text/60 text-sm text-center mb-4">{artist}</p>
-
-            {/* Insight Quote */}
-            <div 
-              className="px-4 py-2 rounded-full border mb-5 max-w-[280px]"
-              style={{ 
-                borderColor: `${accentColor}40`,
-                backgroundColor: `${accentColor}15`,
-              }}
-            >
-              <p className="text-xs italic text-center" style={{ color: `${accentColor}dd` }}>
-                &ldquo;{insight}&rdquo;
-              </p>
-            </div>
-
-            {/* Date & Username */}
-            <div className="text-center space-y-0.5 mt-auto">
-              <p className="text-text/40 text-xs">{formatDate(date)}</p>
-              <p className="text-xs font-semibold" style={{ color: `${accentColor}aa` }}>@{username}</p>
-            </div>
-
-            {/* Branding */}
-            <div className="mt-3 px-4 py-1.5 rounded-full bg-white/5">
-              <p className="text-text/30 text-[10px] font-semibold tracking-wider">🐦  SongBird</p>
+            {/* Bottom: Date, Username, Branding */}
+            <div className="flex flex-col items-center gap-2.5">
+              <div className="text-center space-y-0.5">
+                <p className="text-text/40 text-sm">{formatDate(date)}</p>
+                <p className="text-sm font-semibold" style={{ color: `${accentColor}aa` }}>@{username}</p>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-2 px-5 py-2 rounded-full bg-white/5">
+                  <Image src={birdLogo} alt="SongBird" width={20} height={20} className="object-contain" />
+                  <p className="text-text/35 text-xs font-semibold tracking-wider">SongBird</p>
+                </div>
+                <p className="text-text/25 text-[10px] italic">{tagline}</p>
+              </div>
             </div>
           </div>
         </div>
