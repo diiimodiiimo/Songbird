@@ -544,7 +544,7 @@ export default function FeedTab() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-base sm:text-lg mb-1 truncate">{entry.songTitle}</div>
+                  <div className="font-bold text-base sm:text-lg mb-1 line-clamp-2 leading-snug">{entry.songTitle}</div>
                   <div className="text-text/70 text-sm sm:text-base mb-2 truncate">by {entry.artist}</div>
                   <SpotifyAttribution variant="minimal" className="mt-1" />
                 </div>
@@ -624,7 +624,7 @@ export default function FeedTab() {
                       durationMs={entry.durationMs || undefined}
                       birdImage={getBirdLogo((entry.user.theme || 'cardinal') as any)}
                       birdSize={88}
-                      className="-mb-2 z-10"
+                      className="mb-2 z-10"
                     />
                     <div className="flex items-center gap-2">
                       {/* Spotify */}

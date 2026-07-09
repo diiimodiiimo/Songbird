@@ -374,76 +374,75 @@ export default function MemoryTab() {
         ) : onThisDayEntries.length > 0 ? (
           <div className="space-y-4">
             {onThisDayEntries.map((entry) => (
-              <div key={entry.id} style={albumTintStyle(entry.albumColor)} className="bg-surface rounded-xl p-6 hover:bg-surface/80 transition-colors">
-                <div className="flex gap-4">
+              /* Stacked layout: year → title → artist → art + bird row → notes → people */
+              <div key={entry.id} style={albumTintStyle(entry.albumColor)} className="bg-surface rounded-xl p-5 sm:p-6 hover:bg-surface/80 transition-colors">
+                <div className="text-sm text-accent font-semibold">
+                  {entry.date.split('-')[0]} {/* Year */}
+                </div>
+                <h3 className="font-title text-2xl mt-1 leading-snug">
+                  {entry.songTitle}
+                </h3>
+                <div className="text-text/70 mb-4">
+                  {entry.artist}
+                </div>
+
+                <div className="flex items-end gap-5 mb-4">
                   {entry.albumArt && (
-                    <div className="flex-shrink-0 self-stretch flex items-center">
-                      <div className="relative group">
-                        <div
-                          className="absolute -inset-1 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-xl opacity-75 blur-sm group-hover:opacity-100 transition-opacity"
-                          style={entry.albumColor ? { background: entry.albumColor } : undefined}
-                        ></div>
-                        <Image
-                          src={entry.albumArt}
-                          alt={entry.songTitle}
-                          width={120}
-                          height={120}
-                          className="relative rounded-lg h-full w-auto border-2 border-white/10"
-                          style={{ objectFit: 'contain' }}
-                        />
-                      </div>
+                    <div className="relative flex-shrink-0 group">
+                      <div
+                        className="absolute -inset-1 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-xl opacity-75 blur-sm group-hover:opacity-100 transition-opacity"
+                        style={entry.albumColor ? { background: entry.albumColor } : undefined}
+                      ></div>
+                      <Image
+                        src={entry.albumArt}
+                        alt={entry.songTitle}
+                        width={112}
+                        height={112}
+                        className="relative rounded-lg border-2 border-white/10"
+                        style={{ objectFit: 'cover', aspectRatio: '1/1' }}
+                      />
                     </div>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-accent mb-2 font-semibold">
-                      {entry.date.split('-')[0]} {/* Year */}
-                    </div>
-                    <h3 className="font-title text-2xl mb-1">
-                      {entry.songTitle}
-                    </h3>
-                    <div className="text-text/70 mb-3">
-                      {entry.artist}
-                    </div>
-                    <div className="mb-3 flex items-end gap-3">
-                      <PreviewButton
-                        songTitle={entry.songTitle}
-                        artist={entry.artist}
-                        durationMs={entry.durationMs || undefined}
-                        birdImage={getBirdLogo(currentTheme.id)}
-                        birdSize={64}
-                      />
-                      <SpotifyAttribution variant="minimal" className="mb-1" />
-                    </div>
-                    {showNotes && (entry.notesPreview || entry.notes) && (
-                      <p
-                        onClick={() => toggleNote(entry.id)}
-                        className="text-text/80 mb-3 text-sm cursor-pointer"
-                        title={expandedNotes[entry.id] ? 'Show less' : 'Show full note'}
-                      >
-                        {expandedNotes[entry.id]
-                          ? (entry.notes || entry.notesPreview)
-                          : (entry.notesPreview || entry.notes)}
-                        {!expandedNotes[entry.id] && entry.notesPreview?.endsWith('...') && (
-                          <span className="text-accent ml-1">more</span>
-                        )}
-                      </p>
-                    )}
-                    
-                    {/* People in Your Day */}
-                    {entry.people && entry.people.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {entry.people.map((person) => (
-                          <span
-                            key={person.id}
-                            className="px-3 py-1.5 bg-accent/10 border border-accent/30 rounded-full text-sm text-text font-medium"
-                          >
-                            {person.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                  <div className="flex flex-col items-start gap-2 pb-1">
+                    <PreviewButton
+                      songTitle={entry.songTitle}
+                      artist={entry.artist}
+                      durationMs={entry.durationMs || undefined}
+                      birdImage={getBirdLogo(currentTheme.id)}
+                      birdSize={60}
+                    />
+                    <SpotifyAttribution variant="minimal" />
                   </div>
                 </div>
+
+                {showNotes && (entry.notesPreview || entry.notes) && (
+                  <p
+                    onClick={() => toggleNote(entry.id)}
+                    className="text-text/80 text-sm leading-relaxed cursor-pointer"
+                    title={expandedNotes[entry.id] ? 'Show less' : 'Show full note'}
+                  >
+                    {expandedNotes[entry.id]
+                      ? (entry.notes || entry.notesPreview)
+                      : (entry.notesPreview || entry.notes)}
+                    {!expandedNotes[entry.id] && entry.notesPreview?.endsWith('...') && (
+                      <span className="text-accent ml-1">more</span>
+                    )}
+                  </p>
+                )}
+
+                {/* People in Your Day */}
+                {entry.people && entry.people.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {entry.people.map((person) => (
+                      <span
+                        key={person.id}
+                        className="px-3 py-1.5 bg-accent/10 border border-accent/30 rounded-full text-sm text-text font-medium"
+                      >
+                        {person.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

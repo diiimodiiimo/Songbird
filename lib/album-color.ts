@@ -65,6 +65,6 @@ export function extractAlbumColor(imageUrl: string): Promise<string | null> {
 export function albumTintStyle(albumColor?: string | null): React.CSSProperties {
   if (!albumColor || !/^#[0-9a-fA-F]{6}$/.test(albumColor)) return {}
   return {
-    backgroundImage: `linear-gradient(135deg, ${albumColor}2e 0%, ${albumColor}14 35%, transparent 70%)`,
+    backgroundImage: `linear-gradient(135deg, ${albumColor}52 0%, ${albumColor}1f 45%, transparent 80%)`,
   }
 }
