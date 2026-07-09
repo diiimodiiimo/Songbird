@@ -577,6 +577,18 @@ export default function FeedTab() {
                   <div className="text-text/70 text-sm sm:text-base mb-2 truncate">by {entry.artist}</div>
                   <SpotifyAttribution variant="minimal" className="mt-1" />
                 </div>
+                {/* Their bird perches bottom-right of the song block, feet on the
+                    divider — occupies already-empty space so card height is
+                    identical whether or not a preview exists */}
+                <PreviewButton
+                  songTitle={entry.songTitle}
+                  artist={entry.artist}
+                  album={entry.albumTitle}
+                  durationMs={entry.durationMs || undefined}
+                  birdImage={getBirdLogo((entry.user.theme || 'cardinal') as any)}
+                  birdSize={60}
+                  className="self-end flex-shrink-0 -mb-1"
+                />
               </div>
 
               {/* Duet — the viewer logged the same song/artist recently */}
@@ -630,7 +642,7 @@ export default function FeedTab() {
                 </button>
 
                 {/* Listen & Share Buttons */}
-                <div className="flex items-end gap-2 ml-auto">
+                <div className="flex items-center gap-2 ml-auto">
                   {/* Share (own entries only) */}
                   {entry.isOwnEntry && (
                     <button
@@ -644,42 +656,28 @@ export default function FeedTab() {
                       <span className="text-sm font-medium hidden sm:inline">Share</span>
                     </button>
                   )}
-                  {/* Their bird perches on the listen buttons and sings the preview */}
-                  <div className="flex flex-col items-center">
-                    <PreviewButton
-                      songTitle={entry.songTitle}
-                      artist={entry.artist}
-                      album={entry.albumTitle}
-                      durationMs={entry.durationMs || undefined}
-                      birdImage={getBirdLogo((entry.user.theme || 'cardinal') as any)}
-                      birdSize={88}
-                      className="mb-2 z-10"
-                    />
-                    <div className="flex items-center gap-2">
-                      {/* Spotify */}
-                      <a
-                        href={`https://open.spotify.com/track/${entry.trackId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#1DB954]/20 text-[#1DB954] hover:bg-[#1DB954]/30 transition-all"
-                        title="Listen on Spotify"
-                      >
-                        <SpotifyIcon />
-                        <span className="text-sm font-medium hidden sm:inline">Spotify</span>
-                      </a>
-                      {/* Apple Music */}
-                      <a
-                        href={`https://music.apple.com/us/search?term=${encodeURIComponent(`${entry.songTitle} ${entry.artist}`)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#FC3C44]/20 text-[#FC3C44] hover:bg-[#FC3C44]/30 transition-all"
-                        title="Listen on Apple Music"
-                      >
-                        <AppleMusicIcon />
-                        <span className="text-sm font-medium hidden sm:inline">Apple</span>
-                      </a>
-                    </div>
-                  </div>
+                  {/* Spotify */}
+                  <a
+                    href={`https://open.spotify.com/track/${entry.trackId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#1DB954]/20 text-[#1DB954] hover:bg-[#1DB954]/30 transition-all"
+                    title="Listen on Spotify"
+                  >
+                    <SpotifyIcon />
+                    <span className="text-sm font-medium hidden sm:inline">Spotify</span>
+                  </a>
+                  {/* Apple Music */}
+                  <a
+                    href={`https://music.apple.com/us/search?term=${encodeURIComponent(`${entry.songTitle} ${entry.artist}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#FC3C44]/20 text-[#FC3C44] hover:bg-[#FC3C44]/30 transition-all"
+                    title="Listen on Apple Music"
+                  >
+                    <AppleMusicIcon />
+                    <span className="text-sm font-medium hidden sm:inline">Apple</span>
+                  </a>
                 </div>
               </div>
 
