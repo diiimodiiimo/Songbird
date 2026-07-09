@@ -86,6 +86,7 @@ model Entry {
   artist      String
   albumTitle  String
   albumArt    String
+  albumColor  String? // dominant art color (hex), extracted at save time
   durationMs  Int
   explicit    Boolean  @default(false)
   popularity  Int

@@ -1,15 +1,25 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import AddEntryTab from './AddEntryTab'
-import MemoryTab from './MemoryTab'
-import FeedTab from './FeedTab'
-import AviaryTab from './AviaryTab'
-import ProfileTab from './ProfileTab'
+import dynamic from 'next/dynamic'
 import Navigation from './Navigation'
+import { stopActivePreview } from './PreviewButton'
+
+const TabLoading = () => (
+  <div className="flex justify-center py-16">
+    <div className="animate-pulse text-text-muted">Loading...</div>
+  </div>
+)
+
+// Each tab loads as its own chunk, so first paint only ships the active tab
+const AddEntryTab = dynamic(() => import('./AddEntryTab'), { loading: TabLoading })
+const MemoryTab = dynamic(() => import('./MemoryTab'), { loading: TabLoading })
+const FeedTab = dynamic(() => import('./FeedTab'), { loading: TabLoading })
+const AviaryTab = dynamic(() => import('./AviaryTab'), { loading: TabLoading })
+const ProfileTab = dynamic(() => import('./ProfileTab'), { loading: TabLoading })
 
 // Custom SongBird-style icon components
 const TodayIcon = ({ active }: { active: boolean }) => (
@@ -54,28 +64,36 @@ export default function Dashboard() {
   const { user, isLoaded } = useUser()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState('today')
+  // Tabs stay mounted after first visit so switching back is instant (no refetch)
+  const [visitedTabs, setVisitedTabs] = useState<string[]>(['today'])
+
+  const navigateToTab = useCallback((tabId: string) => {
+    stopActivePreview() // leaving a tab shouldn't leave a song playing
+    setActiveTab(tabId)
+    setVisitedTabs((prev) => (prev.includes(tabId) ? prev : [...prev, tabId]))
+  }, [])
 
   useEffect(() => {
     const handleNavigateToWrapped = () => {
       // Wrapped now lives in Memory tab
-      setActiveTab('history')
+      navigateToTab('history')
     }
     const handleNavigateToMemory = () => {
-      setActiveTab('history')
+      navigateToTab('history')
     }
     const handleNavigateToFriends = () => {
-      setActiveTab('feed')
+      navigateToTab('feed')
     }
     const handleNavigateToFeed = () => {
-      setActiveTab('feed')
+      navigateToTab('feed')
     }
     const handleNavigateToInsights = () => {
       // Insights now lives in Memory tab (Your Stats section)
-      setActiveTab('history')
+      navigateToTab('history')
     }
     const handleNavigateToLeaderboard = () => {
       // Leaderboard now lives in Aviary -> Community sub-tab
-      setActiveTab('aviary')
+      navigateToTab('aviary')
       window.dispatchEvent(new Event('navigateToAviaryCommunity'))
     }
     window.addEventListener('navigateToWrapped', handleNavigateToWrapped)
@@ -92,7 +110,7 @@ export default function Dashboard() {
       window.removeEventListener('navigateToInsights', handleNavigateToInsights)
       window.removeEventListener('navigateToLeaderboard', handleNavigateToLeaderboard)
     }
-  }, [user])
+  }, [user, navigateToTab])
 
   // Main tabs - 5 tabs: Today | Memory | Feed | Aviary | Profile
   const mainTabs = [
@@ -103,8 +121,8 @@ export default function Dashboard() {
     { id: 'profile', label: 'Profile', icon: ProfileIcon },
   ]
 
-  const getActiveComponent = () => {
-    switch (activeTab) {
+  const renderTab = (tabId: string) => {
+    switch (tabId) {
       case 'today': return <AddEntryTab />
       case 'history': return <MemoryTab />
       case 'feed': return <FeedTab />
@@ -118,9 +136,13 @@ export default function Dashboard() {
     <div className="min-h-screen bg-bg text-white">
       <Navigation />
       
-      {/* Main Content */}
+      {/* Main Content — visited tabs stay mounted, inactive ones are hidden */}
       <div className="container mx-auto px-4 py-4 pb-24">
-        {getActiveComponent()}
+        {visitedTabs.map((tabId) => (
+          <div key={tabId} hidden={activeTab !== tabId}>
+            {renderTab(tabId)}
+          </div>
+        ))}
       </div>
 
       {/* Bottom Navigation */}
@@ -132,7 +154,7 @@ export default function Dashboard() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => navigateToTab(tab.id)}
                 className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-lg transition-all ${
                   isActive
                     ? 'text-accent'

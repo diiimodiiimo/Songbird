@@ -8,6 +8,12 @@ const config: CapacitorConfig = {
     // For development, uncomment and set your local IP:
     // url: 'http://YOUR_LOCAL_IP:3000',
     // cleartext: true,
+    allowNavigation: [
+      '*.clerk.accounts.dev',
+      'accounts.google.com',
+      'appleid.apple.com',
+      '*.songbird.app',
+    ],
   },
   ios: {
     contentInset: 'automatic',

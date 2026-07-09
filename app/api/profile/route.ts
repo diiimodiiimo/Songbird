@@ -136,8 +136,10 @@ const updateProfileSchema = z.object({
   image: z
     .string()
     .transform((val) => (val.trim() === '' ? null : val.trim()))
-    .refine((val) => val === null || z.string().url().safeParse(val).success || val.startsWith('data:image'), {
-      message: 'Must be a valid URL, base64 data URI, or empty',
+    // Base64 data URIs are no longer accepted — upload via /api/profile/avatar,
+    // which stores the file in Supabase Storage and returns a URL
+    .refine((val) => val === null || z.string().url().safeParse(val).success, {
+      message: 'Must be a valid image URL (upload via /api/profile/avatar), or empty',
     })
     .optional()
     .nullable(),

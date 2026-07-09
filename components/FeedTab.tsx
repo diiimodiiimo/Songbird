@@ -10,6 +10,9 @@ import InviteFriendsCTA from './InviteFriendsCTA'
 import SpotifyAttribution from './SpotifyAttribution'
 import SongShareCard from './SongShareCard'
 import { trackTabView } from '@/lib/analytics-client'
+import { albumTintStyle } from '@/lib/album-color'
+import PreviewButton from './PreviewButton'
+import { getBirdLogo } from '@/lib/theme'
 
 interface Comment {
   id: string
@@ -31,6 +34,9 @@ interface FeedEntry {
   artist: string
   albumTitle: string
   albumArt: string
+  albumColor?: string | null
+  duet?: { type: 'song' | 'artist' } | null
+  durationMs?: number | null
   trackId: string
   user: {
     id: string
@@ -38,6 +44,7 @@ interface FeedEntry {
     name: string | null
     username: string | null
     image: string | null
+    theme?: string
   }
   mentions: Array<{
     id: string
@@ -457,9 +464,10 @@ export default function FeedTab() {
           <div
             key={entry.id}
             data-entry-id={entry.id}
+            style={albumTintStyle(entry.albumColor)}
             className={`bg-surface rounded-xl overflow-hidden border-2 transition-all ${
-              entry.isOwnEntry 
-                ? 'border-accent/40 ring-1 ring-accent/20' 
+              entry.isOwnEntry
+                ? 'border-accent/40 ring-1 ring-accent/20'
                 : !seenEntryIds.has(entry.id)
                 ? 'border-accent/30 ring-1 ring-accent/10'
                 : 'border-transparent hover:border-accent/30'
@@ -542,13 +550,28 @@ export default function FeedTab() {
                 </div>
               </div>
 
+              {/* Duet — the viewer logged the same song/artist recently */}
+              {entry.duet && (
+                <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/25">
+                  <div className="flex -space-x-1.5" aria-hidden="true">
+                    <ThemeBird size={18} />
+                    <ThemeBird size={18} />
+                  </div>
+                  <span className="text-sm text-accent font-medium">
+                    Duet — {entry.duet.type === 'song'
+                      ? 'you logged this song this week too'
+                      : `you logged ${entry.artist} this week too`}
+                  </span>
+                </div>
+              )}
+
               {/* Action Buttons */}
-              <div className="flex items-center gap-4 mt-4 pt-3 border-t border-surface">
+              <div className="flex items-center gap-2 sm:gap-4 mt-4 pt-3 border-t border-surface">
                 {/* Vibe Button */}
                 <button
                   onClick={() => handleVibe(entry.id)}
                   disabled={vibing === entry.id}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 rounded-lg transition-all ${
                     entry.hasVibed
                       ? 'bg-pink-500/20 text-pink-400'
                       : 'bg-surface hover:bg-pink-500/10 text-text/70 hover:text-pink-400'
@@ -556,14 +579,15 @@ export default function FeedTab() {
                 >
                   <HeartIcon filled={entry.hasVibed} />
                   <span className="text-sm font-medium">
-                    {entry.vibeCount > 0 ? entry.vibeCount : ''} Vibe{entry.vibeCount !== 1 ? 's' : ''}
+                    {entry.vibeCount > 0 ? entry.vibeCount : ''}
+                    <span className="hidden sm:inline"> Vibe{entry.vibeCount !== 1 ? 's' : ''}</span>
                   </span>
                 </button>
 
                 {/* Comment Button */}
                 <button
                   onClick={() => toggleComments(entry.id)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 rounded-lg transition-all ${
                     expandedComments.has(entry.id)
                       ? 'bg-accent/20 text-accent'
                       : 'bg-surface hover:bg-accent/10 text-text/70 hover:text-accent'
@@ -571,12 +595,13 @@ export default function FeedTab() {
                 >
                   <CommentIcon />
                   <span className="text-sm font-medium">
-                    {entry.commentCount > 0 ? entry.commentCount : ''} Comment{entry.commentCount !== 1 ? 's' : ''}
+                    {entry.commentCount > 0 ? entry.commentCount : ''}
+                    <span className="hidden sm:inline"> Comment{entry.commentCount !== 1 ? 's' : ''}</span>
                   </span>
                 </button>
 
                 {/* Listen & Share Buttons */}
-                <div className="flex items-center gap-2 ml-auto">
+                <div className="flex items-end gap-2 ml-auto">
                   {/* Share (own entries only) */}
                   {entry.isOwnEntry && (
                     <button
@@ -590,28 +615,42 @@ export default function FeedTab() {
                       <span className="text-sm font-medium hidden sm:inline">Share</span>
                     </button>
                   )}
-                  {/* Spotify */}
-                  <a
-                    href={`https://open.spotify.com/track/${entry.trackId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#1DB954]/20 text-[#1DB954] hover:bg-[#1DB954]/30 transition-all"
-                    title="Listen on Spotify"
-                  >
-                    <SpotifyIcon />
-                    <span className="text-sm font-medium hidden sm:inline">Spotify</span>
-                  </a>
-                  {/* Apple Music */}
-                  <a
-                    href={`https://music.apple.com/us/search?term=${encodeURIComponent(`${entry.songTitle} ${entry.artist}`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#FC3C44]/20 text-[#FC3C44] hover:bg-[#FC3C44]/30 transition-all"
-                    title="Listen on Apple Music"
-                  >
-                    <AppleMusicIcon />
-                    <span className="text-sm font-medium hidden sm:inline">Apple</span>
-                  </a>
+                  {/* Their bird perches on the listen buttons and sings the preview */}
+                  <div className="flex flex-col items-center">
+                    <PreviewButton
+                      songTitle={entry.songTitle}
+                      artist={entry.artist}
+                      album={entry.albumTitle}
+                      durationMs={entry.durationMs || undefined}
+                      birdImage={getBirdLogo((entry.user.theme || 'cardinal') as any)}
+                      birdSize={88}
+                      className="-mb-2 z-10"
+                    />
+                    <div className="flex items-center gap-2">
+                      {/* Spotify */}
+                      <a
+                        href={`https://open.spotify.com/track/${entry.trackId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#1DB954]/20 text-[#1DB954] hover:bg-[#1DB954]/30 transition-all"
+                        title="Listen on Spotify"
+                      >
+                        <SpotifyIcon />
+                        <span className="text-sm font-medium hidden sm:inline">Spotify</span>
+                      </a>
+                      {/* Apple Music */}
+                      <a
+                        href={`https://music.apple.com/us/search?term=${encodeURIComponent(`${entry.songTitle} ${entry.artist}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#FC3C44]/20 text-[#FC3C44] hover:bg-[#FC3C44]/30 transition-all"
+                        title="Listen on Apple Music"
+                      >
+                        <AppleMusicIcon />
+                        <span className="text-sm font-medium hidden sm:inline">Apple</span>
+                      </a>
+                    </div>
+                  </div>
                 </div>
               </div>
 

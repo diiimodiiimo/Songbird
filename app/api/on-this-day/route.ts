@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     while (hasMore) {
       let query = supabase
         .from('entries')
-        .select('id, date, songTitle, artist, albumArt, notes, durationMs, explicit, popularity, releaseDate')
+        .select('id, date, songTitle, artist, albumArt, albumColor, notes, durationMs, explicit, popularity, releaseDate')
         .eq('userId', userId)
         .order('date', { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1)
@@ -98,6 +98,7 @@ export async function GET(request: Request) {
       songTitle: entry.songTitle || '',
       artist: entry.artist || '',
       albumArt: entry.albumArt || null,
+      albumColor: entry.albumColor || null,
       notesPreview: entry.notes
         ? entry.notes.substring(0, 160) + (entry.notes.length > 160 ? '...' : '')
         : null,

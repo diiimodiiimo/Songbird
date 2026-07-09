@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     // Build query with pagination
     let query = supabase
       .from('entries')
-      .select('id, date, songTitle, artist, albumTitle, albumArt, createdAt, userId, trackId')
+      .select('id, date, songTitle, artist, albumTitle, albumArt, albumColor, durationMs, createdAt, userId, trackId')
       .in('userId', allUserIds)
       .order('date', { ascending: false })
       .limit(limit + 1) // Fetch one extra to check if there are more
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
     // Get user info for user + all friends
     const { data: users } = await supabase
       .from('users')
-      .select('id, email, name, username, image')
+      .select('id, email, name, username, image, theme')
       .in('id', allUserIds)
 
     const userMap = new Map((users || []).map(u => [u.id, u]))
@@ -174,6 +174,39 @@ export async function GET(request: Request) {
       }
     }
 
+    // Duets: does the viewer have a recent entry with the same song or artist?
+    // Compared against the viewer's last 14 days; a friend's matching entry
+    // within 7 days counts.
+    const DUET_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+    const fourteenDaysAgo = new Date(Date.now() - 2 * DUET_WINDOW_MS).toISOString()
+    const { data: myRecentEntries } = await supabase
+      .from('entries')
+      .select('trackId, artist, date')
+      .eq('userId', userId)
+      .gte('date', fourteenDaysAgo)
+
+    const myTrackDates = new Map<string, number>()
+    const myArtistDates = new Map<string, number>()
+    for (const mine of myRecentEntries || []) {
+      const t = Date.parse(mine.date)
+      if (mine.trackId) myTrackDates.set(mine.trackId, t)
+      if (mine.artist) myArtistDates.set(mine.artist.toLowerCase(), t)
+    }
+
+    const getDuet = (entry: any): { type: 'song' | 'artist' } | null => {
+      if (entry.userId === userId) return null
+      const entryTime = Date.parse(entry.date)
+      const songMatch = entry.trackId ? myTrackDates.get(entry.trackId) : undefined
+      if (songMatch !== undefined && Math.abs(entryTime - songMatch) <= DUET_WINDOW_MS) {
+        return { type: 'song' }
+      }
+      const artistMatch = entry.artist ? myArtistDates.get(entry.artist.toLowerCase()) : undefined
+      if (artistMatch !== undefined && Math.abs(entryTime - artistMatch) <= DUET_WINDOW_MS) {
+        return { type: 'artist' }
+      }
+      return null
+    }
+
     // Format entries for feed
     const feedEntries = entriesToReturn.map((entry) => ({
       id: entry.id,
@@ -182,6 +215,8 @@ export async function GET(request: Request) {
       artist: entry.artist,
       albumTitle: entry.albumTitle,
       albumArt: entry.albumArt,
+      albumColor: entry.albumColor || null,
+      durationMs: entry.durationMs || null,
       trackId: entry.trackId,
       user: userMap.get(entry.userId) || null,
       mentions: mentionsMap.get(entry.id) || [],
@@ -190,6 +225,7 @@ export async function GET(request: Request) {
       hasVibed: userVibeSet.has(entry.id),
       commentCount: commentCountMap.get(entry.id) || 0,
       isOwnEntry: entry.userId === userId, // Flag to identify user's own entries
+      duet: getDuet(entry),
     }))
 
     return NextResponse.json({ 

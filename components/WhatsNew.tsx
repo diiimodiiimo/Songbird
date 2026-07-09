@@ -16,6 +16,23 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '1.5.0',
+    date: 'Jul 2026',
+    title: 'Faster, Fresher, and a Midyear Surprise',
+    changes: [
+      { type: 'new', text: 'Midyear Rewind — if you\'ve logged 30+ songs since January, your first six months are wrapped and waiting on the Today screen' },
+      { type: 'new', text: 'Tap play on any song to hear a 30-second preview' },
+      { type: 'new', text: 'Duets — when a friend logs a song or artist you logged this week, the feed celebrates it' },
+      { type: 'new', text: 'Every song\'s card now glows with its album\'s colors' },
+      { type: 'new', text: 'Song search now shows results as you type — no more search button' },
+      { type: 'improved', text: 'The whole app is noticeably faster, especially switching between tabs' },
+      { type: 'improved', text: 'A fresh new look — cleaner text and visuals throughout' },
+      { type: 'improved', text: 'Tap any memory to read the full note' },
+      { type: 'fixed', text: 'People you add to your day now save properly (sorry about that!)' },
+      { type: 'fixed', text: 'Profile photos load much faster' },
+    ],
+  },
+  {
     version: '1.4.0',
     date: 'Feb 2026',
     title: 'Discoverability & Help',
@@ -85,10 +102,14 @@ export default function WhatsNew() {
     <>
       <button
         onClick={handleOpen}
+        aria-label="What's New"
         className="relative flex items-center gap-2 px-3 py-2 bg-surface border border-text/20 rounded-lg text-sm text-text/70 hover:text-text hover:border-text/30 transition-colors"
       >
-        <span>🆕</span>
-        <span>What's New</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9L12 3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M19 3.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" fill="currentColor" />
+        </svg>
+        <span className="hidden sm:inline">What's New</span>
         {hasUnseen && (
           <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-accent rounded-full animate-pulse" />
         )}

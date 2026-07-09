@@ -3,7 +3,7 @@
 
 import Constants from 'expo-constants';
 
-const API_BASE_URL = Constants.expoConfig?.extra?.apiBaseUrl || 'https://songbird.vercel.app';
+const API_BASE_URL = Constants.expoConfig?.extra?.apiBaseUrl || 'https://songbiiird.vercel.app';
 
 interface FetchOptions extends RequestInit {
   token?: string | null;
@@ -254,6 +254,15 @@ export const api = {
     apiFetch<{ user: UserProfile }>('/api/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
+      token,
+    }),
+
+  // image must be a data URI (data:image/jpeg;base64,...); server stores it
+  // in Supabase Storage and returns the public URL
+  uploadAvatar: (token: string, image: string) =>
+    apiFetch<{ url: string }>('/api/profile/avatar', {
+      method: 'POST',
+      body: JSON.stringify({ image }),
       token,
     }),
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { getThemeById, getBirdLogo } from '@/lib/theme'
 import SpotifyAttribution from '@/components/SpotifyAttribution'
+import AlbumArtPlaceholder from '@/components/AlbumArtPlaceholder'
 import type { AviaryBird as AviaryBirdType, SongAssociation } from '@/types/aviary'
 
 interface SongPreviewModalProps {
@@ -143,7 +144,7 @@ function LatestSongTab({
   if (!latestSong) {
     return (
       <div className="py-8">
-        <div className="text-4xl mb-4">🎵</div>
+        <div className="mb-4 flex justify-center"><AlbumArtPlaceholder className="w-16 h-16 rounded-xl" /></div>
         <p className="text-text-muted">
           {isCurrentUser 
             ? "You haven't logged a song yet today." 

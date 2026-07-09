@@ -5,6 +5,14 @@ import { z } from 'zod'
 import { getUserIdFromClerk } from '@/lib/clerk-sync'
 import { checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
+// entry_tags and person_references ids have no DB default (schema uses
+// Prisma-side cuid()), so inserts must generate them explicitly
+function generateId(): string {
+  const timestamp = Date.now().toString(36)
+  const randomPart = Math.random().toString(36).substring(2, 15)
+  return `c${timestamp}${randomPart}`
+}
+
 const updateEntrySchema = z.object({
   songTitle: z.string().optional(),
   artist: z.string().optional(),
@@ -18,6 +26,7 @@ const updateEntrySchema = z.object({
   uri: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   mood: z.string().nullable().optional(),
+  albumColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   date: z.string().optional(),
   taggedUserIds: z.array(z.string()).optional(),
   peopleNames: z.array(z.string()).optional(),
@@ -92,6 +101,7 @@ export async function PUT(
     if (data.uri) updateData.uri = data.uri
     if (data.notes !== undefined) updateData.notes = data.notes
     if (data.mood !== undefined) updateData.mood = data.mood
+    if (data.albumColor !== undefined) updateData.albumColor = data.albumColor
 
     const { data: updatedEntry, error: updateError } = await supabase
       .from('entries')
@@ -104,13 +114,17 @@ export async function PUT(
 
     // Create new tags
     if (data.taggedUserIds && data.taggedUserIds.length > 0) {
-      await supabase.from('entry_tags').insert(
+      const { error: tagsError } = await supabase.from('entry_tags').insert(
         data.taggedUserIds.map((taggedUserId) => ({
+          id: generateId(),
           entryId: id,
           userId: taggedUserId,
           createdAt: new Date().toISOString(),
         }))
       )
+      if (tagsError) {
+        console.error('[entries/[id]] PUT: Failed to save tags:', tagsError.message)
+      }
     }
 
     // Create new people references
@@ -131,6 +145,7 @@ export async function PUT(
               user.email?.toLowerCase().split('@')[0] === name.toLowerCase()
           )
           return {
+            id: generateId(),
             entryId: id,
             name,
             userId: matchedUser?.id || null,
@@ -139,7 +154,10 @@ export async function PUT(
         })
 
       if (peopleToCreate.length > 0) {
-        await supabase.from('person_references').insert(peopleToCreate)
+        const { error: peopleError } = await supabase.from('person_references').insert(peopleToCreate)
+        if (peopleError) {
+          console.error('[entries/[id]] PUT: Failed to save people:', peopleError.message)
+        }
       }
     }
 

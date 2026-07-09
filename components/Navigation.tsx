@@ -25,9 +25,7 @@ export default function Navigation() {
         <div className="flex items-center gap-4">
           {mounted && isLoaded && user && (
             <>
-              <div className="hidden sm:block">
-                <WhatsNew />
-              </div>
+              <WhatsNew />
               <Notifications />
               <span className="text-text-muted text-sm hidden sm:inline">{user.firstName || user.emailAddresses[0]?.emailAddress}</span>
               <SignOutButton redirectUrl="/home">

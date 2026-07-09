@@ -53,7 +53,7 @@ interface WrappedData {
   }>
 }
 
-export default function WrappedTab() {
+export default function WrappedTab({ half = false }: { half?: boolean } = {}) {
   const { user, isLoaded } = useUser()
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [wrappedData, setWrappedData] = useState<WrappedData | null>(null)
@@ -103,7 +103,7 @@ export default function WrappedTab() {
 
     setLoading(true)
     try {
-      const res = await fetch(`/api/wrapped?year=${currentYear}`)
+      const res = await fetch(`/api/wrapped?year=${currentYear}${half ? '&half=1' : ''}`)
       const data = await res.json()
       if (res.ok) {
         setWrappedData(data)
@@ -354,7 +354,6 @@ export default function WrappedTab() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 bg-surface/30 rounded-lg p-3">
-                    <span className="text-lg">🎵</span>
                     <div className="text-left">
                       <div className="font-semibold text-sm">Top Song</div>
                       <div className="text-xs text-text/60">The song that defined your year</div>
@@ -438,10 +437,10 @@ export default function WrappedTab() {
             <div className="mb-6 animate-bounce flex justify-center">
               <ThemeBird size={96} state="bounce" />
             </div>
-            <h2 className="text-4xl font-bold mb-4">SongBird Wrapped</h2>
-            <h3 className="text-2xl text-primary/80 mb-8">{wrappedData.year}</h3>
+            <h2 className="text-4xl font-bold mb-4">{half ? 'Midyear Rewind' : 'SongBird Wrapped'}</h2>
+            <h3 className="text-2xl text-primary/80 mb-8">{half ? `January – June ${wrappedData.year}` : wrappedData.year}</h3>
             <div className="text-lg text-primary/60">
-              Your year in music, wrapped
+              {half ? 'Six months of songs, wrapped early' : 'Your year in music, wrapped'}
             </div>
           </div>
         )
@@ -541,7 +540,7 @@ export default function WrappedTab() {
       case 'topSongs':
         return (
           <div className={`text-center ${slideClass}`}>
-            <div className="text-5xl mb-6">🎵</div>
+            <div className="mb-6 flex justify-center"><ThemeBird size={72} /></div>
             <h2 className="text-3xl font-bold mb-6">Top Songs</h2>
             <div className="space-y-4">
               {wrappedData.topSongs.map((item, index) => (
@@ -825,7 +824,7 @@ export default function WrappedTab() {
         if (!wrappedData.noteSongMatching || wrappedData.noteSongMatching.totalMatches === 0) return null
         return (
           <div className={`text-center ${slideClass}`}>
-            <div className="text-5xl mb-6">🎵💭</div>
+            <div className="mb-6 flex justify-center"><ThemeBird size={72} state="happy" /></div>
             <h2 className="text-3xl font-bold mb-4">Your Emotional Soundtrack</h2>
             <div className="text-lg text-primary/60 mb-6">
               Songs that captured your moods
@@ -887,7 +886,7 @@ export default function WrappedTab() {
         if (!wrappedData.noteSongMatching || wrappedData.noteSongMatching.totalWithLyrics === 0) return null
         return (
           <div className={`text-center ${slideClass}`}>
-            <div className="text-5xl mb-6">🎵📝</div>
+            <div className="mb-6 flex justify-center"><ThemeBird size={72} /></div>
             <h2 className="text-3xl font-bold mb-4">Lyrics vs Your Vibes</h2>
             <div className="text-lg text-primary/60 mb-6">
               Did your song choices match how you were feeling?
@@ -1069,10 +1068,12 @@ export default function WrappedTab() {
             </div>
             <h2 className="text-3xl font-bold mb-4">That's a wrap!</h2>
             <div className="text-lg text-primary/60 mb-6">
-              Thanks for making {wrappedData.year} musical
+              {half
+                ? `Six months down — see you in December for the full story`
+                : `Thanks for making ${wrappedData.year} musical`}
             </div>
             <div className="text-sm text-primary/40">
-              SongBird Wrapped
+              {half ? 'SongBird Midyear Rewind' : 'SongBird Wrapped'}
             </div>
           </div>
         )
@@ -1099,12 +1100,17 @@ export default function WrappedTab() {
         </select>
       </div>
 
-      {/* Mobile swipeable card with animations */}
+      {/* Mobile swipeable card with animations — tapping the card advances it
+          (stories-style) unless the tap landed on an interactive element */}
       <div
-        className="relative bg-gradient-to-br from-yellow-400/30 via-orange-300/25 to-red-400/20 border-2 border-yellow-400/40 rounded-2xl p-8 min-h-[500px] flex items-center justify-center overflow-hidden"
+        className="relative bg-gradient-to-br from-yellow-400/30 via-orange-300/25 to-red-400/20 border-2 border-yellow-400/40 rounded-2xl p-8 min-h-[420px] sm:min-h-[500px] flex items-center justify-center overflow-hidden cursor-pointer"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest('button, a, select, input')) return
+          if (currentCard < getTotalCards() - 1) nextCard()
+        }}
       >
         {/* SongBird themed background elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -1150,6 +1156,11 @@ export default function WrappedTab() {
           Next →
         </button>
       </div>
+
+      {/* Interaction hint */}
+      <p className="text-center text-xs text-primary/40">
+        Tap the card or swipe to keep going
+      </p>
 
       {/* Card indicators */}
       <div className="flex justify-center gap-2">

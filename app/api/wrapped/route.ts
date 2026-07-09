@@ -36,11 +36,37 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
     }
 
+    const { searchParams } = new URL(request.url)
+    const year = searchParams.get('year') || new Date().getFullYear().toString()
+    const yearNum = parseInt(year)
+    // half=1 → Midyear Rewind: January through June only
+    const half = searchParams.get('half') === '1'
+
+    const startDate = new Date(Date.UTC(yearNum, 0, 1, 0, 0, 0, 0)).toISOString()
+    const endDate = half
+      ? new Date(Date.UTC(yearNum, 5, 30, 23, 59, 59, 999)).toISOString()
+      : new Date(Date.UTC(yearNum, 11, 31, 23, 59, 59, 999)).toISOString()
+
+    const supabase = getSupabase()
+
+    // Lightweight eligibility probe (used by the Midyear Rewind card):
+    // just the entry count for the range — no stats, no paywall
+    if (searchParams.get('checkOnly') === 'true') {
+      const { count } = await supabase
+        .from('entries')
+        .select('id', { count: 'exact', head: true })
+        .eq('userId', userId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+      const totalEntries = count || 0
+      return NextResponse.json({ totalEntries, eligible: totalEntries >= 30 })
+    }
+
     // Check paywall: Wrapped is premium only
     const wrappedCheck = await canAccessWrapped(clerkUserId)
     if (!wrappedCheck.allowed) {
       return NextResponse.json(
-        { 
+        {
           error: 'Premium feature',
           message: wrappedCheck.reason,
           upgradeRequired: true,
@@ -48,15 +74,6 @@ export async function GET(request: Request) {
         { status: 403 }
       )
     }
-
-    const { searchParams } = new URL(request.url)
-    const year = searchParams.get('year') || new Date().getFullYear().toString()
-    const yearNum = parseInt(year)
-
-    const startDate = new Date(Date.UTC(yearNum, 0, 1, 0, 0, 0, 0)).toISOString()
-    const endDate = new Date(Date.UTC(yearNum, 11, 31, 23, 59, 59, 999)).toISOString()
-
-    const supabase = getSupabase()
 
     // Get ALL entries for the year with pagination
     const allEntries: any[] = []

@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import ThemeBird from './ThemeBird'
+import { albumTintStyle } from '@/lib/album-color'
+import PreviewButton from './PreviewButton'
+import { useTheme, getBirdLogo } from '@/lib/theme'
 import SpotifyAttribution from './SpotifyAttribution'
 import SongbirdFlight from './SongbirdFlight'
 import AnalyticsTab from './AnalyticsTab'
@@ -17,6 +20,7 @@ interface Entry {
   songTitle: string
   artist: string
   albumArt: string | null
+  albumColor?: string | null
   notesPreview?: string
   notes?: string
   people?: Array<{ id: string; name: string }>
@@ -50,6 +54,7 @@ interface MilestoneData {
 
 export default function MemoryTab() {
   const { user, isLoaded } = useUser()
+  const { currentTheme } = useTheme()
   const router = useRouter()
   const [selectedDate, setSelectedDate] = useState(getLocalDateString())
   const [onThisDayEntries, setOnThisDayEntries] = useState<Entry[]>([])
@@ -59,6 +64,11 @@ export default function MemoryTab() {
   const [loadingRecent, setLoadingRecent] = useState(false)
   const [loadingRecentReflections, setLoadingRecentReflections] = useState(false)
   const [showNotes, setShowNotes] = useState(true)
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({})
+
+  const toggleNote = (entryId: string) => {
+    setExpandedNotes((prev) => ({ ...prev, [entryId]: !prev[entryId] }))
+  }
   const [aiInsight, setAiInsight] = useState<string | null>(null)
   const [loadingInsight, setLoadingInsight] = useState(false)
   const [journeyNarrative, setJourneyNarrative] = useState<string | null>(null)
@@ -364,12 +374,15 @@ export default function MemoryTab() {
         ) : onThisDayEntries.length > 0 ? (
           <div className="space-y-4">
             {onThisDayEntries.map((entry) => (
-              <div key={entry.id} className="bg-surface rounded-xl p-6 hover:bg-surface/80 transition-colors">
+              <div key={entry.id} style={albumTintStyle(entry.albumColor)} className="bg-surface rounded-xl p-6 hover:bg-surface/80 transition-colors">
                 <div className="flex gap-4">
                   {entry.albumArt && (
                     <div className="flex-shrink-0 self-stretch flex items-center">
                       <div className="relative group">
-                        <div className="absolute -inset-1 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-xl opacity-75 blur-sm group-hover:opacity-100 transition-opacity"></div>
+                        <div
+                          className="absolute -inset-1 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-xl opacity-75 blur-sm group-hover:opacity-100 transition-opacity"
+                          style={entry.albumColor ? { background: entry.albumColor } : undefined}
+                        ></div>
                         <Image
                           src={entry.albumArt}
                           alt={entry.songTitle}
@@ -391,12 +404,28 @@ export default function MemoryTab() {
                     <div className="text-text/70 mb-3">
                       {entry.artist}
                     </div>
-                    <div className="mb-3">
-                      <SpotifyAttribution variant="minimal" />
+                    <div className="mb-3 flex items-end gap-3">
+                      <PreviewButton
+                        songTitle={entry.songTitle}
+                        artist={entry.artist}
+                        durationMs={entry.durationMs || undefined}
+                        birdImage={getBirdLogo(currentTheme.id)}
+                        birdSize={64}
+                      />
+                      <SpotifyAttribution variant="minimal" className="mb-1" />
                     </div>
                     {showNotes && (entry.notesPreview || entry.notes) && (
-                      <p className="text-text/80 mb-3 text-sm">
-                        {entry.notesPreview || entry.notes}
+                      <p
+                        onClick={() => toggleNote(entry.id)}
+                        className="text-text/80 mb-3 text-sm cursor-pointer"
+                        title={expandedNotes[entry.id] ? 'Show less' : 'Show full note'}
+                      >
+                        {expandedNotes[entry.id]
+                          ? (entry.notes || entry.notesPreview)
+                          : (entry.notesPreview || entry.notes)}
+                        {!expandedNotes[entry.id] && entry.notesPreview?.endsWith('...') && (
+                          <span className="text-accent ml-1">more</span>
+                        )}
                       </p>
                     )}
                     
@@ -526,12 +555,15 @@ export default function MemoryTab() {
           ) : recentEntries.length > 0 ? (
             <div className="space-y-3">
               {recentEntries.map((entry) => (
-                <div key={entry.id} className="bg-surface rounded-lg p-4 hover:bg-surface/80 transition-colors">
+                <div key={entry.id} style={albumTintStyle(entry.albumColor)} className="bg-surface rounded-lg p-4 hover:bg-surface/80 transition-colors">
                   <div className="flex gap-3">
                     {entry.albumArt && (
                       <div className="flex-shrink-0 self-stretch flex items-center">
                         <div className="relative group">
-                          <div className="absolute -inset-0.5 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-lg opacity-50 blur-[2px] group-hover:opacity-80 transition-opacity"></div>
+                          <div
+                            className="absolute -inset-0.5 bg-gradient-to-br from-accent via-pink-500 to-purple-500 rounded-lg opacity-50 blur-[2px] group-hover:opacity-80 transition-opacity"
+                            style={entry.albumColor ? { background: entry.albumColor } : undefined}
+                          ></div>
                           <Image
                             src={entry.albumArt}
                             alt={entry.songTitle}
@@ -562,8 +594,14 @@ export default function MemoryTab() {
                         {entry.artist}
                       </div>
                       {showNotes && (entry.notesPreview || entry.notes) && (
-                        <p className="text-text/80 text-xs mt-2 line-clamp-2">
-                          {entry.notesPreview || entry.notes}
+                        <p
+                          onClick={() => toggleNote(entry.id)}
+                          className={`text-text/80 text-xs mt-2 cursor-pointer ${expandedNotes[entry.id] ? '' : 'line-clamp-2'}`}
+                          title={expandedNotes[entry.id] ? 'Show less' : 'Show full note'}
+                        >
+                          {expandedNotes[entry.id]
+                            ? (entry.notes || entry.notesPreview)
+                            : (entry.notesPreview || entry.notes)}
                         </p>
                       )}
                     </div>

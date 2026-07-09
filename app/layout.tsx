@@ -1,15 +1,12 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Crimson_Text } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 
-const crimsonText = Crimson_Text({
-  weight: ['400', '600', '700'],
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-crimson',
+  variable: '--font-inter',
 })
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -41,7 +38,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={crimsonText.className}>
+      <body className={`${inter.variable} ${inter.className}`}>
         <Providers>{children}</Providers>
       </body>
     </html>

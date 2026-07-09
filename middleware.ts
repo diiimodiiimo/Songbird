@@ -7,6 +7,9 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up(.*)',
   '/join/(.*)',
   '/waitlist(.*)',
+  '/privacy(.*)',
+  '/terms(.*)',
+  '/help(.*)',
   '/api/webhooks(.*)',
   '/api/invites/validate(.*)',
   '/api/waitlist(.*)',
@@ -18,6 +21,11 @@ export default clerkMiddleware(async (auth, req) => {
   
   // If user is not authenticated and trying to access a protected route
   if (!userId && !isPublic) {
+    // API clients (web fetch, mobile app) need a JSON 401, not an HTML redirect
+    if (req.nextUrl.pathname.startsWith('/api')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const waitlistEnabled = process.env.WAITLIST_MODE_ENABLED === 'true'
     const hasInviteCode = req.nextUrl.searchParams.has('invite')
     
@@ -42,6 +50,9 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // Skip static assets: Next internals, favicon, images/video, and
+    // root-level PWA files (manifest.json, sw.js) which must never be
+    // redirected to HTML
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4)$).*)',
   ],
 }

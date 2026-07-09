@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { z } from 'zod'
-import { v4 as uuidv4 } from 'uuid'
 
 const joinWaitlistSchema = z.object({
   email: z.string().email(),
@@ -43,7 +42,7 @@ export async function POST(request: Request) {
     const { data: entry, error } = await supabase
       .from('waitlist_entries')
       .insert({
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         email,
         name: name || null,
         source: finalSource,

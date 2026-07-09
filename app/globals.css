@@ -155,8 +155,9 @@
 body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: 'Crimson Text', Georgia, 'Times New Roman', serif;
+  font-family: var(--font-inter), system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-weight: 400;
+  -webkit-font-smoothing: antialiased;
   transition: background-color 0.3s ease, color 0.3s ease;
   padding-top: var(--safe-area-top);
   padding-bottom: var(--safe-area-bottom);

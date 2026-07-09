@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SongBird",
-    "slug": "songbird",
+    "slug": "songbiiird",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,7 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.songbird.app",
       "associatedDomains": [
-        "applinks:songbird.vercel.app"
+        "applinks:songbiiird.vercel.app"
       ],
       "infoPlist": {
         "UIBackgroundModes": ["remote-notification"]
@@ -38,12 +38,12 @@
           "data": [
             {
               "scheme": "https",
-              "host": "songbird.vercel.app",
+              "host": "songbiiird.vercel.app",
               "pathPrefix": "/join"
             },
             {
               "scheme": "https",
-              "host": "songbird.vercel.app",
+              "host": "songbiiird.vercel.app",
               "pathPrefix": "/user"
             }
           ],
@@ -74,9 +74,9 @@
     ],
     "extra": {
       "clerkPublishableKey": "pk_test_Y2hhcm1pbmcta2l3aS0zOS5jbGVyay5hY2NvdW50cy5kZXYk",
-      "apiBaseUrl": "https://songbird.vercel.app",
+      "apiBaseUrl": "https://songbiiird.vercel.app",
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "c241dfd8-b69e-4772-9fee-7b9e8d4af10a"
       }
     }
   }

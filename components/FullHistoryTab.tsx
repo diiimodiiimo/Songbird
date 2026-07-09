@@ -57,7 +57,7 @@ export default function FullHistoryTab() {
         setFilteredEntries(sorted)
       } else if (res.status === 401) {
         console.error('Unauthorized - please sign in')
-        window.location.href = '/auth/signin'
+        window.location.href = '/home'
       }
     } catch (error) {
       console.error('Error fetching entries:', error)

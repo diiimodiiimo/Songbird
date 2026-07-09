@@ -1,5 +1,7 @@
 'use client'
 
+import AlbumArtPlaceholder from './AlbumArtPlaceholder'
+
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import ThemeBird from './ThemeBird'
@@ -220,9 +222,7 @@ export default function LeaderboardTab() {
                     </div>
                   </div>
                 ) : (
-                  <div className="w-48 h-48 bg-bg rounded-xl flex items-center justify-center">
-                    <span className="text-6xl">🎵</span>
-                  </div>
+                  <AlbumArtPlaceholder className="w-48 h-48 rounded-xl" />
                 )}
               </div>
 
@@ -354,7 +354,7 @@ export default function LeaderboardTab() {
                   : 'text-text/60 hover:text-text'
               }`}
             >
-              🎵 Songs
+              Songs
             </button>
           </div>
         </div>
@@ -504,9 +504,7 @@ export default function LeaderboardTab() {
                           style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
                         />
                       ) : (
-                        <div className="w-20 h-20 bg-gradient-to-br from-purple-400 to-purple-600 rounded-lg flex items-center justify-center text-3xl mb-3 border-4 border-white shadow-lg">
-                          🎵
-                        </div>
+                        <AlbumArtPlaceholder className="w-20 h-20 rounded-lg mb-3 border-4 border-white shadow-lg" />
                       )}
                       <div className="text-center px-2">
                         <div className="font-bold text-sm sm:text-base mb-1 line-clamp-2">{data.topSongs[1].songTitle}</div>
@@ -532,9 +530,7 @@ export default function LeaderboardTab() {
                           style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
                         />
                       ) : (
-                        <div className="w-[100px] h-[100px] bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-lg flex items-center justify-center text-4xl mb-3 border-4 border-white shadow-xl">
-                          🎵
-                        </div>
+                        <AlbumArtPlaceholder className="w-[100px] h-[100px] rounded-lg mb-3 border-4 border-white shadow-xl" />
                       )}
                       <div className="text-center px-2">
                         <div className="font-bold text-base sm:text-lg mb-1 line-clamp-2">{data.topSongs[0].songTitle}</div>
@@ -560,9 +556,7 @@ export default function LeaderboardTab() {
                           style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
                         />
                       ) : (
-                        <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center text-3xl mb-3 border-4 border-white shadow-lg">
-                          🎵
-                        </div>
+                        <AlbumArtPlaceholder className="w-20 h-20 rounded-lg mb-3 border-4 border-white shadow-lg" />
                       )}
                       <div className="text-center px-2">
                         <div className="font-bold text-sm sm:text-base mb-1 line-clamp-2">{data.topSongs[2].songTitle}</div>
@@ -594,8 +588,8 @@ export default function LeaderboardTab() {
                         style={{ aspectRatio: '1/1', objectFit: 'cover', objectPosition: 'center' }}
                       />
                     ) : (
-                      <div className="w-11 h-11 bg-accent/20 rounded flex items-center justify-center">
-                        <span className="text-xl">🎵</span>
+                      <div className="w-11 h-11 flex items-center justify-center">
+                        <AlbumArtPlaceholder className="w-11 h-11 rounded" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">

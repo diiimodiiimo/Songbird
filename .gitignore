@@ -56,3 +56,5 @@ google-credentials.json
 ios/App/App/public/
 ios/App/Pods/
 ios/capacitor-cordova-ios-plugins/
+.vercel
+.env*

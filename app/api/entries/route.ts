@@ -139,9 +139,9 @@ export async function GET(request: Request) {
       })
     } else {
       // All entries (paginated)
-      const selectFields = excludeImages 
-        ? 'id, date, songTitle, artist, albumTitle, notes'
-        : 'id, date, songTitle, artist, albumTitle, albumArt, notes'
+      const selectFields = excludeImages
+        ? 'id, date, songTitle, artist, albumTitle, notes, albumColor'
+        : 'id, date, songTitle, artist, albumTitle, albumArt, albumColor, notes'
 
       const { data: entries, error } = await supabase
         .from('entries')
@@ -252,6 +252,7 @@ export async function POST(request: Request) {
       uri,
       notes,
       mood,
+      albumColor,
       peopleNames = [],
     } = body
 
@@ -305,6 +306,7 @@ export async function POST(request: Request) {
         uri: uri || '',
         notes: notes || null,
         mood: mood || null,
+        albumColor: typeof albumColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(albumColor) ? albumColor : null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
@@ -339,6 +341,9 @@ export async function POST(request: Request) {
               user.email?.toLowerCase().split('@')[0] === name.toLowerCase()
           )
           return {
+            // id has no DB default (schema uses Prisma-side cuid()), so it
+            // must be generated here or the insert fails
+            id: generateId(),
             entryId: entry.id,
             name,
             userId: matchedUser?.id || null,
@@ -347,7 +352,10 @@ export async function POST(request: Request) {
         })
 
       if (peopleToCreate.length > 0) {
-        await supabase.from('person_references').insert(peopleToCreate)
+        const { error: peopleError } = await supabase.from('person_references').insert(peopleToCreate)
+        if (peopleError) {
+          console.error('[entries] POST: Failed to save people:', peopleError.message)
+        }
       }
     }
 

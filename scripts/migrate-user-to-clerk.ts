@@ -52,8 +52,7 @@ async function migrateUserToClerk() {
     // Get Clerk user by email using Clerk API
     console.log(`\n🔍 Looking for Clerk user with email: ${email}\n`)
 
-    // Use hardcoded key (same as in next.config.js)
-    const clerkApiKey = 'sk_test_ItopDjxx3irW16Y07vAItJ681quUhnaPTTlyRjs9od'
+    const clerkApiKey = process.env.CLERK_SECRET_KEY
     if (!clerkApiKey) {
       console.error('❌ CLERK_SECRET_KEY not found in environment variables')
       console.error('Please set CLERK_SECRET_KEY in your .env.local file')

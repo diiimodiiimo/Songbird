@@ -95,7 +95,31 @@ export default function EditProfilePage() {
     }
   }
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Downscale to max 512px JPEG so uploads stay small
+  const downscaleImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file)
+      const img = document.createElement('img')
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const maxSize = 512
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height))
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return reject(new Error('Canvas not supported'))
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/jpeg', 0.85))
+      }
+      img.onerror = () => {
+        URL.revokeObjectURL(url)
+        reject(new Error('Failed to load image'))
+      }
+      img.src = url
+    })
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -111,16 +135,23 @@ export default function EditProfilePage() {
       return
     }
 
-    // Convert to base64 for preview and storage
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      const base64String = reader.result as string
-      setProfileImage(base64String)
+    try {
+      const dataUri = await downscaleImage(file)
+      setProfileImage(dataUri) // instant local preview
+      const res = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUri }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setMessage({ type: 'error', text: data.error || 'Failed to upload image' })
+        return
+      }
+      setProfileImage(data.url)
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to process image' })
     }
-    reader.onerror = () => {
-      setMessage({ type: 'error', text: 'Failed to read image file' })
-    }
-    reader.readAsDataURL(file)
   }
 
   const toggleArtist = (artistName: string) => {

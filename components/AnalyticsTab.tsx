@@ -1,5 +1,7 @@
 'use client'
 
+import AlbumArtPlaceholder from './AlbumArtPlaceholder'
+
 import { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
 import Image from 'next/image'
@@ -184,7 +186,7 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
         setAnalytics(data)
       } else if (res.status === 401) {
         console.error('Unauthorized - please sign in')
-        window.location.href = '/auth/signin'
+        window.location.href = '/home'
       }
     } catch (error) {
       console.error('Error fetching analytics:', error)
@@ -534,7 +536,6 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
           {/* Songs Podium - Olympic style like Top Artists */}
           <section>
             <h3 className="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6 flex items-center gap-2">
-              <span>🎵</span>
               Top Songs
             </h3>
             
@@ -562,9 +563,7 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
                           />
                         </Link>
                       ) : (
-                        <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-3xl mb-3 border-4 border-white shadow-lg">
-                          🎵
-                        </div>
+                        <AlbumArtPlaceholder className="w-20 h-20 rounded-lg mb-3 border-4 border-white shadow-lg" />
                       )}
                       <div className="text-center px-2">
                         <div className="font-bold text-sm sm:text-base mb-0.5 line-clamp-2">{analytics.topSongs[1].songTitle}</div>
@@ -594,9 +593,7 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
                           />
                         </Link>
                       ) : (
-                        <div className="w-[100px] h-[100px] rounded-lg bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center text-4xl mb-3 border-4 border-white shadow-xl">
-                          🎵
-                        </div>
+                        <AlbumArtPlaceholder className="w-[100px] h-[100px] rounded-lg mb-3 border-4 border-white shadow-xl" />
                       )}
                       <div className="text-center px-2">
                         <div className="font-bold text-base sm:text-lg mb-0.5 line-clamp-2">{analytics.topSongs[0].songTitle}</div>
@@ -626,9 +623,7 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
                           />
                         </Link>
                       ) : (
-                        <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-3xl mb-3 border-4 border-white shadow-lg">
-                          🎵
-                        </div>
+                        <AlbumArtPlaceholder className="w-20 h-20 rounded-lg mb-3 border-4 border-white shadow-lg" />
                       )}
                       <div className="text-center px-2">
                         <div className="font-bold text-sm sm:text-base mb-0.5 line-clamp-2">{analytics.topSongs[2].songTitle}</div>
@@ -665,9 +660,7 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
                             />
                           </Link>
                         ) : (
-                          <div className="w-11 h-11 rounded bg-accent/20 flex items-center justify-center text-xl flex-shrink-0">
-                            🎵
-                          </div>
+                          <AlbumArtPlaceholder className="w-11 h-11 rounded flex-shrink-0" />
                         )}
 
                         {/* Song Info */}
@@ -711,9 +704,7 @@ export default function AnalyticsTab({ onNavigateToAddEntry, onBack }: { onNavig
                         />
                       </Link>
                     ) : (
-                      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-accent/20 flex items-center justify-center text-3xl sm:text-4xl mb-3">
-                        🎵
-                      </div>
+                      <AlbumArtPlaceholder className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg mb-3" />
                     )}
                     <div className="font-semibold text-sm mb-1 line-clamp-2">{song.songTitle}</div>
                     <div className="text-xs text-text/60 mb-2 line-clamp-1">{song.artist}</div>

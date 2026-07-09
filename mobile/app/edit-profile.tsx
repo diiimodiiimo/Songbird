@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { colors, fontSize, spacing, borderRadius } from '../lib/theme';
 import { api, UserProfile } from '../lib/api';
 import { useAuth, useAuthToken } from '../lib/auth';
@@ -102,17 +103,22 @@ export default function EditProfileScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
-      base64: true,
+      base64: false,
     });
 
-    if (!result.canceled && result.assets[0].base64) {
-      // Note: Uploading base64 image to backend
+    if (!result.canceled && result.assets[0]) {
       try {
+        // Downscale before upload — the avatar endpoint caps uploads at 2MB
+        const resized = await ImageManipulator.manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 512 } }],
+          { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        );
+        if (!resized.base64) throw new Error('Failed to process image');
+
         const token = await getToken();
         if (!token) return;
-        await api.updateProfile(token, {
-          image: `data:image/jpeg;base64,${result.assets[0].base64}`,
-        });
+        await api.uploadAvatar(token, `data:image/jpeg;base64,${resized.base64}`);
         await fetchProfile();
         setMessage({ type: 'success', text: 'Photo updated!' });
       } catch (err) {

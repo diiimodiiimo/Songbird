@@ -1,15 +1,21 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import dynamic from 'next/dynamic'
+
+// Heavy card-deck experience — only loaded if the user opens it
+const WrappedTab = dynamic(() => import('./WrappedTab'))
 import ThemeBird from './ThemeBird'
 import SpotifyAttribution from './SpotifyAttribution'
 import MilestoneModal from './MilestoneModal'
 import { UpgradePrompt } from './UpgradePrompt'
 import InfoTooltip from './InfoTooltip'
 import { getLocalDateString, isToday as isTodayLocal, parseLocalDate, getLocalStartOfDay } from '@/lib/date-utils'
+import { extractAlbumColor } from '@/lib/album-color'
 
 interface Track {
   id: string
@@ -31,6 +37,7 @@ export default function AddEntryTab() {
   const [showWrappedBanner, setShowWrappedBanner] = useState(true)
   const [date, setDate] = useState(getLocalDateString())
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [tracks, setTracks] = useState<Track[]>([])
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null)
   const [notes, setNotes] = useState('')
@@ -66,6 +73,7 @@ export default function AddEntryTab() {
   const [previousStreak, setPreviousStreak] = useState(0)
   const [friendsWhoLoggedToday, setFriendsWhoLoggedToday] = useState<Array<{ id: string; name: string; username?: string; image?: string }>>([])
   const [hoursUntilMidnight, setHoursUntilMidnight] = useState(24)
+  const [showMidyearWrapped, setShowMidyearWrapped] = useState(false)
 
   // Check if it's today's date
   const isToday = isTodayLocal(date)
@@ -188,7 +196,54 @@ export default function AddEntryTab() {
   useEffect(() => {
     fetchTodayData()
   }, [date, isLoaded, isSignedIn])
-  
+
+  // Search-as-you-type: debounce keystrokes, then let React Query handle
+  // fetching, request cancellation, and caching of repeated searches.
+  // NOTE: hooks must stay above the early returns below.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 350)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const {
+    data: searchResults,
+    isFetching: searching,
+    isError: searchError,
+  } = useQuery({
+    queryKey: ['song-search', debouncedQuery],
+    queryFn: async ({ signal }) => {
+      const res = await fetch(`/api/songs/search?q=${encodeURIComponent(debouncedQuery)}`, { signal })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to search songs')
+      return data.tracks as Track[]
+    },
+    enabled: debouncedQuery.length >= 2,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  useEffect(() => {
+    if (debouncedQuery.length < 2) {
+      setTracks([])
+    } else if (searchResults) {
+      setTracks(searchResults)
+    }
+  }, [searchResults, debouncedQuery])
+
+  // Midyear Rewind eligibility: 30+ entries Jan–Jun of this year.
+  // Only checked in the second half of the year.
+  const currentYear = new Date().getFullYear()
+  const isSecondHalf = new Date().getMonth() >= 6
+  const { data: midyearCheck } = useQuery({
+    queryKey: ['midyear-eligible', currentYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/wrapped?year=${currentYear}&half=1&checkOnly=true`)
+      if (!res.ok) return { eligible: false, totalEntries: 0 }
+      return res.json() as Promise<{ eligible: boolean; totalEntries: number }>
+    },
+    enabled: isLoaded && !!isSignedIn && isSecondHalf,
+    staleTime: 60 * 60 * 1000,
+  })
+
   // Show loading state while Clerk or initial data is loading
   if (!isLoaded || (isSignedIn && !initialLoadComplete)) {
     return (
@@ -264,7 +319,7 @@ export default function AddEntryTab() {
                     <div className="text-sm text-text/70">✓ Logged today</div>
                   ) : !existingEntry && hoursUntilMidnight < 3 && currentStreak > 0 ? (
                     <div className="text-sm text-red-400 font-medium">
-                      ⚠️ Your {currentStreak}-day streak ends in {hoursUntilMidnight} {hoursUntilMidnight === 1 ? 'hour' : 'hours'}!
+                      Your {currentStreak}-day streak ends in {hoursUntilMidnight} {hoursUntilMidnight === 1 ? 'hour' : 'hours'}
                     </div>
                   ) : (
                     <div className="text-sm text-accent/80">Log today to keep your streak!</div>
@@ -274,6 +329,42 @@ export default function AddEntryTab() {
             </div>
           </div>
         ) : null}
+
+        {/* Midyear Rewind — appears July onward once Jan–Jun has 30+ entries */}
+        {midyearCheck?.eligible && (
+          <button
+            onClick={() => setShowMidyearWrapped(true)}
+            className="w-full mb-6 rounded-xl p-4 border border-accent/30 bg-gradient-to-r from-accent/15 via-surface to-surface text-left hover:border-accent/60 transition-colors group"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="font-bold text-text text-lg">Your Midyear Rewind is ready</div>
+                <div className="text-sm text-text/60 mt-0.5">
+                  {midyearCheck.totalEntries} songs from January to June, wrapped early.
+                </div>
+              </div>
+              <span className="text-accent group-hover:translate-x-1 transition-transform">→</span>
+            </div>
+          </button>
+        )}
+
+        {/* Midyear Rewind overlay */}
+        {showMidyearWrapped && (
+          <div className="fixed inset-0 z-50 bg-bg overflow-y-auto">
+            <div className="sticky top-0 z-10 flex justify-end p-3 bg-gradient-to-b from-bg to-transparent">
+              <button
+                onClick={() => setShowMidyearWrapped(false)}
+                aria-label="Close Midyear Rewind"
+                className="px-3 py-1.5 rounded-lg bg-surface border border-text/20 text-sm text-text/80 hover:text-text"
+              >
+                Close
+              </button>
+            </div>
+            <div className="container mx-auto px-4 pb-12">
+              <WrappedTab half />
+            </div>
+          </div>
+        )}
 
         {/* Top Row: Full date with year */}
         <div className="mb-6">
@@ -429,25 +520,6 @@ export default function AddEntryTab() {
     setShowWrappedBanner(false)
   }
 
-  const searchSongs = async () => {
-    if (!query.trim()) return
-
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/songs/search?q=${encodeURIComponent(query)}`)
-      const data = await res.json()
-      if (res.ok) {
-        setTracks(data.tracks)
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to search songs' })
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to search songs' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const addPerson = (name: string) => {
     const trimmedName = name.trim()
     if (trimmedName && !peopleNames.includes(trimmedName)) {
@@ -533,6 +605,10 @@ export default function AddEntryTab() {
 
     setLoading(true)
     try {
+      // Pull the album's dominant color so cards can tint to the artwork.
+      // Optional — a null just means no tint.
+      const albumColor = await extractAlbumColor(selectedTrack.albumArt).catch(() => null)
+
       // If entry exists, update it; otherwise create new
       if (existingEntry) {
         const res = await fetch(`/api/entries/${existingEntry.id}`, {
@@ -551,6 +627,7 @@ export default function AddEntryTab() {
             uri: selectedTrack.uri,
             notes: notes || undefined,
             mood: selectedMood || undefined,
+            albumColor: albumColor || undefined,
             peopleNames: peopleNames.filter((name) => name.trim().length > 0),
           }),
         })
@@ -559,7 +636,7 @@ export default function AddEntryTab() {
         if (res.ok) {
           // Update mentions after entry is saved
           await updateMentions(existingEntry.id)
-          setMessage({ type: 'success', text: `🎵 Updated to ${selectedTrack.name} by ${selectedTrack.artist}! Notes preserved.` })
+          setMessage({ type: 'success', text: `Updated to ${selectedTrack.name} by ${selectedTrack.artist} — notes preserved.` })
           setSelectedTrack(null)
           setQuery('')
           setTracks([])
@@ -586,6 +663,7 @@ export default function AddEntryTab() {
             uri: selectedTrack.uri,
             notes,
             mood: selectedMood,
+            albumColor: albumColor || undefined,
             peopleNames: peopleNames.filter((name) => name.trim().length > 0),
           }),
         })
@@ -629,7 +707,7 @@ export default function AddEntryTab() {
             }, 2000)
           }
           
-          setMessage({ type: 'success', text: `🎵 ${selectedTrack.name} by ${selectedTrack.artist} added successfully!` })
+          setMessage({ type: 'success', text: `${selectedTrack.name} by ${selectedTrack.artist} logged.` })
           setSelectedTrack(null)
           setQuery('')
           setTracks([])
@@ -701,7 +779,7 @@ export default function AddEntryTab() {
       )}
       
       <div>
-        <h3 className="text-xl font-semibold mb-4">➕ Add a New Song of the Day</h3>
+        <h3 className="text-xl font-semibold mb-4">Add a New Song of the Day</h3>
         
         <div className="mb-4">
           <label className="block mb-2">Select a Date (You can pick any date)</label>
@@ -710,7 +788,7 @@ export default function AddEntryTab() {
             value={date}
             onChange={(e) => setDate(e.target.value)}
             onClick={(e) => e.currentTarget.showPicker?.()}
-            className="w-full px-4 py-2 bg-card border border-primary rounded text-primary cursor-pointer"
+            className="w-full h-12 px-4 bg-card border border-primary rounded text-primary cursor-pointer appearance-none"
             title="Click to change the date"
           />
           <p className="text-sm text-primary/60 mt-1">
@@ -724,18 +802,20 @@ export default function AddEntryTab() {
           {checkingEntry ? (
             <p className="text-sm text-primary/60 mt-1">Checking for existing entry...</p>
           ) : existingEntry ? (
-            <div className="mt-2 p-3 bg-green-900/30 border border-green-500/50 rounded">
-              <p className="text-green-300 font-semibold">
-                ✅ Entry exists for this date: <strong>{existingEntry.songTitle}</strong> by <strong>{existingEntry.artist}</strong>
+            <div className="mt-2 p-3 bg-green-900/20 border border-green-500/40 rounded">
+              <p className="text-green-300 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" aria-hidden="true" />
+                <span>Logged for this day: <strong>{existingEntry.songTitle}</strong> by <strong>{existingEntry.artist}</strong></span>
               </p>
-              <p className="text-sm text-green-300/80 mt-1">
-                You can change the song below - your notes will be preserved!
+              <p className="text-sm text-green-300/70 mt-1 pl-4">
+                Pick a new song below to change it — your notes stay put.
               </p>
             </div>
           ) : (
-            <div className="mt-2 p-3 bg-warn-bg/30 border border-red-500/50 rounded">
-              <p className="text-red-300 font-semibold">
-                🔴 No entry exists for this date. Add a song below.
+            <div className="mt-2 p-3 bg-red-900/20 border border-red-500/40 rounded">
+              <p className="text-red-300 flex items-center gap-2 text-sm">
+                <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" aria-hidden="true" />
+                <span>Nothing logged for this day yet — add a song below.</span>
               </p>
             </div>
           )}
@@ -743,23 +823,23 @@ export default function AddEntryTab() {
 
         <div className="mb-4">
           <label className="block mb-2">Search for a Song on Spotify</label>
-          <div className="flex gap-2">
+          <div className="relative">
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && searchSongs()}
-              placeholder="Enter song name..."
-              className="flex-1 px-4 py-2 bg-card border border-primary rounded text-primary"
+              placeholder="Start typing a song or artist..."
+              className="w-full h-12 px-4 pr-10 bg-card border border-primary rounded text-primary"
             />
-            <button
-              onClick={searchSongs}
-              disabled={loading}
-              className="px-6 py-2 bg-card border border-primary rounded hover:bg-primary/10 transition-colors"
-            >
-              Search
-            </button>
+            {searching && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              </div>
+            )}
           </div>
+          {searchError && (
+            <p className="text-sm text-red-300 mt-1">Search failed. Check your connection and keep typing to retry.</p>
+          )}
         </div>
 
         {tracks.length > 0 && (

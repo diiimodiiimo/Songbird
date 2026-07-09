@@ -21,24 +21,25 @@ import { getUserIdFromClerk } from '@/lib/clerk-sync'
  * 11. Delete user record
  * 12. Delete from Clerk
  */
-export async function POST(request: Request) {
-  try {
-    const { userId: clerkUserId } = await auth()
-    if (!clerkUserId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+async function handleDeleteAccount(request: Request) {
+  const { userId: clerkUserId } = await auth()
+  if (!clerkUserId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
+  // POST requires confirmText; DELETE (mobile) skips it since
+  // the mobile UI has its own confirmation dialog before calling.
+  if (request.method === 'POST') {
     const body = await request.json()
-    const { confirmText } = body
-
-    // Safety measure: require typing "DELETE" to confirm
-    if (confirmText !== 'DELETE') {
+    if (body.confirmText !== 'DELETE') {
       return NextResponse.json(
         { error: 'Please type "DELETE" to confirm account deletion' },
         { status: 400 }
       )
     }
+  }
 
+  try {
     const userId = await getUserIdFromClerk(clerkUserId)
     if (!userId) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 })
@@ -236,5 +237,11 @@ export async function POST(request: Request) {
   }
 }
 
+export async function POST(request: Request) {
+  return handleDeleteAccount(request)
+}
 
+export async function DELETE(request: Request) {
+  return handleDeleteAccount(request)
+}
 
