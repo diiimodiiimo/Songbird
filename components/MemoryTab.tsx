@@ -9,10 +9,18 @@ import ThemeBird from './ThemeBird'
 import { albumTintStyle } from '@/lib/album-color'
 import PreviewButton from './PreviewButton'
 import { useTheme, getBirdLogo } from '@/lib/theme'
+import { MemoryCardSkeleton, RecentEntrySkeleton } from './Skeleton'
 import SpotifyAttribution from './SpotifyAttribution'
 import SongbirdFlight from './SongbirdFlight'
 import AnalyticsTab from './AnalyticsTab'
 import { getLocalDateString } from '@/lib/date-utils'
+
+// Shift a YYYY-MM-DD string by whole days (local time, no timezone drift)
+function shiftDate(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day + days)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 
 interface Entry {
   id: string
@@ -21,6 +29,7 @@ interface Entry {
   artist: string
   albumArt: string | null
   albumColor?: string | null
+  mood?: string | null
   notesPreview?: string
   notes?: string
   people?: Array<{ id: string; name: string }>
@@ -330,13 +339,27 @@ export default function MemoryTab() {
           <label className="block text-text/70 mb-3 text-center">
             What happened on this day?
           </label>
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}
+              aria-label="Previous day"
+              className="w-11 h-11 flex items-center justify-center rounded-lg bg-bg text-text/70 hover:text-accent hover:bg-bg/70 transition-colors text-xl"
+            >
+              ‹
+            </button>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               className="bg-bg rounded-lg px-4 py-3 text-text border border-transparent focus:border-accent outline-none transition-colors"
             />
+            <button
+              onClick={() => setSelectedDate(shiftDate(selectedDate, 1))}
+              aria-label="Next day"
+              className="w-11 h-11 flex items-center justify-center rounded-lg bg-bg text-text/70 hover:text-accent hover:bg-bg/70 transition-colors text-xl"
+            >
+              ›
+            </button>
           </div>
           
           {/* Notes Toggle */}
@@ -365,19 +388,20 @@ export default function MemoryTab() {
         )}
 
         {loadingOnThisDay ? (
-          <div className="text-center py-12">
-            <div className="flex justify-center mb-4">
-              <ThemeBird size={64} state="curious" className="animate-pulse" />
-            </div>
-            <p className="text-text/60">Searching your memories...</p>
+          <div className="space-y-4">
+            <MemoryCardSkeleton />
+            <MemoryCardSkeleton />
           </div>
         ) : onThisDayEntries.length > 0 ? (
           <div className="space-y-4">
             {onThisDayEntries.map((entry) => (
               /* Stacked layout: year → title → artist → art + bird row → notes → people */
               <div key={entry.id} style={albumTintStyle(entry.albumColor)} className="bg-surface rounded-xl p-5 sm:p-6 hover:bg-surface/80 transition-colors">
-                <div className="text-sm text-accent font-semibold">
-                  {entry.date.split('-')[0]} {/* Year */}
+                <div className="text-sm text-accent font-semibold flex items-center gap-2">
+                  <span>{entry.date.split('-')[0]} {/* Year */}</span>
+                  {entry.mood && (
+                    <span className="text-base" title="How that day felt">{entry.mood}</span>
+                  )}
                 </div>
                 <h3 className="font-title text-2xl mt-1 leading-snug">
                   {entry.songTitle}
@@ -477,7 +501,7 @@ export default function MemoryTab() {
                   No memories from this day yet.
                 </p>
                 <p className="text-text/40 text-sm">
-                  Keep logging songs to build your musical timeline!
+                  Flip through other days with the arrows above, or keep logging to build your timeline.
                 </p>
                 {milestoneData?.nextMilestone?.progress && (
                   <div className="mt-6 bg-surface rounded-lg p-4 max-w-sm mx-auto">
@@ -545,11 +569,10 @@ export default function MemoryTab() {
           }`}
         >
           {loadingRecent ? (
-            <div className="text-center py-8">
-              <div className="flex justify-center mb-3">
-                <ThemeBird size={48} state="bounce" className="animate-bounce" />
-              </div>
-              <p className="text-text/60">Loading recent entries...</p>
+            <div className="space-y-3">
+              <RecentEntrySkeleton />
+              <RecentEntrySkeleton />
+              <RecentEntrySkeleton />
             </div>
           ) : recentEntries.length > 0 ? (
             <div className="space-y-3">

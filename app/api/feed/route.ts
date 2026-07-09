@@ -45,26 +45,34 @@ export async function GET(request: Request) {
     // Build query with pagination
     let query = supabase
       .from('entries')
-      .select('id, date, songTitle, artist, albumTitle, albumArt, albumColor, durationMs, createdAt, userId, trackId')
+      .select('id, date, songTitle, artist, albumTitle, albumArt, albumColor, durationMs, mood, createdAt, userId, trackId')
       .in('userId', allUserIds)
       .order('date', { ascending: false })
+      .order('id', { ascending: false }) // deterministic order for the cursor tie-breaker
       .limit(limit + 1) // Fetch one extra to check if there are more
 
-    // If cursor is provided (for pagination), get entries before the cursor
-    // Cursor format: "date:entryId" or just "date" for backwards compatibility
+    // If cursor is provided (for pagination), get entries before the cursor.
+    // Cursor format: "isoDate|entryId" — '|' because ISO dates contain ':'
+    // (the old ':' separator corrupted the date and pagination looped forever).
+    // Entries logged on the same day share an identical timestamp, so the
+    // entry id breaks ties: same-date entries with a smaller id come next.
     if (cursorParam) {
       try {
-        const [cursorDateStr] = cursorParam.split(':')
+        const sepIndex = cursorParam.lastIndexOf('|')
+        const cursorDateStr = sepIndex === -1 ? cursorParam : cursorParam.slice(0, sepIndex)
+        const cursorId = sepIndex === -1 ? null : cursorParam.slice(sepIndex + 1)
         const cursorDate = new Date(cursorDateStr)
-        
-        // Validate date
+
         if (isNaN(cursorDate.getTime())) {
           throw new Error('Invalid cursor date')
         }
-        
-        // Simple approach: filter by date < cursor date
-        // Client-side deduplication handles any edge cases with same-date entries
-        query = query.lt('date', cursorDate.toISOString())
+
+        const iso = cursorDate.toISOString()
+        if (cursorId) {
+          query = query.or(`date.lt.${iso},and(date.eq.${iso},id.lt.${cursorId})`)
+        } else {
+          query = query.lt('date', iso)
+        }
       } catch (err) {
         console.error('[feed] Invalid cursor format:', cursorParam, err)
         // Continue without cursor filter if invalid
@@ -84,8 +92,8 @@ export async function GET(request: Request) {
     
     // Create cursor from last entry (date + id for uniqueness when multiple entries share same date)
     const lastEntry = entriesToReturn.length > 0 ? entriesToReturn[entriesToReturn.length - 1] : null
-    const cursor = lastEntry 
-      ? `${new Date(lastEntry.date).toISOString()}:${lastEntry.id}`
+    const cursor = lastEntry
+      ? `${new Date(lastEntry.date).toISOString()}|${lastEntry.id}`
       : null
 
     // Get user info for user + all friends
@@ -217,6 +225,7 @@ export async function GET(request: Request) {
       albumArt: entry.albumArt,
       albumColor: entry.albumColor || null,
       durationMs: entry.durationMs || null,
+      mood: entry.mood || null,
       trackId: entry.trackId,
       user: userMap.get(entry.userId) || null,
       mentions: mentionsMap.get(entry.id) || [],

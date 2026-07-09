@@ -13,6 +13,7 @@ import { trackTabView } from '@/lib/analytics-client'
 import { albumTintStyle } from '@/lib/album-color'
 import PreviewButton from './PreviewButton'
 import { getBirdLogo } from '@/lib/theme'
+import { FeedCardSkeleton } from './Skeleton'
 
 interface Comment {
   id: string
@@ -27,6 +28,20 @@ interface Comment {
   }
 }
 
+// "Today" / "Yesterday" / "Jul 3" labels for feed day dividers
+function formatDayLabel(dateStr: string): string {
+  const todayStr = getLocalDateString()
+  if (dateStr === todayStr) return 'Today'
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+  if (dateStr === yStr) return 'Yesterday'
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  const sameYear = year === new Date().getFullYear()
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) })
+}
+
 interface FeedEntry {
   id: string
   date: string
@@ -37,6 +52,7 @@ interface FeedEntry {
   albumColor?: string | null
   duet?: { type: 'song' | 'artist' } | null
   durationMs?: number | null
+  mood?: string | null
   trackId: string
   user: {
     id: string
@@ -385,11 +401,10 @@ export default function FeedTab() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-3">
-        <div className="mb-4">
-          <ThemeBird size={72} state="bounce" className="animate-bounce" />
-        </div>
-        <p className="text-text/60">Gathering the flock...</p>
+      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
+        <FeedCardSkeleton />
+        <FeedCardSkeleton />
+        <FeedCardSkeleton />
       </div>
     )
   }
@@ -460,9 +475,18 @@ export default function FeedTab() {
       )}
 
       <div className="space-y-3 sm:space-y-4">
-        {entries.map((entry) => (
+        {entries.map((entry, index) => (
+          <div key={entry.id}>
+          {/* Day divider when the date changes */}
+          {(index === 0 || entries[index - 1].date !== entry.date) && (
+            <div className="flex items-center gap-3 pt-2 pb-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-text/50">
+                {formatDayLabel(entry.date)}
+              </span>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
+          )}
           <div
-            key={entry.id}
             data-entry-id={entry.id}
             style={albumTintStyle(entry.albumColor)}
             className={`bg-surface rounded-xl overflow-hidden border-2 transition-all ${
@@ -511,17 +535,22 @@ export default function FeedTab() {
                       <span className="w-2 h-2 bg-accent rounded-full animate-pulse" />
                     )}
                   </div>
-                  <div className="text-xs sm:text-sm text-text/70">
-                    {(() => {
-                      const dateStr = typeof entry.date === 'string' ? entry.date : (entry.date as any) instanceof Date ? (entry.date as Date).toISOString() : String(entry.date)
-                      const [year, month, day] = dateStr.split('T')[0].split('-')
-                      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
-                      return date.toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })
-                    })()}
+                  <div className="text-xs sm:text-sm text-text/70 flex items-center gap-1.5">
+                    <span>
+                      {(() => {
+                        const dateStr = typeof entry.date === 'string' ? entry.date : (entry.date as any) instanceof Date ? (entry.date as Date).toISOString() : String(entry.date)
+                        const [year, month, day] = dateStr.split('T')[0].split('-')
+                        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+                        return date.toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })
+                      })()}
+                    </span>
+                    {entry.mood && (
+                      <span className="text-sm" title="How their day felt">{entry.mood}</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -757,6 +786,7 @@ export default function FeedTab() {
                 </div>
               )}
             </div>
+          </div>
           </div>
         ))}
       </div>

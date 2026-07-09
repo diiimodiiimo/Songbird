@@ -1,5 +1,10 @@
 # Learnings Log
 
+## 2026-07-07 — Feed pagination + polish batch
+- Feed "loading more" loop: cursor format `isoDate:entryId` was parsed with split(':'), which chops ISO timestamps at the first colon → invalid date → filter dropped → same page returned forever (client dedupe hid it as an infinite spinner). Never use ':' as a separator next to ISO dates.
+- Same-day entries share identical noon-UTC timestamps, so date-only cursors silently skip entries — cursor pagination on non-unique columns needs an id tie-breaker and a matching secondary ORDER BY.
+- Skeleton loaders shaped like content beat "Loading..." text + bird for perceived speed; keep the bird for empty states, not loading states.
+
 ## 2026-07-07 — Bug fixes + design foundation
 - "People don't save" root cause: Prisma `@default(cuid())` is client-side only — Supabase inserts without explicit `id` fail NOT NULL, and the code swallowed the error. The update route deleted people first, so every edit wiped them. Audit any table insert for missing `id` + unchecked error.
 - WrappedTab (52KB) was orphaned — nothing imported it; the whole Wrapped feature was unreachable on web. Grep for imports before assuming a component ships.
